@@ -1,4 +1,4 @@
-from io import open
+# from io import open
 from builtins import range
 
 from . import general, string, funcargparse

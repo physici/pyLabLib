@@ -3,7 +3,7 @@ Logging class that incorporates making file and console logs.
 The actions taken can be altered for different message types and level ranges.
 """
 
-from io import open
+# from io import open
 from builtins import range
 from .py3 import textstring
 

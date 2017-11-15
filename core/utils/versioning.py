@@ -2,7 +2,7 @@
 Fetching, storing and recalling different script and library configurations.
 """
 
-from io import open
+# from io import open
 from builtins import range
 
 from . import files as file_utils #@UnresolvedImport

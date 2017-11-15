@@ -1,6 +1,6 @@
 from builtins import range
 
-from ...core.devio import SCPI, units  #@UnresolvedImport
+from ...core.devio import SCPI, units, data_format  #@UnresolvedImport
 from ...core.utils import general, funcargparse  #@UnresolvedImport
 
 import numpy as np
