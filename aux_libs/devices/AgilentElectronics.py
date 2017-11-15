@@ -222,10 +222,10 @@ class N9310A(SCPI.SCPIDevice):
 
 
 class HP8712B(SCPI.SCPIDevice):
-    def __init__(self, addr):
     """
     HP8712B Vector Network Analyzer.
     """
+    def __init__(self, addr):
         SCPI.SCPIDevice.__init__(self,addr)
         self.channel=1
         self.data_fmt="<f4"
