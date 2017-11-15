@@ -158,7 +158,7 @@ class IDataTableStorage(object):
 
 class ColumnDataTableStorage(IDataTableStorage):
     """
-    Table storage which stores the data as a list of columns (defined in :module:`.columns`).
+    Table storage which stores the data as a list of columns (defined in :mod:`columns`).
 
     More flexible compared to the :class:`ArrayDataStorage`, but potentially slower.
 

@@ -110,9 +110,10 @@ class IIndex(object):
     A generic index object.
 
     Used to transform a varitey of indexes into a subset applicable for specific objects (numpy arrays or lists).
+    
     Allowed input index types:
-        scalar: integer, string
-        vector: integer lists or numpy arrays, bool lists or numpy arrays, string lists or numpy arrays, builtin.ranges, slices and string slices
+        - scalar: integer, string
+        - vector: integer lists or numpy arrays, bool lists or numpy arrays, string lists or numpy arrays, builtin.ranges, slices and string slices
     """
     def tup(self):
         """

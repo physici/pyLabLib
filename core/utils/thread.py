@@ -1,10 +1,19 @@
-from . import funcargparse
+"""
+Simple threading routines.
+
+A more extensive threading library is contained in the core.thread package.
+"""
 
 import threading
 import Queue
 
 
 class PeriodicThread(object):
+    """
+    A thread that runs in an infinite loop (until externally stopped) and executes its task with a given periodicity.
+
+    To use, it needs to be inherited, with the subclass redefining :func:`execute` or :func:`process_message` method.
+    """
     def __init__(self):
         object.__init__(self)
         self.running=False
@@ -13,11 +22,24 @@ class PeriodicThread(object):
         self.ack_queue=Queue.Queue(1)
     
     def execute(self):
+        """
+        Perform a single iteration of the loop.
+
+        To be overrided in subclasses.
+        """
         pass
     def process_message(self, msg):
+        """
+        Process a message sent from the parent thread.
+
+        To be overrided in subclasses.
+        """
         pass
         
     def loop(self, period, sync):
+        """
+        Main loop methods. Called automatically in a new thread when :func:`start` is invoked.
+        """
         self.running=True
         if sync:
             self.ack_queue.put("start")
@@ -44,8 +66,15 @@ class PeriodicThread(object):
             self.paused=False
         
     def wait_for_execution(self):
+        """Synchronize with the thread (wait until the current iteration is executed)."""
         self.send_message(None,sync=True)
     def send_message(self, msg, sync=True):
+        """
+        Send a message to the thread.
+        
+        The message is processed by the thread in the :func:`process_message` method (by default does nothing).
+        If ``sync==True``, wait until the thread received (not necessarily processed) the message.
+        """
         if self.running:
             self.message_queue.put((msg,sync))
             if sync:
@@ -55,6 +84,12 @@ class PeriodicThread(object):
         else:
             raise RuntimeError("thread is not running")
     def start(self, period, sync=True):
+        """
+        Start the thread.
+
+        `period` specifies the job execution period, in seconds.
+        If ``sync==True``, wait until the thread is started.
+        """
         if self.running:
             raise RuntimeError("thread is already running")
         threading.Thread(target=self.loop,args=(period,sync)).start()
@@ -63,13 +98,30 @@ class PeriodicThread(object):
             if ack_msg!="start":
                 raise RuntimeError("wrong acknowledgment '{0}' for message 'start'".format(ack_msg))
     def stop(self, sync=True):
+        """
+        Stop the thread.
+
+        If ``sync==True``, wait until the thread is stopped.
+        """
         self.send_message("stop",sync=sync)
     def pause(self, sync=True):
+        """
+        Pause the thread execution.
+
+        If ``sync==True``, wait until the thread is paused.
+        """
         self.send_message("pause",sync=sync)
     def resume(self, sync=True):
+        """
+        Resume the thread execution.
+
+        If ``sync==True``, wait until the thread is resumed.
+        """
         self.send_message("resume",sync=sync)
     
     def is_looping(self):
+        """Check if the thread is actively executing (not paused)."""
         return self.running and not self.paused
     def is_running(self):
+        """Check if the thread is running (possibly paused)."""
         return self.running

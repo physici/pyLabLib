@@ -219,7 +219,7 @@ def getattr_call(obj, attr_name, *args, **vargs):
     """
     Call the getter for the attribute `attr_name` of `obj`.
 
-    If the attribute is a property, pass *args and **kwargs to the getter (`fget`); otherwise, ignore them.
+    If the attribute is a property, pass ``*args`` and ``**kwargs`` to the getter (`fget`); otherwise, ignore them.
     """
     try:
         return getattr(type(obj),attr_name).fget(obj,*args,**vargs)
@@ -229,7 +229,7 @@ def setattr_call(obj, attr_name, *args, **vargs):
     """
     Call the setter for the attribute `attr_name` of `obj`.
 
-    If the attribute is a propert, pass *args and **kwargs to the setter (`fset`);
+    If the attribute is a propert, pass ``*args`` and ``**kwargs`` to the setter (`fset`);
     otherwise, the set value is assumed to be either the first argument, or the keyword argument with the name ``'value'``.
     """
     try:
@@ -241,7 +241,7 @@ def delattr_call(obj, attr_name, *args, **vargs):
     """
     Call the deleter for the attribute `attr_name` of `obj`.
 
-    If the attribute is a property, pass *args and **kwargs to the deleter (`fdel`); otherwise, ignore them.
+    If the attribute is a property, pass ``*args`` and ``**kwargs`` to the deleter (`fdel`); otherwise, ignore them.
     """
     try:
         return getattr(type(obj),attr_name).fdel(obj,*args,**vargs)

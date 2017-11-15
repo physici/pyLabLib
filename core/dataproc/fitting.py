@@ -18,8 +18,8 @@ class Fitter(object):
     Can handle variety of different functions, complex arguments or return values, array arguments.
     
     Args:
-        func: Fit function. Can be anything callable (function, method, object with ``__call__`` method, etc.).
-        xarg_name: Name (or multiple names) for x arguments. These arguments are passed to `func` (as named arguments) when calling for fitting.
+        func(Callable): Fit function. Can be anything callable (function, method, object with ``__call__`` method, etc.).
+        xarg_name(str or list): Name (or multiple names) for x arguments. These arguments are passed to `func` (as named arguments) when calling for fitting.
             Can be a string (single argument) or a list (arbitrary number of arguments, including zero).
         fit_paramters (dict): Dictionary ``{name: value}`` of parameters to be fitted (`value` is the starting value for the fitting procedure).
             If `value` is ``None``, try and get the default value from the `func`.
@@ -144,14 +144,13 @@ class Fitter(object):
             return_residual: If not ``False``, append `residual` to the output.
         
         Returns:
-            tuple: ``(params, bound_func[, stderr][, residual])``.
-            
+            tuple: ``(params, bound_func[, stderr][, residual])``:
                 - `params`: a dictionary ``{name: value}`` of the parameters supplied to the function (both fit and fixed).
                 - `bound_func`: the fit function with all the parameters bound (i.e., it only requires x parameters).
                 - `stderr`: a dictionary ``{name: error}`` of standard deviation for fit parameters to the return parameters.
-                if the fitting routine returns no residuals (usually for a bad or an underconstrained fit), all residuals are set to NaN.
+                    If the fitting routine returns no residuals (usually for a bad or an underconstrained fit), all residuals are set to NaN.
                 - `residual`: either a full array of residuals ``func(x,**params)-y`` (if ``return_residual=='full'``) or
-                  a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``).
+                    a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``).
         """
         # Applying order: self.fixed_parameters < self.fit_parameters < fixed_parameters < fit_parameters
         fit_parameters=self._prepare_parameters(fit_parameters)
