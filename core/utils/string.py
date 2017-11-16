@@ -385,7 +385,7 @@ def _parse_parenthesis_struct(line, start=0):
     while True:
         quote_pos=find_first_entry(line,_quotation_characters,pos,len(line))
         delim_pos=find_first_entry(line,[',',':'],pos,len(line))
-        open_par_pos=find_first_entry(line,_parenthesis_pairs.keys(),pos,len(line))
+        open_par_pos=find_first_entry(line,_parenthesis_pairs,pos,len(line))
         clos_par_pos=find_first_entry(line,_parenthesis_pairs.values(),pos,len(line))
         if clos_par_pos==len(line):
             raise ValueError("malformatted parenthesis structure")

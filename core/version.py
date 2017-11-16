@@ -2,6 +2,8 @@
 Current version and function that defines compatibility with previous version.
 To be changed in future packages.
 """
+from future.utils import viewitems
+
 import sys
 from .utils import module as module_utils #@UnresolvedImport
 
@@ -11,7 +13,8 @@ def is_compatible(v, package=None, module=None):
     return full_version>=v
 
 ### Additional packages routines ###
-_required_packages_names=["numpy","scipy","matplotlib", # standard scientific packages
+_required_packages_names=["future", # generic required packages
+                          "numpy","scipy","matplotlib", # standard scientific packages
                           "pyusb","python-usbtmc","pywinusb","pyserial","pyvisa", # general device communication:
                             # USB (generic USB, requires libusb library), USB-MTC (VISA-like package for Linux), pywinusb(USB HID talking), Serial port, VISA wrapper
                           "nidaqmx","zipython","zhinst" # special device communication: NIDAQmx, ZurichInstrument (2 different versions)
@@ -25,7 +28,7 @@ python_version="{}.{}.{}".format(*_python_version_full)
 def write_version(f):
     f.write("Python version: "+python_version+"\n\n")
     f.write("Non-standard packages:\n")
-    for p_name,p_version in required_packages.iteritems():
+    for p_name,p_version in viewitems(required_packages):
         if p_version is not None:
             f.write("  {0:20s} {1}\n".format(p_name,p_version))
     f.write("\nCore library version: {}.{}.{}\n".format(*full_version))

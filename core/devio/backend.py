@@ -550,7 +550,7 @@ def new_backend(conn, timeout=None, backend="visa", **kwargs):
     """
     if isinstance(conn,IDeviceBackend):
         return conn
-    funcargparse.check_parameter_range(backend,"backend",_backends.keys())
+    funcargparse.check_parameter_range(backend,"backend",_backends)
     return _backends[backend](conn,timeout=timeout,**kwargs)
 
 

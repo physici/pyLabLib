@@ -4,10 +4,14 @@ from builtins import range
 from . import general, string, funcargparse
 
 try:
-    import Tkinter
-    import tkFileDialog
+    from Tkinter import Tk
+    from tkFileDialog import askopenfilename, asksaveasfilename, askdirectory
 except ImportError:
-    pass
+    try:
+        from tkinter import Tk
+        from tkinter.filedialog import askopenfilename, asksaveasfilename, askdirectory
+    except ImportError:
+        pass
 
 import os
 import os.path
@@ -689,26 +693,26 @@ def openfiledialog(**options):
     """
     Open file dialog, wrapper for tkFileDialog.
     """
-    main=Tkinter.Tk()
+    main=Tk()
     main.withdraw()
-    path=tkFileDialog.askopenfilename(**options)
+    path=askopenfilename(**options)
     main.quit()
     return path
 def savefiledialog(**options):
     """
     Save file dialog, wrapper for tkFileDialog.
     """
-    main=Tkinter.Tk()
+    main=Tk()
     main.withdraw()
-    path=tkFileDialog.asksaveasfilename(**options)
+    path=asksaveasfilename(**options)
     main.quit()
     return path
 def opendirdialog(**options):
     """
     Open directory dialog, wrapper for tkFileDialog.
     """
-    main=Tkinter.Tk()
+    main=Tk()
     main.withdraw()
-    path=tkFileDialog.askdirectory(**options)
+    path=askdirectory(**options)
     main.quit()
     return path

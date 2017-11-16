@@ -48,7 +48,7 @@ class ICallable(object):
     def bind(self, arg_names, **bound_params):
         """Bind function to a given parameters set, leaving `arg_names` as free parameters (in the given order)."""
         bound_params=bound_params.copy()
-        covered_args=set(bound_params.keys())
+        covered_args=set(bound_params)
         covered_args.update(arg_names)
         uncovered_mand_args=self.get_mandatory_args().difference(covered_args)
         if len(uncovered_mand_args)>0:
@@ -374,7 +374,7 @@ class MethodCallable(FunctionCallable):
     This callable is implemented largely to be used with :class:`~core.theory.calculator.TheoryCalculator`.
     """
     def __init__(self, method, function_signature=None, defaults=None, alias=None):
-        if method.im_self is None:
+        if method.__self__ is None:
             raise ValueError("supplied method is unbound; use FunctionCallable instead")
         if function_signature is None:
             function_signature=function_utils.FunctionSignature.from_function(method)
@@ -404,7 +404,7 @@ class MethodCallable(FunctionCallable):
                 raise TypeError("mandatory parameter not supplied: {0}".format(n))
         named_params=self._defaults.copy()
         named_params.update(self._apply_unalias_dict(params))
-        for n in named_params.keys():
+        for n in named_params:
             if not self._is_func_arg(n):
                 if hasattr(self._obj,n):
                     setattr(self._obj,n,named_params.pop(n))
@@ -461,7 +461,7 @@ def to_callable(func):
     if isinstance(func, ICallable):
         return func
     else:
-        if getattr(func,"im_self",None) is None:
+        if getattr(func,"__self__",None) is None:
             return FunctionCallable(func)
         else:
             return MethodCallable(func)

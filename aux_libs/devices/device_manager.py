@@ -41,7 +41,7 @@ class DeviceManager(object):
     __getitem__=get_device
     __getattr__=get_device
     def __dir__(self):
-        return self.devices.keys()
+        return list(self.devices.keys())
     
     
 def default_device_manager(name="devices.txt"):

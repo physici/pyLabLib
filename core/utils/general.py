@@ -3,7 +3,7 @@ Collection of small utilities.
 """
 
 from builtins import input
-from future.utils import viewitems
+from future.utils import viewitems, viewvalues
 
 import time
 import threading
@@ -53,7 +53,7 @@ def try_method_wrapper(func, method_name=None, inherit_signature=True):
     if inherit_signature:
         wrapped=functions.getargsfrom(func)(wrapped)
     else:
-        wrapped.func_doc=func.func_doc
+        wrapped.__doc__=func.__doc__
     return wrapped
 
 
@@ -229,7 +229,7 @@ def split_in_groups(key_func, l, continuous=True, max_group_size=None):
         groups={}
         for e in l:
             groups.get(key_func(e),[]).append(e)
-        return groups.values()
+        return list(viewvalues(groups))
 def sort_set_by_list(s, l, keep_duplicates=True):
     """
     Convert the set `s` into a list ordered by a list `l`.
@@ -445,14 +445,14 @@ def topological_order(graph, visit_order=None):
     order=[]
     visited=set()
     if visit_order is None:
-        nodes=set(graph.keys())
+        nodes=set(graph)
         while len(nodes)>0:
             start=nodes.pop()
             _topological_order_dfs(graph,start,visited=visited,order=order)
             nodes.difference_update(visited)
     else:
         vo_set=set(visit_order)
-        nodes=visit_order+[n for n in graph.keys() if n not in vo_set]
+        nodes=visit_order+[n for n in graph if n not in vo_set]
         priority=dict([(v,i) for i,v in enumerate(nodes)])
         while len(nodes)>0:
             start=nodes.pop(0)

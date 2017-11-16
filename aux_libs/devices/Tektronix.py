@@ -384,7 +384,7 @@ class MDO3000(SCPI.SCPIDevice):
         try:
             return self._rf_trace_kind[kind]
         except KeyError:
-            funcargparse.check_parameter_range(kind,"kind",self._rf_trace_kind.keys())
+            funcargparse.check_parameter_range(kind,"kind",self._rf_trace_kind)
     def enable_rf_channel(self, kind="normal", enable=True):
         self.write(":SELECT:{} {}".format(self._get_rf_trace_kind(kind),1 if enable else 0))
     
@@ -397,7 +397,7 @@ class MDO3000(SCPI.SCPIDevice):
         try:
             mode=self._rf_modes[mode]
         except KeyError:
-            funcargparse.check_parameter_range(mode,"mode",self._rf_modes.keys())
+            funcargparse.check_parameter_range(mode,"mode",self._rf_modes)
         self.write(":RF:DETECT:MODE MANUAL")
         self.write(":RF:DETECT:{} {}".format(self._get_rf_trace_kind(kind),mode))
         return self.get_rf_mode(kind)

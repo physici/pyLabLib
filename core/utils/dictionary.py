@@ -348,7 +348,8 @@ class Dictionary(object):
         """
         return sorted(self._data) if ordered else self._data
     iterkeys=viewkeys # for compatibility
-    __iter__=viewkeys
+    def __iter__(self):
+        return self._data.__iter__()
     keys=viewkeys
     def paths(self, ordered=False, topdown=False):
         """

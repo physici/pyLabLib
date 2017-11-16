@@ -281,7 +281,7 @@ class ZIDevice(object):
             except Exception:
                 return x
         def undo_timestamp(d):
-            if len(d)==2 and all([k.upper() in cls._timestamp_keys for k in d.keys()]):
+            if len(d)==2 and all([k.upper() in cls._timestamp_keys for k in d]):
                 return d["VALUE"]
             else:
                 return d

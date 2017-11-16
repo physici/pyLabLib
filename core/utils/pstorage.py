@@ -20,7 +20,7 @@ def _get_lookup_table(storage, import_table):
             if alias is True:
                 alias=name
             new_lookup_table[alias]=original_lookup_table[name]
-    general_names=set(original_lookup_table.keys()).difference(import_table.keys()) #Names without specific rule
+    general_names=set(original_lookup_table).difference(import_table) #Names without specific rule
     if "*" in import_table and import_table["*"]:
         mask=import_table["*"]
         if mask==True:
@@ -182,7 +182,7 @@ class ParametersStorageInterface(ParametersStorage):
         self._add_local_parameter(stored_name,getattr(type(self),desc_name))
         
     def __dir__(self):
-        return self.__dict__.keys()+self._lookup_table.keys()
+        return list(self.__dict__.keys())+list(self._lookup_table.keys())
 
 
 def init(init_func):

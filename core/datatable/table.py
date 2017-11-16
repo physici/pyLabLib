@@ -401,7 +401,7 @@ class DataTable(object):
         if alias is None:
             alias=func.__name__
         try:
-            self_func.func_doc=func.func_doc
+            self_func.__doc__=func.__doc__
         except AttributeError:
             pass
         setattr(cls,alias,self_func)
@@ -427,7 +427,7 @@ class DataTable(object):
         if alias is None:
             alias=func.__name__
         try:
-            self_func.func_doc=func.func_doc
+            self_func.__doc__=func.__doc__
         except AttributeError:
             pass
         setattr(cls,alias,self_func)
@@ -449,7 +449,7 @@ class DataTable(object):
         if alias is None:
             alias=func.__name__
         try:
-            self_func.func_doc=func.func_doc
+            self_func.__doc__=func.__doc__
         except AttributeError:
             pass
         setattr(cls,alias,self_func)

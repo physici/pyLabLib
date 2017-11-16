@@ -319,7 +319,7 @@ class DictionaryInputFileFormat(ITextInputFileFormat):
                 return ptr
         if entry_format!="branch":
             data.map_self(map_entries,to_visit="branches",topdown=False)
-        if data.keys()==["__data__"]: # special case of files with preamble
+        if len(data)==1 and list(data.keys())==["__data__"]: # special case of files with preamble
             data=data["__data__"]
         return datafile.DataFile(data=data,comments=comments,creation_time=creation_time,filetype="dict")
     

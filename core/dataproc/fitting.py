@@ -126,7 +126,7 @@ class Fitter(object):
             self.fit_parameters.pop(name,None)
             
     def _get_unaccounted_parameters(self, fixed_parameters, fit_parameters):
-        supplied_names=set(self.xarg_name+fixed_parameters.keys()+fit_parameters.keys())
+        supplied_names=set(self.xarg_name)|set(fixed_parameters)|set(fit_parameters)
         unaccounted_names=set.difference(self.func.get_mandatory_args(),supplied_names)
         return unaccounted_names
     
@@ -167,7 +167,7 @@ class Fitter(object):
         else:
             x=[np.asarray(e) for e in x]
         y=np.asarray(y)
-        p_names=fit_parameters.keys()
+        p_names=list(fit_parameters.keys())
         bound_func=self.func.bind_namelist(self.xarg_name+p_names,**fixed_parameters)
         props=[fit_parameters[name] for name in p_names]
         init_p=self._pack_parameters(props)
@@ -221,7 +221,7 @@ class Fitter(object):
         bound_func=self.func.bind_namelist(self.xarg_name,**params_dict)
         return_val=params_dict,bound_func
         if return_stderr:
-            p_names=fit_parameters.keys()
+            p_names=list(fit_parameters.keys())
             props=[fit_parameters[name] for name in p_names]
             init_p=self._pack_parameters(props)
             unpacker=self._build_unpacker(props)

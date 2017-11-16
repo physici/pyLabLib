@@ -5,7 +5,10 @@ A more extensive threading library is contained in the core.thread package.
 """
 
 import threading
-import Queue
+try:
+    from Queue import Queue, Empty
+except ImportError:
+    from queue import Queue, Empty
 
 
 class PeriodicThread(object):
@@ -18,8 +21,8 @@ class PeriodicThread(object):
         object.__init__(self)
         self.running=False
         self.paused=False
-        self.message_queue=Queue.Queue(1)
-        self.ack_queue=Queue.Queue(1)
+        self.message_queue=Queue(1)
+        self.ack_queue=Queue(1)
     
     def execute(self):
         """
@@ -49,7 +52,7 @@ class PeriodicThread(object):
                     msg,sync=self.message_queue.get(timeout=period if not self.paused else None)
                     if sync:
                         self.ack_queue.put(msg)
-                except Queue.Empty:
+                except Empty:
                     msg=None
                 if msg=="pause":
                     self.paused=True

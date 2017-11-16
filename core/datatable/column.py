@@ -160,7 +160,7 @@ class IDataColumn(numclass.NumClass):
             def self_func(self, *args, **vargs):
                 return func(self.as_array(force_copy=False),*args,**vargs)
         try:
-            self_func.func_doc=func.func_doc
+            self_func.__doc__=func.__doc__
         except AttributeError:
             pass
         if as_property:

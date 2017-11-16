@@ -68,7 +68,7 @@ class FunctionSignature(object):
         """
         eval_string="lambda {0}: _func_({1})".format(self.signature(),self.signature(pass_order))
         wrapped=eval(eval_string,{'_func_':func})
-        wrapped.func_defaults=tuple(self.get_defaults_list())
+        wrapped.__defaults__=tuple(self.get_defaults_list())
         if self.doc:
             wrapped.__doc__=self.doc
         else:
@@ -119,9 +119,9 @@ class FunctionSignature(object):
             args=inspect.getargspec(func)
         defaults=args.defaults and dict(zip(args.args[::-1],args.defaults[::-1]))
         try:
-            cls=func.im_class
-            obj=func.im_self
-            func=func.im_func
+            cls=func.__self__.__class__
+            obj=func.__self__
+            func=func.__func__
         except AttributeError:
             cls=None
             obj=None
