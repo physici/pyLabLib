@@ -70,13 +70,13 @@ class FunctionSignature(object):
         wrapped=eval(eval_string,{'_func_':func})
         wrapped.func_defaults=tuple(self.get_defaults_list())
         if self.doc:
-            wrapped.func_doc=self.doc
+            wrapped.__doc__=self.doc
         else:
-            wrapped.func_doc=func.func_doc
+            wrapped.__doc__=func.__doc__
         if self.name:
-            wrapped.func_name=self.name
+            wrapped.__name__=self.name
         else:
-            wrapped.func_name=func.func_name
+            wrapped.__name__=func.__name__
         if self.cls is not None:
             wrapped=MethodType(wrapped,self.obj,self.cls)
         return wrapped
@@ -125,7 +125,7 @@ class FunctionSignature(object):
         except AttributeError:
             cls=None
             obj=None
-        return FunctionSignature(args.args,defaults,args.varargs,args.keywords,cls,obj,func.func_name,func.func_doc)
+        return FunctionSignature(args.args,defaults,args.varargs,args.keywords,cls,obj,func.__name__,func.__doc__)
     @staticmethod
     def merge(original, addition, add_place="front", merge_duplicates=True, overwrite=None):
         """

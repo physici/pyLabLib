@@ -3,6 +3,7 @@ Universal function fitting interface.
 """
 
 from __future__ import division
+from ..utils.py3 import textstring
 
 from ..utils import general as general_utils #@UnresolvedImport
 from ..utils import funcargparse #@UnresolvedImport
@@ -38,7 +39,7 @@ class Fitter(object):
         fit_parameters=general_utils.to_pairs_list(fit_parameters)
         parameters={}
         for name,val in fit_parameters:
-            if isinstance(val,basestring) and val=="complex":
+            if isinstance(val,textstring) and val=="complex":
                 val=complex(self.func.get_arg_default(name))
             elif val is None:
                 val=self.func.get_arg_default(name)

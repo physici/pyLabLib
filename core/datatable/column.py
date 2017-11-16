@@ -147,12 +147,12 @@ class IDataColumn(numclass.NumClass):
 
         Arguments:
             func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
-            alias (str): the method name; by default, it's ``func.func_name``
+            alias (str): the method name; by default, it's ``func.__name__``
             wrap_into_columnn (bool): if ``True``, the returned result is wrapped into :class:`ArrayDataColumn`
             as_property (bool): if ``True``, the function is added as a property getter instead
         """
         if alias is None:
-            alias=func.func_name
+            alias=func.__name__
         if wrap_into_column:
             def self_func(self, *args, **vargs):
                 return ArrayDataColumn(func(self.as_array(force_copy=False),*args,**vargs))

@@ -1,9 +1,8 @@
 from future.utils import viewitems
+from builtins import zip
 
 from ..utils import functions as function_utils #@UnresolvedImport
 import numpy as np
-from itertools import izip
-
 
 class ICallable(object):
     """
@@ -341,7 +340,7 @@ class FunctionCallable(ICallable):
             self._named_params.update(func._apply_unalias_dict(bound_params))
         def __call__(self, *params):
             n_par=self._named_params
-            for p,d in izip(params,self._names_dest):
+            for p,d in zip(params,self._names_dest):
                 if d[0]=='named':
                     n_par[d[1]]=p
             return self._func(**n_par)
@@ -445,7 +444,7 @@ class MethodCallable(FunctionCallable):
             for n,p in self._object_params:
                 setattr(obj,n,p)
             n_par=self._named_params
-            for p,d in izip(params,self._names_dest):
+            for p,d in zip(params,self._names_dest):
                 if d[0]=='named':
                     n_par[d[1]]=p
                 elif d[0]=='attr':

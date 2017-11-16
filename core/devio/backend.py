@@ -2,6 +2,7 @@
 Routines for defining a unified interface across multiple backends.
 """
 
+from ..utils.py3 import textstring
 from future.utils import viewitems
 from builtins import range, zip
 
@@ -426,7 +427,7 @@ try:
         
         def _read_terms(self, terms="", timeout=None, error_on_timeout=True):
             result=""
-            singlechar_terms=isinstance(terms,basestring)
+            singlechar_terms=isinstance(terms,textstring)
             with self.single_op():
                 with self.using_timeout(timeout):
                     while True:
@@ -456,7 +457,7 @@ try:
             self.cooldown()
             if remove_term and self.term_read:
                 tcs=0
-                if isinstance(self.term_read,basestring):
+                if isinstance(self.term_read,textstring):
                     for c in result[::-1]:
                         if c not in self.term_read:
                             break
@@ -493,7 +494,7 @@ try:
                 timeout: Operation timeout. If ``None``, use the default device timeout.
                 error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
             """
-            if isinstance(term,basestring):
+            if isinstance(term,textstring):
                 term=[term]
             result=self._read_terms(term,timeout=timeout,error_on_timeout=error_on_timeout)
             self.cooldown()

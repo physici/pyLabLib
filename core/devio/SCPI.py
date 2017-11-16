@@ -1,6 +1,7 @@
 import time
 import contextlib
 
+from ..utils.py3 import textstring
 from . import data_format
 from . import backend as backend_module  #@UnresolvedImport
 from ..utils import general as general_utils  #@UnresolvedImport
@@ -235,7 +236,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
             return "int"
         if isinstance(arg,float):
             return "float"
-        if isinstance(arg,basestring):
+        if isinstance(arg,textstring):
             return "string"
         raise ValueError("can't determine type for argument {0}".format(arg))
     def _compose_msg(self, msg, arg=None, arg_type=None, unit=None, fmt=None, bool_selector=("OFF","ON")):

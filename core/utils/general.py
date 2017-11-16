@@ -36,15 +36,15 @@ def try_method_wrapper(func, method_name=None, inherit_signature=True):
     If ``inherit_signature==True``, completely copy the signature of the wrapped method (name, args list, docstring, etc.).
     """
     if method_name is None:
-        method_name=func.func_name
+        method_name=func.__name__
     def wrapped(*args, **kwargs):
         if args:
             self,args=args[0],args[1:]
             if "self" in kwargs:
-                raise TypeError("{}() got multiple values for keyword argument 'self'".format(func.func_name))
+                raise TypeError("{}() got multiple values for keyword argument 'self'".format(func.__name__))
         elif kwargs:
             if "self" not in kwargs:
-                raise TypeError("{}() reqiqres jeyword argument 'self'".format(func.func_name))
+                raise TypeError("{}() reqiqres jeyword argument 'self'".format(func.__name__))
             self=kwargs.pop("self")
         try:
             return getattr(self,method_name)(*args,**kwargs)

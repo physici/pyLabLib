@@ -1,4 +1,5 @@
 from builtins import zip
+from ..utils.py3 import textstring
 
 from ..utils import iterator as iterator_utils #@UnresolvedImport
 from ..utils import funcargparse, general, strdump
@@ -267,7 +268,7 @@ class DataTable(object):
         if c_ndim==0:
             new_names[idx]=val
         else:
-            if isinstance(val,basestring):
+            if isinstance(val,textstring):
                 raise ValueError("can't assign single name to multiple columns")
             for i,v in zip(idx,val):
                 new_names[i]=v
@@ -398,7 +399,7 @@ class DataTable(object):
         def self_func(self, *args, **vargs):
             return func(self.as_array(force_copy=False),*args,**vargs)
         if alias is None:
-            alias=func.func_name
+            alias=func.__name__
         try:
             self_func.func_doc=func.func_doc
         except AttributeError:
@@ -424,7 +425,7 @@ class DataTable(object):
             else:
                 return func(self[c],*args,**vargs)
         if alias is None:
-            alias=func.func_name
+            alias=func.__name__
         try:
             self_func.func_doc=func.func_doc
         except AttributeError:
@@ -446,7 +447,7 @@ class DataTable(object):
                 raise TypeError("argument '{}' is not supplied".format(column_arg_name))
             return func(self.c[c],*args,**vargs)
         if alias is None:
-            alias=func.func_name
+            alias=func.__name__
         try:
             self_func.func_doc=func.func_doc
         except AttributeError:

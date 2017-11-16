@@ -1,3 +1,4 @@
+from ...core.utils.py3 import textstring
 from ...core.devio import SCPI  #@UnresolvedImport
 
 _depends_local=["...core.devio.SCPI"]
@@ -28,7 +29,7 @@ class LM500(SCPI.SCPIDevice):
     def get_interval(self):
         return self._str_to_sec(self.ask("INTVL?"))
     def set_interval(self, intvl):
-        if not isinstance(intvl,basestring):
+        if not isinstance(intvl,textstring):
             intvl=self._sec_to_str(intvl)
         self.write("INTVL",intvl)
         return self.get_interval()

@@ -1,4 +1,5 @@
 from builtins import range
+from ...core.utils.py3 import bytestring
 
 from ...core.utils import dictionary, funcargparse  #@UnresolvedImport
 from ...core.dataproc import waveforms, fourier  #@UnresolvedImport
@@ -257,7 +258,7 @@ class ZIDevice(object):
             path=self._build_path(path)
             if isinstance(value,float):
                 self.server.setDouble(path,value)
-            elif isinstance(value,basestring):
+            elif isinstance(value,bytestring):
                 self.server.setByte(path,value)
             else:
                 self.server.setInt(path,value)
@@ -543,7 +544,7 @@ class ZIDevice(object):
         funcargparse.check_parameter_range(source,"source",self._scope_sources)
         return self._scope_sources.index(source)
     def get_scope_source_range(self, source):
-        if isinstance(source,basestring):
+        if isinstance(source,str):
             funcargparse.check_parameter_range(source,"source",self._scope_sources)
         else:
             source=self._scope_sources[source]
@@ -711,7 +712,7 @@ class UHFDevice(ZIDevice):
         funcargparse.check_parameter_range(source,"source",self._scope_sources)
         return self._scope_sources.index(source)
     def get_scope_source_range(self, source):
-        if isinstance(source,basestring):
+        if isinstance(source,str):
             funcargparse.check_parameter_range(source,"source",self._scope_sources)
         else:
             source=self._scope_sources[source]

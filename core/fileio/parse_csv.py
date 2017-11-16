@@ -3,6 +3,7 @@ Utilities for parsing CSV files.
 """
 
 from builtins import range, zip
+from ..utils.py3 import textstring
 
 from ..utils import string, funcargparse  #@UnresolvedImport
 from ..datatable import table as datatable  #@UnresolvedImport
@@ -118,7 +119,7 @@ def _try_convert_column(column, dtype, min_dtype="int"):
     If dtype=="generic" or dtype=="numeric", min_dtype determines "minimal" (in a sense that int<float<complex<generic) dtype.
         If min_dtype!="generic", the routine first tries to convert the whole column into a numpy array, gradually increasing types on fails. 
     """
-    if len(column)>0 and not isinstance(column[0],basestring):
+    if len(column)>0 and not isinstance(column[0],textstring):
         raise ValueError("_try_convert_column only works for string input")
     if dtype=="raw":
         return column, dtype

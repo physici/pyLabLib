@@ -265,7 +265,7 @@ def to_string(value, location="element", custom_representations=None):
         return tr.get("float",_default_float_representaion).format(float(value))
     if isinstance(value,bool):
         return str(value)
-    if isinstance(value,int) or isinstance(value,np.integer) or isinstance(value,long):
+    if isinstance(value,int) or isinstance(value,np.long) or isinstance(value,np.integer):
         return tr.get("int",_default_int_representation).format(int(value))
     if isinstance(value,textstring):
         return escape_string(value, location=location)
@@ -288,7 +288,7 @@ def to_string(value, location="element", custom_representations=None):
     for ec in "\n\v\r":
         value=value.replace(ec,"\t")
     return value
-_conv_types=[float,int,np.floating,np.integer,textstring,complex,long,bool]
+_conv_types=[float,int,np.floating,np.integer,textstring,complex,np.long,bool]
 _cont_types=[list,tuple,set]
 def is_convertible(value):
     """

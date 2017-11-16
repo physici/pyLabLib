@@ -1,4 +1,5 @@
 from builtins import range
+from ...core.utils.py3 import textstring
 
 import numpy as np
 
@@ -562,7 +563,7 @@ class MDO3000(SCPI.SCPIDevice):
             return self._inv_rf_trace_kind[source]
         raise RuntimeError("source {} is not a channel".format(source))
     def select_channel(self, channel):
-        if not isinstance(channel,basestring):
+        if not isinstance(channel,textstring):
             channel="CH{}".format(channel)
         elif channel in self._rf_trace_kind:
             channel=self._get_rf_trace_kind(channel)

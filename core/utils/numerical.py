@@ -131,10 +131,11 @@ class infinite_list(object):
             self.idx=0
         def __iter__(self):
             return self
-        def next(self):
+        def __next__(self):
             elt=self.lst[self.idx]
             self.idx=self.idx+1
             return elt
+        next=__next__
     def __iter__(self):
         return self.counter(self)
     

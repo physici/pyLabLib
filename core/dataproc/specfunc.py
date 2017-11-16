@@ -3,6 +3,7 @@ Specific useful functions.
 """
 
 from __future__ import division
+from ..utils.py3 import textstring
 
 
 import numpy as np
@@ -91,7 +92,7 @@ def get_kernel_func(kernel):
     
     Available functions are: ``'gaussian'``, ``'rectangle'``, ``'lorentzian'``, ``'exp_decay'``, ``'complex_lorentzian'``.
     """
-    if isinstance(kernel,basestring):
+    if isinstance(kernel,textstring):
         try:
             return _kernel_functions[kernel]
         except KeyError:
@@ -144,7 +145,7 @@ def get_window_func(window):
     
     Available functions are: ``'hamming'``, ``'rectangle'``, ``'hann'``.
     """
-    if isinstance(window,basestring):
+    if isinstance(window,textstring):
         try:
             return _window_functions[window]
         except KeyError:
@@ -196,7 +197,7 @@ def get_window_ft_func(window):
     
     Available functions are: ``'hamming'``, ``'rectangle'``, ``'hann'``.
     """
-    if isinstance(window,basestring):
+    if isinstance(window,textstring):
         try:
             return _window_ft_functions[window]
         except KeyError:

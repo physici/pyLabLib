@@ -93,9 +93,9 @@ iir_apply(PyObject *self, PyObject *args)
     return (PyObject *)ArrTrace;
 };
 char iir_apply__doc[]="iir_apply(trace, xcoeff, ycoeff)\n\n\
-	Apply digital, (possibly) recursive filter with coefficients xcoeff and ycoeff.\n\n\
-	Result is filtered signal y with y[n]=sum_j x[n-j]*xcoeff[j] + sum_k y[n-k-1]*ycoeff[k].\n\
-	All input arrays should be one-dimensional.";
+	Apply digital, (possibly) recursive filter with coefficients `xcoeff` and `ycoeff`.\n\n\
+	Result is filtered signal `y` with ``y[n]=sum_j x[n-j]*xcoeff[j] + sum_k y[n-k-1]*ycoeff[k]`` .\n\
+	All input arrays should be one-dimensional and real.";
 
 static PyMethodDef ExtMethods[] = 
 {
@@ -103,20 +103,38 @@ static PyMethodDef ExtMethods[] =
 	{NULL, NULL, 0, NULL}
 };
 
+
+
 #ifdef ENVIRONMENT32
+static struct PyModuleDef iir_transform_module = {
+    PyModuleDef_HEAD_INIT,
+    "iir_transform_py36_32",   /* name of module */
+    NULL, /* module documentation, may be NULL */
+    -1,       /* size of per-interpreter state of the module, or -1 if the module keeps state in global variables. */
+	ExtMethods
+};
 PyMODINIT_FUNC
-initiir_transform_32()
+PyInit_iir_transform_py36_32()
 {
-	Py_InitModule("iir_transform_32", ExtMethods);
+	PyObject *module=PyModule_Create(&iir_transform_module);
 	import_array();
+	return module;
 };
 #endif
 
 #ifdef ENVIRONMENT64
+static struct PyModuleDef iir_transform_module = {
+    PyModuleDef_HEAD_INIT,
+    "iir_transform_py36_64",   /* name of module */
+    NULL, /* module documentation, may be NULL */
+    -1,       /* size of per-interpreter state of the module, or -1 if the module keeps state in global variables. */
+	ExtMethods
+};
 PyMODINIT_FUNC
-initiir_transform_64()
+PyInit_iir_transform_py36_64()
 {
-	Py_InitModule("iir_transform_64", ExtMethods);
+	PyObject *module=PyModule_Create(&iir_transform_module);
 	import_array();
+	return module;
 };
 #endif

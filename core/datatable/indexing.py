@@ -3,6 +3,7 @@ Processing and normalization of different indexing styles.
 """
 
 from builtins import range
+from ..utils.py3 import textstring
 
 import numpy as np
 from ..utils import string as string_utils #@UnresolvedImport
@@ -130,7 +131,7 @@ class NumpyIndex(IIndex):
         IIndex.__init__(self)
         if ndim is None:
             if is_slice(idx):
-                if isinstance(idx.start,basestring) or isinstance(idx.stop,basestring):
+                if isinstance(idx.start,textstring) or isinstance(idx.stop,textstring):
                     raise ValueError("can't accept string index for numpy object")
                 self.ndim=1
             else:
@@ -140,7 +141,7 @@ class NumpyIndex(IIndex):
                         idx=np.asarray(idx)
                     else:
                         val=idx[0]
-                        if isinstance(val,basestring):
+                        if isinstance(val,textstring):
                             raise ValueError("can't accept string index for numpy object")
                         if isinstance(val,bool):
                             idx=np.asarray(idx)
@@ -166,7 +167,7 @@ class ListIndex(IIndex):
         IIndex.__init__(self)
         if ndim is None:
             if is_slice(idx):
-                if names is not None and (isinstance(idx.start,basestring) or isinstance(idx.stop,basestring)):
+                if names is not None and (isinstance(idx.start,textstring) or isinstance(idx.stop,textstring)):
                     start_stop=string_list_idx([idx.start,idx.stop],names)
                     idx=slice(start_stop[0],start_stop[1],idx.step) # crash later if names is None
                 self.ndim=1
@@ -177,7 +178,7 @@ class ListIndex(IIndex):
                         idx=[]
                     else:
                         val=idx[0]
-                        if isinstance(val,basestring):
+                        if isinstance(val,textstring):
                             if names:
                                 idx=string_list_idx(idx,names)
                                 if type(idx)==list:

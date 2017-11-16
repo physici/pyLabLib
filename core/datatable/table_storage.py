@@ -5,6 +5,7 @@ Should not be acessed directly by users of `DataTable`.
 """
 
 from builtins import range
+from ..utils.py3 import textstring
 
 from . import indexing
 from . import column
@@ -232,7 +233,7 @@ class ColumnDataTableStorage(IDataTableStorage):
         self._columns[idx1],self._columns[idx2]=self._columns[idx2],self._columns[idx1]
         
     def _check_name_clashes(self, names, adding=True):
-        if isinstance(names,basestring):
+        if isinstance(names,textstring):
             names=[names]
         for i,n in enumerate(names): # check collisions in the supplied array
             if n in names[i+1:]:
@@ -373,7 +374,7 @@ class ColumnDataTableStorage(IDataTableStorage):
         c_ndim,idx=indexing.to_list_idx_noslice(idx,self.get_column_names()).tup()
         if c_ndim==1:
             raise ValueError("can only insert items in a single location")
-        if isinstance(names,basestring) or names is None:
+        if isinstance(names,textstring) or names is None:
             names=[names]
         v_shape=get_shape(val)
         v_ndim=len(v_shape)
@@ -598,7 +599,7 @@ class ArrayDataTableStorage(IDataTableStorage):
         self._data[:,idx1],self._data[:,idx2]=self._data[:,idx2].copy(),self._data[:,idx1].copy()
         
     def _check_name_clashes(self, names, adding=True):
-        if isinstance(names,basestring):
+        if isinstance(names,textstring):
             names=[names]
         for i,n in enumerate(names): # check collisions in the supplied array
             if n in names[i+1:]:
@@ -635,9 +636,9 @@ class ArrayDataTableStorage(IDataTableStorage):
             self._data=self._data.astype(val.dtype)
     ## Indexing ##
     def _to_column_index(self, idx):
-        if isinstance(idx,basestring) or (isinstance(idx,list) and isinstance(idx[0],basestring)):
+        if isinstance(idx,textstring) or (isinstance(idx,list) and isinstance(idx[0],textstring)):
             return indexing.string_list_idx(idx,self.get_column_names())
-        if isinstance(idx,slice) and (isinstance(idx.start,basestring) or isinstance(idx.stop,basestring)):
+        if isinstance(idx,slice) and (isinstance(idx.start,textstring) or isinstance(idx.stop,textstring)):
             start_stop=indexing.string_list_idx([idx.start,idx.stop],self.get_column_names())
             return slice(start_stop[0],start_stop[1],idx.step)
         return None
@@ -701,7 +702,7 @@ class ArrayDataTableStorage(IDataTableStorage):
         column_idx=self._to_column_index(idx)
         if column_idx is not None:
             idx=column_idx
-        if isinstance(names,basestring) or names is None:
+        if isinstance(names,textstring) or names is None:
             names=[names]
         v_ndim=np.ndim(val)
         if v_ndim==0:
