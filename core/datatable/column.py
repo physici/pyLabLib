@@ -9,7 +9,7 @@ from ..utils import iterator as iterator_utils #@UnresolvedImport
 from . import indexing
 from .utils import as_array
 
-_depends_local=["..utils.numclass"]
+_depends_local=["..utils.numclass","..utils.strdump"]
 
 
 ##### Data column #####

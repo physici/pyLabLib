@@ -1,3 +1,7 @@
+"""
+Utilities for working with the file system: creating/removing/listing folders, comparing folders and files, working with zip archives.
+"""
+
 # from io import open
 from builtins import range
 

@@ -7,7 +7,7 @@ from . import table_storage, column, indexing
 
 import numpy as np
 
-_depends_local=[".table_storage"]
+_depends_local=[".table_storage","..utils.strdump"]
 
 
 _storage_types={"columns":table_storage.ColumnDataTableStorage,"array":table_storage.ArrayDataTableStorage}

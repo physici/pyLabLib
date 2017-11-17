@@ -1,5 +1,5 @@
 """
-Implements names lifting feature (works both for attributes and for methods), similar to the tandard class inheritance.
+Implements names lifting feature (works both for attributes and for methods), similar to the standard class inheritance.
 The goal is solely to simplify syntax (shortcut access to parameters deep in the subarguments tree).
 Multiple inclusion is allowed (e.g., A->B->C and A->D->C), but recursive containment (A->B->C->A) is not.
 """

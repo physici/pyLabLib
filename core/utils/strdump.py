@@ -10,10 +10,6 @@ import collections
 
 import numpy as np
 
-# from ..datatable import table, column
-
-_depends_local=[".dictionary","..datatable.column","..datatable.table"]
-
 class StrDumper(object):
     """
     Class for dumping and loading an object.

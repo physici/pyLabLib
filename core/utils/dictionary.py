@@ -9,7 +9,7 @@ from . import funcargparse, general, strdump
 import re
 import collections
 
-
+_depends_local=["..utils.strdump"]
 
 def split_path(path, omit_empty=True, sep=None):
     """

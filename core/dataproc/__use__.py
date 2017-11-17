@@ -25,4 +25,4 @@ from . import specfunc
 from .specfunc import get_kernel_func, get_window_func
 
 from . import feature as feature_detect
-from .feature import get_baseline_simple, subtract_baseline, find_peaks_cutoff
+from .feature import get_baseline_simple, subtract_baseline, find_peaks_cutoff, peaks_sum_func
