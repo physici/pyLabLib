@@ -34,6 +34,31 @@ class LM500(SCPI.SCPIDevice):
         self.write("INTVL",intvl)
         return self.get_interval()
     
+    def start_meas(self, channel=1):
+        self.write("MEAS",channel)
+    def _get_stb(self):
+        return self.ask("*STB?","int")
+    def wait_meas(self, channel=1):
+        mask=0x01 if channel==1 else 0x04
+        while not self._get_stb()&mask:
+            self.sleep(0.1)
     def get_level(self, channel=1):
         res=self.ask("MEAS? {}".format(channel))
         return float(res.split()[0])
+    def measure_level(self, channel=1):
+        self.start_meas(channel=channel)
+        self.wait_meas(channel=channel)
+        return self.get_level(channel=channel)
+
+    def start_fill(self, channel=1):
+        self.write("FILL",channel)
+    def get_fill_status(self, channel):
+        res=self.ask("FILL? {}".format(channel)).lower()
+        if res in {"off","timeout"}:
+            return res
+        spres=res.split()
+        if len(spres)==1 or spres[1] in ["s","sec"]:
+            return float(spres[0])
+        if spres[1] in ["m","min"]:
+            return float(spres[0])*60.
+        raise ValueError("unxepected response: {}".format(res))
