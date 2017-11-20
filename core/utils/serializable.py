@@ -10,7 +10,7 @@ from future.utils import viewitems, viewvalues
 from .py3 import textstring
 
 import inspect
-from . import string, functions
+from . import string
 
 class Serializable(object):
     """

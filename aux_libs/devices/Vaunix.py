@@ -5,7 +5,6 @@ from ...core.utils import log #@UnresolvedImport
 
 import time
 import threading
-import sys
 
 _depends_local=["...core.devio.backend"]
 
