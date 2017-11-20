@@ -78,22 +78,23 @@ class IDeviceBackend(object):
     
             
         
-    def readline(self, remove_term=True, timeout=None):
+    def readline(self, remove_term=True, timeout=None, skip_empty=False):
         """
         Read a single line from the device.
         
         Args:
             remove_term (bool): If ``True``, remove terminal characters from the result.
             timeout: Operation timeout. If ``None``, use the default device timeout.
+            skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
         """
         raise NotImplementedError("IDeviceBackend.readline")
-    def readlines(self, lines_num, remove_term=True, timeout=None):
+    def readlines(self, lines_num, remove_term=True, timeout=None, skip_empty=False):
         """
         Read multiple lines from the device.
         
         Parameters are the same as in :func:`readline`.
         """
-        return [self.readline(remove_term=remove_term,timeout=timeout) for _ in range(lines_num)]
+        return [self.readline(remove_term=remove_term,timeout=timeout,skip_empty=skip_empty) for _ in range(lines_num)]
     def read(self, size=None):
         """
         Read data from the device.
@@ -104,12 +105,12 @@ class IDeviceBackend(object):
     def flush_read(self):
         """Flush the device output (read all the available data; return the number of bytes read)."""
         return len(self.read())
-    def write(self, data, flush=True, read_echo=False, read_echo_delay=0):
+    def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
         """
         Write data to the device.
         
         If ``flush==True``, flush the write buffer.
-        If ``read_echo==True``, perform a single :func:`readline` after writing (waiting `read_echo_delay` before that).
+        If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
         """
         raise NotImplementedError("IDeviceBackend.write")
     def ask(self, query, delay=0., read_all=False):
@@ -247,17 +248,21 @@ try:
             """Get operations timeout (in seconds)."""
             return self._get_timeout()            
         
-        def readline(self, remove_term=True, timeout=None):
+        def readline(self, remove_term=True, timeout=None, skip_empty=False):
             """
             Read a single line from the device.
             
             Args:
                 remove_term (bool): If ``True``, remove terminal characters from the result.
                 timeout: Operation timeout. If ``None``, use the default device timeout.
+                skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
             """
             with self.using_timeout(timeout):
                 if remove_term:
-                    result=self.instr.read()
+                    while True:
+                        result=self.instr.read()
+                        if (not skip_empty) or result:
+                            break
                 else:
                     result=self.instr.read_raw()
             self.cooldown()
@@ -275,12 +280,12 @@ try:
             self.cooldown()
             return result
         
-        def write(self, data, flush=True, read_echo=False, read_echo_delay=0):
+        def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
             """
             Write data to the device.
             
-            `flush` argument doesn't matter.
-            If ``read_echo==True``, perform a single :func:`readline` after writing (waiting `read_echo_delay` before that).
+            If ``flush==True``, flush the write buffer.
+            If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
             """
             if self.term_write:
                 data=data+self.term_write
@@ -289,8 +294,9 @@ try:
             if read_echo_delay>0.:
                 time.sleep(read_echo_delay)
             if read_echo:
-                self.readline()
-                self.cooldown()
+                for _ in xrange(read_echo_lines):
+                    self.readline()
+                    self.cooldown()
 
         def __repr__(self):
             return "VisaDeviceBackend("+self.instr.__repr__()+")"
@@ -304,7 +310,7 @@ except ImportError:
 
 try:
     import serial
-    
+
     class SerialDeviceBackend(IDeviceBackend):
         """
         Serial backend (via pySerial).
@@ -336,16 +342,22 @@ try:
         
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts","dsrdtr"]
         _default_conn=["COM1",19200,8,"N",1,0,0,0]
+    
+        @staticmethod
+        def _conn_to_dict(conn):
+            if isinstance(conn, dict):
+                return conn
+            if isinstance(conn, (tuple,list)):
+                return dict(zip(SerialDeviceBackend._conn_params,conn))
+            return {"port":conn}
+        @staticmethod
+        def combine_serial_conn(conn1, conn2):
+            conn=SerialDeviceBackend._conn_to_dict(conn2).copy()
+            conn.update(SerialDeviceBackend._conn_to_dict(conn1))
+            return conn
+
         def __init__(self, conn, timeout=10., term_write=None, term_read=None, connect_on_operation=False, open_retry_times=3, no_dtr=False):
-            if isinstance(conn,tuple) or isinstance(conn,list):
-                conn=list(conn)+self._default_conn[len(conn):]
-                conn_dict=dict(zip(self._conn_params,conn))
-            elif isinstance(conn,dict):
-                conn_dict=dict(zip(self._conn_params,self._default_conn))
-                conn_dict.update(conn)
-            else:
-                conn=[conn]+self._default_conn[1:]
-                conn_dict=dict(zip(self._conn_params,conn))
+            conn_dict=self.combine_serial_conn(conn,self._default_conn)
             if term_write is None:
                 term_write="\r\n"
             if term_read is None:
@@ -444,30 +456,34 @@ try:
                             for t in terms:
                                 if result.endswith(t):
                                     return result
-        def readline(self, remove_term=True, timeout=None, error_on_timeout=True):
+        def readline(self, remove_term=True, timeout=None, skip_empty=False, error_on_timeout=True):
             """
             Read a single line from the device.
             
             Args:
                 remove_term (bool): If ``True``, remove terminal characters from the result.
                 timeout: Operation timeout. If ``None``, use the default device timeout.
+                skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
                 error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
             """
-            result=self._read_terms(self.term_read or "",timeout=timeout,error_on_timeout=error_on_timeout)
-            self.cooldown()
-            if remove_term and self.term_read:
-                tcs=0
-                if isinstance(self.term_read,textstring):
-                    for c in result[::-1]:
-                        if c not in self.term_read:
-                            break
-                        tcs=tcs+1
-                else:
-                    for t in self.term_read:
-                        if result.endswith(t):
-                            tcs=max(tcs,len(t))
-                if tcs:
-                    result=result[:-tcs]
+            while True:
+                result=self._read_terms(self.term_read or "",timeout=timeout,error_on_timeout=error_on_timeout)
+                self.cooldown()
+                if remove_term and self.term_read:
+                    tcs=0
+                    if isinstance(self.term_read,textstring):
+                        for c in result[::-1]:
+                            if c not in self.term_read:
+                                break
+                            tcs=tcs+1
+                    else:
+                        for t in self.term_read:
+                            if result.endswith(t):
+                                tcs=max(tcs,len(t))
+                    if tcs:
+                        result=result[:-tcs]
+                if not (skip_empty and remove_term and (not result)):
+                    break
             return result
         def read(self, size=None, error_on_timeout=True):
             """
@@ -504,12 +520,12 @@ try:
                         result=result[:-len(t)]
                         break
             return result
-        def write(self, data, flush=True, read_echo=False, read_echo_delay=0):
+        def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
             """
             Write data to the device.
-        
+            
             If ``flush==True``, flush the write buffer.
-            If ``read_echo==True``, perform a single :func:`readline` after writing (waiting `read_echo_delay` before that).
+            If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
             """
             with self.single_op():
                 if self.term_write:
@@ -522,8 +538,9 @@ try:
                 if read_echo_delay>0.:
                     time.sleep(read_echo_delay)
                 if read_echo:
-                    self.readline()
-                    self.cooldown()
+                    for _ in range(read_echo_lines):
+                        self.readline()
+                        self.cooldown()
 
         def __repr__(self):
             return "SerialDeviceBackend("+self.instr.__repr__()+")"

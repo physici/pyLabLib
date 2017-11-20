@@ -11,12 +11,16 @@ class LM500(SCPI.SCPIDevice):
     def __init__(self, addr):
         SCPI.SCPIDevice.__init__(self,(addr,9600),backend="serial")
         self.instr.term_read="\n"
+        self.instr.term_write="\n"
         self._add_settings_node("interval",self.get_interval,self.set_interval)
     
     def _instr_write(self, msg):
-        return self.instr.write(msg,read_echo=True)
+        return self.instr.write(msg,read_echo=True,read_echo_delay=0.1)
     def _instr_read(self, raw=False):
-        return self.instr.readline(remove_term=True).strip()
+        data=""
+        while not data:
+            data=self.instr.readline(remove_term=True).strip()
+        return data
     
     @staticmethod
     def _str_to_sec(s):
@@ -57,8 +61,8 @@ class LM500(SCPI.SCPIDevice):
         if res in {"off","timeout"}:
             return res
         spres=res.split()
-        if len(spres)==1 or spres[1] in ["s","sec"]:
-            return float(spres[0])
-        if spres[1] in ["m","min"]:
+        if len(spres)==1 or spres[1] in ["m","min"]:
             return float(spres[0])*60.
+        if spres[1] in ["s","sec"]:
+            return float(spres[0])
         raise ValueError("unxepected response: {}".format(res))
