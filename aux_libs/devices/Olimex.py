@@ -10,7 +10,7 @@ class IMCDevice(backend.IBackendWrapper):
     Generic Olimex ATMega device.
     """
     def __init__(self, port_addr, timeout=20.):
-        instr=backend.SerialDeviceBackend((port_addr,9600),timeout=timeout,term_write="",term_read="\r\n",connect_on_operation=True)
+        instr=backend.SerialDeviceBackend((port_addr,9600),timeout=timeout,term_write="",connect_on_operation=True)
         backend.IBackendWrapper.__init__(self,instr)
     
     def comm(self, comm, timeout=None):

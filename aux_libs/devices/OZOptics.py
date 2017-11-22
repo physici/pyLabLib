@@ -11,7 +11,7 @@ class OZOpticsDevice(backend.IBackendWrapper):
     Generic OZOptics device.
     """
     def __init__(self, port_addr, timeout=20.):
-        instr=backend.SerialDeviceBackend((port_addr,9600),timeout=timeout,term_write="\r\n",term_read="\r\n",connect_on_operation=True)
+        instr=backend.SerialDeviceBackend((port_addr,9600),timeout=timeout,term_write="\r\n",connect_on_operation=True)
         backend.IBackendWrapper.__init__(self,instr)
     
     def _parse_response(self, comm, resp):
@@ -113,7 +113,7 @@ class EPC04(backend.IBackendWrapper):
     OZOptics EPC04 polarization controller.
     """
     def __init__(self, port_addr, timeout=20.):
-        instr=backend.SerialDeviceBackend((port_addr,9600),timeout=timeout,term_write="\r\n",term_read="\r\n",connect_on_operation=True)
+        instr=backend.SerialDeviceBackend((port_addr,9600),timeout=timeout,term_write="\r\n",connect_on_operation=True)
         backend.IBackendWrapper.__init__(self,instr)
         self._add_settings_node("voltages",self.get_voltages,None)
         self._add_settings_node("mode",self.get_mode,self.set_mode)

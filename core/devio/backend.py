@@ -2,14 +2,12 @@
 Routines for defining a unified interface across multiple backends.
 """
 
-from ..utils.py3 import textstring
+from ..utils.py3 import anystring
 from future.utils import viewitems
 from builtins import range, zip
 
 import time
-from ..utils import funcargparse
-from ..utils import general
-from ..utils import log #@UnresolvedImport
+from ..utils import funcargparse, general, log, net
 import contextlib
 
 
@@ -78,7 +76,7 @@ class IDeviceBackend(object):
     
             
         
-    def readline(self, remove_term=True, timeout=None, skip_empty=False):
+    def readline(self, remove_term=True, timeout=None, skip_empty=True):
         """
         Read a single line from the device.
         
@@ -88,7 +86,7 @@ class IDeviceBackend(object):
             skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
         """
         raise NotImplementedError("IDeviceBackend.readline")
-    def readlines(self, lines_num, remove_term=True, timeout=None, skip_empty=False):
+    def readlines(self, lines_num, remove_term=True, timeout=None, skip_empty=True):
         """
         Read multiple lines from the device.
         
@@ -126,7 +124,20 @@ class IDeviceBackend(object):
             return self.read()
         else:
             return self.readline()
-    
+
+
+
+### Helper functions ###
+
+def remove_longest_term(msg, terms):
+    """
+    Remove the longest terminator among `terms` from the end of the message.
+    """
+    tcs=0
+    for t in terms:
+        if msg.endswith(t):
+            tcs=max(tcs,len(t))
+    return msg[:-tcs]
     
 
 
@@ -248,7 +259,7 @@ try:
             """Get operations timeout (in seconds)."""
             return self._get_timeout()            
         
-        def readline(self, remove_term=True, timeout=None, skip_empty=False):
+        def readline(self, remove_term=True, timeout=None, skip_empty=True):
             """
             Read a single line from the device.
             
@@ -329,11 +340,6 @@ try:
                 (normally two processes can't be simultaneously connected to the same device). 
             open_retry_times (int): Number of times the connection is attempted before giving up.
             no_dtr (bool): If ``True``, turn off DTR status line before opening (e.g., turns off reset-on-connection for Arduino controllers).
-            
-        Note:
-            If `term_read` is a string, its behavior is different from the VISA backend:
-            instead of being a multi-char terminator it is assumed to be a set of single-char terminators.
-            If multi-char terminator is required, `term_read` should be a single-element list instead of a string.
         """
         _default_operation_cooldown=0.0
         _backend="serial"
@@ -361,7 +367,9 @@ try:
             if term_write is None:
                 term_write="\r\n"
             if term_read is None:
-                term_read="\r\n"
+                term_read="\n"
+            if isinstance(term_read,anystring):
+                term_read=[term_read]
             IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
             port=conn_dict.pop("port")
             self.instr=serial.serial_for_url(port,do_not_open=True,**conn_dict)
@@ -439,7 +447,7 @@ try:
         
         def _read_terms(self, terms="", timeout=None, error_on_timeout=True):
             result=""
-            singlechar_terms=isinstance(terms,textstring)
+            singlechar_terms=all(len(t)==1 for t in terms)
             with self.single_op():
                 with self.using_timeout(timeout):
                     while True:
@@ -456,7 +464,7 @@ try:
                             for t in terms:
                                 if result.endswith(t):
                                     return result
-        def readline(self, remove_term=True, timeout=None, skip_empty=False, error_on_timeout=True):
+        def readline(self, remove_term=True, timeout=None, skip_empty=True, error_on_timeout=True):
             """
             Read a single line from the device.
             
@@ -470,18 +478,7 @@ try:
                 result=self._read_terms(self.term_read or "",timeout=timeout,error_on_timeout=error_on_timeout)
                 self.cooldown()
                 if remove_term and self.term_read:
-                    tcs=0
-                    if isinstance(self.term_read,textstring):
-                        for c in result[::-1]:
-                            if c not in self.term_read:
-                                break
-                            tcs=tcs+1
-                    else:
-                        for t in self.term_read:
-                            if result.endswith(t):
-                                tcs=max(tcs,len(t))
-                    if tcs:
-                        result=result[:-tcs]
+                    result=remove_longest_term(result,self.term_read)
                 if not (skip_empty and remove_term and (not result)):
                     break
             return result
@@ -510,15 +507,12 @@ try:
                 timeout: Operation timeout. If ``None``, use the default device timeout.
                 error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
             """
-            if isinstance(term,textstring):
+            if isinstance(term,anystring):
                 term=[term]
             result=self._read_terms(term,timeout=timeout,error_on_timeout=error_on_timeout)
             self.cooldown()
             if remove_term and term:
-                for t in term:
-                    if result.endswith(t):
-                        result=result[:-len(t)]
-                        break
+                result=remove_longest_term(result,term)
             return result
         def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
             """
@@ -549,6 +543,167 @@ try:
     _backends["serial"]=SerialDeviceBackend
 except ImportError:
     pass
+
+
+
+
+class NetworkDeviceBackend(IDeviceBackend):
+    """
+    Serial backend (via pySerial).
+    
+    Connection is automatically opened on creation.
+    
+    Args:
+        conn: Connection parameters. Can be either a string (for a port),
+            or a list/tuple ``(port, baudrate, bytesize, parity, stopbits, xonxoff, rtscts, dsrdtr)`` supplied to the serial connection
+            (default is ``('COM1',19200,8,'N',1,0,0,0)``),
+            or a dict with the same paramters. 
+        timeout (float): Default timeout (in seconds).
+        term_write (str): Line terminator for writing operations; appended to the data
+        term_read (str): List of possible single-char terminator for reading operations (specifies when :func:`readline` stops).
+        open_retry_times (int): Number of times the connection is attempted before giving up.
+        
+    Note:
+        If `term_read` is a string, its behavior is different from the VISA backend:
+        instead of being a multi-char terminator it is assumed to be a set of single-char terminators.
+        If multi-char terminator is required, `term_read` should be a single-element list instead of a string.
+    """
+    _default_operation_cooldown=0.0
+    _backend="network"
+    Error=net.socket.error
+    """Base class for the errors raised by the backend operations"""
+
+    def __init__(self, conn, timeout=10., term_write=None, term_read=None):
+        if term_write is None:
+            term_write="\r\n"
+        if term_read is None:
+            term_read="\r\n"
+        if isinstance(term_read,anystring):
+            term_read=[term_read]
+        IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
+        self.open()
+        self._operation_cooldown=self._default_operation_cooldown
+        self.cooldown()
+        self.set_timeout(timeout)
+    
+    @staticmethod
+    def _get_addr_port(conn):
+        conn=conn.split(":")
+        if len(conn)!=2:
+            raise ValueError("invalid device address: {}".format(conn))
+        return conn[0],int(conn[1])
+    def open(self):
+        """Open the connection."""
+        self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen")
+        self.socket.connect(self._get_addr_port(self.conn))
+    def close(self):
+        """Close the connection."""
+        self.socket.close()
+        
+    def cooldown(self):
+        """
+        Cooldown between the operations.
+        
+        Sleeping for a short time defined by `_operation_cooldown` attribute (no cooldown by default).
+        Also defined class-wide by `_default_operation_cooldown` class attribute.
+        """
+        if self._operation_cooldown>0:
+            time.sleep(self._operation_cooldown)
+        
+    def set_timeout(self, timeout):
+        """Set operations timeout (in seconds)."""
+        self.socket.set_timeout(timeout)
+    def get_timeout(self):
+        """Get operations timeout (in seconds)."""
+        return self.socket.get_timeout()
+    
+    
+    def readline(self, remove_term=True, timeout=None, skip_empty=True, error_on_timeout=True):
+        """
+        Read a single line from the device.
+        
+        Args:
+            remove_term (bool): If ``True``, remove terminal characters from the result.
+            timeout: Operation timeout. If ``None``, use the default device timeout.
+            skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
+            error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
+        """
+        while True:
+            try:
+                with self.using_timeout(timeout):
+                    result=self.socket.recv_delimiter(self.term_read,strict=True)
+            except net.SocketTimeout:
+                if error_on_timeout:
+                    raise
+            self.cooldown()
+            if remove_term and self.term_read:
+                result=remove_longest_term(result,self.term_read)
+            if not (skip_empty and remove_term and (not result)):
+                break
+        return result
+    def read(self, size=None, error_on_timeout=True):
+        """
+        Read data from the device.
+        
+        If `size` is not None, read `size` bytes (usual timeout applies); otherwise, read all available data (return immediately).
+        """
+        if size is None:
+            try:
+                data=b""
+                with self.using_timeout(0):
+                    while True:
+                        new_data=self.socket.recv_fixedlen(1024)
+                        if not new_data:
+                            break
+                        data=data+new_data
+            except net.SocketTimeout:
+                pass
+        else:
+            try:
+                data=self.socket.recv_fixedlen(size)
+            except net.SocketTimeout:
+                if error_on_timeout:
+                    raise
+        return data
+    def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
+        """
+        Read a single line with multiple possible terminators.
+        
+        Args:
+            term: Either a string (single multi-char terminator) or a list of strings (multiple terminators).
+            remove_term (bool): If ``True``, remove terminal characters from the result.
+            timeout: Operation timeout. If ``None``, use the default device timeout.
+            error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
+        """
+        if isinstance(term,anystring):
+                term=[term]
+        result=self.socket.recv_delimiter(term,strict=True)
+        self.cooldown()
+        if remove_term and term:
+            result=remove_longest_term(result,term)
+        return result
+    def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
+        """
+        Write data to the device.
+        
+        If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
+        `flush` parameter is ignored.
+        """
+        self.socket.send_delimiter(data,self.term_write)
+        self.instr.write(data)
+        self.cooldown()
+        if read_echo_delay>0.:
+            time.sleep(read_echo_delay)
+        if read_echo:
+            for _ in range(read_echo_lines):
+                self.readline()
+                self.cooldown()
+
+    def __repr__(self):
+        return "NetworkDeviceBackend("+self.instr.__repr__()+")"
+    
+    
+_backends["network"]=NetworkDeviceBackend
     
     
     

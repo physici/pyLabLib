@@ -12,7 +12,7 @@ class NIGPIBSerialDevice(backend.IBackendWrapper):
     National Instruments Serial<->GPIB converter.
     """
     def __init__(self, port_addr, timeout=10.):
-        instr=backend.SerialDeviceBackend((port_addr,57600,8,'N',1,0,1),timeout=timeout,term_write="\n",term_read=["\r\n"])
+        instr=backend.SerialDeviceBackend((port_addr,57600,8,'N',1,0,1),timeout=timeout,term_write="\n",term_read="\r\n")
         backend.IBackendWrapper.__init__(self,instr)
     
     def get_id(self):

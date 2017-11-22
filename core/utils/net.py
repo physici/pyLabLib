@@ -4,7 +4,7 @@ A wrapper for built-in TCP/IP routines.
 
 
 import socket
-from . import funcargparse, strpack, general
+from . import funcargparse, strpack, general, py3
 
 
 class SocketError(socket.error):
@@ -40,7 +40,7 @@ class ClientSocket(object):
     
     Args:
         sock (socket.socket): If not ``None``, use already created socket.
-        timeout (float): The timeout used for connecting and sending/receving.
+        timeout (float): The timeout used for connecting and sending/receving (``None`` means no timeout).
         wait_callback (Callable): Called periodically (every 100ms by default) while waiting for connecting or sending/receiving.
         send_method (str): Default sending method.
         recv_method (str): Default receiving method.
@@ -84,6 +84,9 @@ class ClientSocket(object):
         self.timeout=timeout
         if self.wait_callback is None:
             self.sock.settimeout(self.timeout)
+    def get_timeout(self):
+        """Get timeout for connecting or sending/receiving."""
+        return self.timeout
     
     def _connect_callback(self):
         self.sock.close()
@@ -119,15 +122,21 @@ class ClientSocket(object):
                 raise SocketError("connection closed while receiving")
             buf=buf+recvd
         return buf
-    def recv_delimiter(self, delim, lmax=None, chunk_l=1024):
+    def recv_delimiter(self, delim, lmax=None, chunk_l=1024, strict=False):
         """
         Receive a single message ending with a delimiter `delim` (can be several characters).
         
         `lmax` specifies the maximal received length (`None` means no limit).
         `chunk_l` specifies the size of data chunk to be read in one try.
+        If ``strict==False``, keep receiving as much data as possible until a delimiter is found in the end (only works properly if a single line is expected);
+        otherwise, receive the data byte-by-byte and stop as soon as a delimiter is found (equivalent ot setting ``chunk_l=1``).
         """
         buf=""
-        while not buf.endswith(delim):
+        if isinstance(delim, py3.anystring):
+            delim=[delim]
+        if strict:
+            chunk_l=1
+        while not any([buf.endswith(d) for d in delim]):
             try:
                 recvd=self._recv_wait(chunk_l)
             except socket.timeout:

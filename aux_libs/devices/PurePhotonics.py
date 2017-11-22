@@ -14,7 +14,7 @@ class CBDX1(SCPI.SCPIDevice):
         backend_params={"connect_on_operation":connect_on_operation}
         SCPI.SCPIDevice.__init__(self,(addr,115200),backend="serial",backend_params=backend_params)
         self.instr.set_timeout(6.)
-        self.instr.term_read=";\r\n"
+        self.instr.term_read=[";","\r","\n"]
         self.max_wavelength_step=50E-12
         self.power_range=(4E-3,63E-3)
         self._ask_delay=comm_delay

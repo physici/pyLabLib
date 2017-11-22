@@ -9,7 +9,7 @@ class Lakeshore218(SCPI.SCPIDevice):
     Lakeshore 218 temperature controller.
     """
     def __init__(self, port_addr, timeout=1.):
-        SCPI.SCPIDevice.__init__(self,(port_addr,9600,7,'E',1),backend="serial",timeout=timeout,term_write="\r\n",backend_params={"term_read":["\r\n"]})
+        SCPI.SCPIDevice.__init__(self,(port_addr,9600,7,'E',1),backend="serial",timeout=timeout,term_write="\r\n",backend_params={"term_read":"\r\n"})
     
     def is_enabled(self, channel):
         return self.ask("INPUT? {}".format(channel+1),"bool")

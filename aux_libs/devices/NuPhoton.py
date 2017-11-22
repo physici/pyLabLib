@@ -7,7 +7,7 @@ class EDFA_NP2000(backend.IBackendWrapper):
     NuPhoton NP2000 EDFA (optical amplifier).
     """
     def __init__(self, port_addr, timeout=5.):
-        instr=backend.SerialDeviceBackend((port_addr,19200),timeout=timeout,term_write="\n",term_read="\r\n",connect_on_operation=True)
+        instr=backend.SerialDeviceBackend((port_addr,19200),timeout=timeout,term_write="\n",connect_on_operation=True)
         backend.IBackendWrapper.__init__(self,instr)
     
     def _parse_response(self, comm, resp):
