@@ -3,7 +3,7 @@ A wrapper for built-in TCP/IP routines.
 """
 
 
-import socket
+import socket, json
 from . import funcargparse, strpack, general, py3
 
 
@@ -102,6 +102,13 @@ class ClientSocket(object):
         """Close the connection."""
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
+
+    def get_local_name(self):
+        """Return IP address and port of this socket."""
+        return self.sock.getlocalname()
+    def get_peer_name(self):
+        """Return IP address and port of the peer socket."""
+        return self.sock.getlocalname()
         
     def _recv_wait(self, l):
         sock_func=lambda: self.sock.recv(l)
@@ -164,6 +171,22 @@ class ClientSocket(object):
             return self.recv_decllen()
         else:
             return self.recv_fixedlen(l)
+    def recv_all(self, chunk_l=1024):
+        """
+        Receive all of the data currently in the socket.
+
+        `chunk_l` specifies the size of data chunk to be read in one try.
+        """
+        data=b""
+        try:
+            to=self.get_timeout()
+            self.set_timeout(0)
+            while True:
+                data+=self.recv_fixedlen(chunk_l)
+        except SocketTimeout:
+            pass
+        finally:
+            self.set_timeout(to)
     def recv_ack(self, l=None):
         """Receive a message using the default method and send an acknowledgement (message length)."""
         msg=self.recv(l=l)
@@ -218,7 +241,23 @@ class ClientSocket(object):
         return res
         
         
-        
+
+def recv_JSON(socket, chunk_l=1024, strict=True):
+    """
+    Receive a complete JSON tokent from the socket.
+
+    `chunk_l` specifies the size of data chunk to be read in one try.
+    If ``strict==False``, keep receiving as much data as possible until the received data forms a complete JSON token.
+    otherwise, receive the data byte-by-byte and stop as soon as a token is formed (equivalent ot setting ``chunk_l=1``).
+    """
+    msg=""
+    while True:
+        msg+=socket.recv_delimiter("}",chunk_l=chunk_l,strict=strict)
+        try:
+            json.loads(msg)
+            return msg
+        except ValueError:
+            pass
         
         
 _listen_wait_callback_timeout=0.1
