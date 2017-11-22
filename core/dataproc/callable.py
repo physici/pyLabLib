@@ -87,7 +87,9 @@ class ICallable(object):
 
 def _join_list_results(res_vec, join_method="stack"):
     if len(res_vec)>0 and np.ndim(res_vec[0])>0:
-        if join_method=="stack":
+        if join_method=="list":
+            return res_vec
+        elif join_method=="stack":
             return np.column_stack(res_vec)
         elif join_method=="concatenate":
             return np.concatenate(res_vec)
@@ -110,7 +112,8 @@ class MultiplexedCallable(ICallable):
         func (Callable): Function to be parallelized.
         multiplex_by (str): Name of the argument to be multiplexed by.
         join_method (str): Method for combining individual results together if they're non-scalars.
-            Can be either ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result)
+            Can be either ``'list'`` (combine the results in a single list),
+            ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result),
             or ``'concatenate'`` (concatenate the return values; the dimension of the result stays the same).
     
     Multiplexing also makes use of call signatures for underlying function even if ``__call__`` is used.
@@ -185,7 +188,8 @@ class JoinedCallable(ICallable):
     Args:
         funcs ([Callable]): List of functions to be joined together.
         join_method (str): Method for combining individual results together if they're non-scalars.
-            Can be either ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result)
+            Can be either ``'list'`` (combine the results in a single list),
+            ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result),
             or ``'concatenate'`` (concatenate the return values; the dimension of the result stays the same).
     """
     def __init__(self, funcs, join_method="stack"):
