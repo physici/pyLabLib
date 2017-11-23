@@ -3,7 +3,7 @@ A wrapper for built-in TCP/IP routines.
 """
 
 
-import socket, json
+import socket, json, contextlib
 from . import funcargparse, strpack, general, py3
 
 
@@ -87,6 +87,17 @@ class ClientSocket(object):
     def get_timeout(self):
         """Get timeout for connecting or sending/receiving."""
         return self.timeout
+    @contextlib.contextmanager
+    def using_timeout(self, timeout=None):
+        """Context manager for usage of a different timeout inside a block."""
+        if timeout is not None:
+            to=self.get_timeout()
+            self.set_timeout(timeout)
+        try:
+            yield
+        finally:
+            if timeout is not None:
+                self.set_timeout(to)
     
     def _connect_callback(self):
         self.sock.close()
@@ -105,10 +116,10 @@ class ClientSocket(object):
 
     def get_local_name(self):
         """Return IP address and port of this socket."""
-        return self.sock.getlocalname()
+        return self.sock.getsockname()
     def get_peer_name(self):
         """Return IP address and port of the peer socket."""
-        return self.sock.getlocalname()
+        return self.sock.getpeername()
         
     def _recv_wait(self, l):
         sock_func=lambda: self.sock.recv(l)
