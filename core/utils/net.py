@@ -11,15 +11,13 @@ class SocketError(socket.error):
     """
     Base socket error class.
     """
-    def __init__(self, msg):
-        socket.error.__init__(self,msg)
+    pass
         
 class SocketTimeout(SocketError):
     """
     Socket timeout error.
     """
-    def __init__(self, msg):
-        SocketError.__init__(self,msg)
+    pass
 
 
 def _wait_sock_func(func, timeout, wait_callback):
@@ -187,17 +185,15 @@ class ClientSocket(object):
         Receive all of the data currently in the socket.
 
         `chunk_l` specifies the size of data chunk to be read in one try.
+        For technical reasons, use 1ms timeout (i.e., this operation takes 1ms).
         """
         data=b""
-        try:
-            to=self.get_timeout()
-            self.set_timeout(0)
-            while True:
-                data+=self.recv_fixedlen(chunk_l)
-        except SocketTimeout:
-            pass
-        finally:
-            self.set_timeout(to)
+        with self.using_timeout(1E-3):
+            try:
+                while True:
+                    data+=self.recv_fixedlen(chunk_l)
+            except SocketTimeout:
+                pass
     def recv_ack(self, l=None):
         """Receive a message using the default method and send an acknowledgement (message length)."""
         msg=self.recv(l=l)
