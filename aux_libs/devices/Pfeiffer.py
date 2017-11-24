@@ -1,5 +1,7 @@
 from ...core.devio import backend  #@UnresolvedImport
 
+_depends_local=["...core.devio.backend"]
+
 
 class PfeifferError(RuntimeError):
     """

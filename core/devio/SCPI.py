@@ -40,7 +40,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
     _default_wait_callback_timeout=.3 # callback call period during wait operations (keeps the thread from complete halting)
     _default_failsafe=False # running in the failsafe mode by default
     _allow_concatenate_write=True # allow automatic concatenation of several write operations (see :func:`using_write_buffer`)
-    def __init__(self, conn, term_write=None, wait_callback=None, backend="visa", failsafe=None, timeout=None, backend_params=None):
+    def __init__(self, conn, term_write=None, term_read=None, wait_callback=None, backend="visa", failsafe=None, timeout=None, backend_params=None):
         self._wait_sync_timeout=self._default_wait_sync_timeout
         failsafe=self._default_failsafe if failsafe is None else failsafe
         self._failsafe=failsafe
@@ -56,13 +56,14 @@ class SCPIDevice(backend_module.IBackendWrapper):
             self._retry_times=0
         self._wait_callback=wait_callback
         self._wait_callback_timeout=self._default_wait_callback_timeout
-        instr=backend_module.new_backend(conn,backend=backend,term_write=term_write,timeout=self._backend_timeout,**(backend_params or {}))
+        instr=backend_module.new_backend(conn,backend=backend,term_write=term_write,term_read=term_read,timeout=self._backend_timeout,**(backend_params or {}))
         instr._operation_cooldown=self._default_operation_cooldown
         backend_module.IBackendWrapper.__init__(self,instr)
         self.conn=conn
         self.backend_params=backend_params or {}
         self.backend=instr._backend
         self.term_write=term_write
+        self.term_read=term_read
         self._setter_echo=True
         self._concatenate_write=0
         self._write_buffer=""
@@ -92,7 +93,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
         except self.instr.Error:
             pass
         if new_instrument:
-            self.instr=backend_module.new_backend(self.conn,backend=self.backend,term_write=self.term_write,timeout=self._backend_timeout,**self.backend_params)
+            self.instr=backend_module.new_backend(self.conn,backend=self.backend,term_write=self.term_write,term_read=self.term_read,timeout=self._backend_timeout,**self.backend_params)
         else:
             self.instr.open()
         
