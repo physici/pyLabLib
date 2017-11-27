@@ -36,7 +36,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
     _default_retry_times=3 # maximal number of operation attempts
     _default_operation_timeout=3. # timeout for an operator in the standard (non-failsafe) mode
     _default_wait_sync_timeout=600. # timeout for "sync" wait opration (waiting for the device operation to complete); an operation can be long (e.g., a single frequency sweep), thus the long timeout
-    _default_operation_cooldown=0.03 # operation cooldown (see backend description)
+    _default_operation_cooldown=0.00 # operation cooldown (see backend description)
     _default_wait_callback_timeout=.3 # callback call period during wait operations (keeps the thread from complete halting)
     _default_failsafe=False # running in the failsafe mode by default
     _allow_concatenate_write=True # allow automatic concatenation of several write operations (see :func:`using_write_buffer`)
