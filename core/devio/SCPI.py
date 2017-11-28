@@ -284,8 +284,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
         self._write_retry(msg)
         if read_echo:
             try:
-                if read_echo_delay>0.:
-                    time.sleep(read_echo_delay)
+                self.sleep(read_echo_delay)
                 self._read_one_try()
             except self.instr.Error:
                 pass
