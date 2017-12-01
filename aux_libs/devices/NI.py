@@ -2,6 +2,7 @@ from ...core.devio import backend  #@UnresolvedImport
 from ...core.utils import general, log  #@UnresolvedImport
 
 import time
+import numpy as np
 
 _depends_local=["...core.devio.backend"]
 
@@ -161,21 +162,26 @@ try:
             self.voltage_range=abs(voltage_range)
         def get_voltage_range(self):
             return self.voltage_range
-            
+        
+        _terms={"default":nidaqmx.constants.TerminalConfiguration.DEFAULT,
+                "diff":nidaqmx.constants.TerminalConfiguration.DIFFERENTIAL,
+                "dseudodiff":nidaqmx.constants.TerminalConfiguration.PSEUDODIFFERENTIAL,
+                "rse":nidaqmx.constants.TerminalConfiguration.RSE,
+                "nrse":nidaqmx.constants.TerminalConfiguration.NRSE}
         def read_channel(self, channel, terminal='diff', points=1E3):
             conseq_fails=0
             for t in general.RetryOnException(self._retry_times,RuntimeError):
                 with t:
-                    task=nidaqmx.AnalogInputTask()
-                    task.create_voltage_channel('{0}/ai{1:d}'.format(self.dev,channel),
-                        terminal=terminal,min_val=-self.voltage_range,max_val=self.voltage_range)
-                    task.configure_timing_sample_clock(rate=self.rate,sample_mode='finite',samples_per_channel=int(points))
+                    task=nidaqmx.Task()
+                    task.ai_channels.add_ai_voltage_chan('{0}/ai{1:d}'.format(self.dev,channel),
+                        terminal_config=self._terms[terminal],min_val=-self.voltage_range,max_val=self.voltage_range)
+                    task.timing.cfg_samp_clk_timing(rate=self.rate,sample_mode=nidaqmx.constants.AcquisitionType.FINITE,samps_per_chan=int(points))
                     task.start()
                     task.wait_until_done()
-                    data=task.read()
+                    data=task.read(int(points))
                     task.stop()
-                    task.clear()
-                    return data.flatten()
+                    task.close()
+                    return np.array(data)
                 conseq_fails=conseq_fails+1
                 if conseq_fails>2:
                     error_msg="Failure to access NIUSB6009 {} times in a row; retrying...".format(conseq_fails)

@@ -21,7 +21,30 @@ class LM500(SCPI.SCPIDevice):
         while not data:
             data=self.instr.readline(remove_term=True).strip()
         return data
+
+    def get_channel(self):
+        return self.ask("CHAN?","int")
+    def set_channel(self, channel=1):
+        self.write("CHAN",channel)
+        return self.get_channel()
+
+    def get_type(self, channel=1):
+        chan_type=self.ask("TYPE? {}".format(channel),"int")
+        return ["LHe","LN"][chan_type]
+    def _check_channel_LHe(self, op, channel=None):
+        if channel is None:
+            channel=self.get_channel()
+        if self.get_type(channel)=="LN":
+            raise RuntimeError("LN channel doesn't support {}".format(op))
     
+    def get_mode(self):
+        self._check_channel_LHe("measurement modes")
+        return self.ask("MODE?").upper()
+    def set_mode(self, mode):
+        self._check_channel_LHe("measurement modes")
+        self.write("MODE",mode)
+        return self.get_mode()
+
     @staticmethod
     def _str_to_sec(s):
         s=s.strip().split(":")
@@ -31,8 +54,10 @@ class LM500(SCPI.SCPIDevice):
     def _sec_to_str(s):
         return "{:02d}:{:02d}:{:02d}".format(int(s/60.**2),int((s/60.)%60.),int(s%60.))
     def get_interval(self):
+        self._check_channel_LHe("measurement intervals")
         return self._str_to_sec(self.ask("INTVL?"))
     def set_interval(self, intvl):
+        self._check_channel_LHe("measurement intervals")
         if not isinstance(intvl,textstring):
             intvl=self._sec_to_str(intvl)
         self.write("INTVL",intvl)
@@ -56,7 +81,7 @@ class LM500(SCPI.SCPIDevice):
 
     def start_fill(self, channel=1):
         self.write("FILL",channel)
-    def get_fill_status(self, channel):
+    def get_fill_status(self, channel=1):
         res=self.ask("FILL? {}".format(channel)).lower()
         if res in {"off","timeout"}:
             return res

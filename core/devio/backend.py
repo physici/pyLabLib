@@ -370,7 +370,7 @@ try:
                 term_read="\n"
             if isinstance(term_read,anystring):
                 term_read=[term_read]
-            IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
+            IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read)
             port=conn_dict.pop("port")
             self.instr=serial.serial_for_url(port,do_not_open=True,**conn_dict)
             if no_dtr:
