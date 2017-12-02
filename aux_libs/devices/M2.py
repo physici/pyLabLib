@@ -1,7 +1,15 @@
 from ...core.utils import net
 
-import json
+try:
+    import websocket
+except ImportError:
+    websocket=None
 
+import json
+import time
+
+
+c=299792458.
 
 class M2Error(RuntimeError):
     """
@@ -82,6 +90,19 @@ class M2ICE(object):
         if reply["status"]!="ok":
             raise M2Error("couldn't establish link: reply status '{}'".format(reply["status"]))
 
+    def _send_websocket_request(self, msg):
+        if websocket:
+            ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+            time.sleep(1.)
+            ws.send(msg)
+            ws.close()
+        else:
+            raise RuntimeError("'websocket' library is requried to communicate this request")
+    def connect_wavemeter(self):
+        self._send_websocket_request('{"message_type":"task_request","task":["start_wavemeter_link"]}')
+    def disconnect_wavemeter(self):
+        self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
+
     def get_system_status(self):
         return self.query("get_status",{})[1]
     
@@ -104,7 +125,7 @@ class M2ICE(object):
             self.wait_for_report(timeout=timeout)
     def get_tuning_status(self):
         status=self.get_full_tuning_status()["status"][0]
-        return ["off","nolink","tuning","on"][status]
+        return ["lock_off","nolink","tuning","done"][status]
     def get_wavelength(self):
         return self.get_full_tuning_status()["current_wavelength"][0]*1E-9
     def stop_tuning(self):
@@ -138,3 +159,160 @@ class M2ICE(object):
             raise M2Error("can't tune etalon: command failed")
         if sync:
             self.wait_for_report()
+
+    
+    def _check_terascan_type(self, scan_type):
+        if scan_type not in {"coarse","medium","fine","line"}:
+            raise M2Error("unknown TeraScan type: {}".format(scan_type))
+        if scan_type=="coarse":
+            raise M2Error("coarse scan is not currently available")
+    def setup_terascan(self, scan_type, scan_range, rate, sync=True):
+        self._check_terascan_type(scan_type)
+        if scan_type=="medium":
+            fact,units=1E9,"GHz/s"
+        elif scan_type=="fine":
+            fact,units=1E6,"MHz/s"
+        elif scan_type=="line":
+            fact,units=1E3,"kHz/s"
+        params={"scan":scan_type,"start":[c/scan_range[0]*1E9],"stop":[c/scan_range[0]*1E9],"rate":[rate/fact],"units":units}
+        _,reply=self.query("scan_stitch_initialise",params,report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't setup TeraScan: start ({:.3f} THz) is out of range".format(scan_range[0]/1E12))
+        elif reply["status"][0]==2:
+            raise M2Error("can't setup TeraScan: stop ({:.3f} THz) is out of range".format(scan_range[1]/1E12))
+        elif reply["status"][0]==2:
+            raise M2Error("can't setup TeraScan: stop ({:.3f} THz) is out of range".format(scan_range[1]/1E12))
+        elif reply["status"][0]==3:
+            raise M2Error("can't setup TeraScan: scan out of range")
+        elif reply["status"][0]==4:
+            raise M2Error("can't setup TeraScan: TeraScan not available")
+        if sync:
+            self.wait_for_report()
+    def start_terascan(self, scan_type, sync=False):
+        self._check_terascan_type(scan_type)
+        _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"start"},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't start TeraScan: operation failed")
+        elif reply["status"][0]==2:
+            raise M2Error("can't start TeraScan: TeraScan not available")
+        if sync:
+            self.wait_for_report()
+    def stop_terascan(self, scan_type, sync=True):
+        self._check_terascan_type(scan_type)
+        _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"stop"},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't stop TeraScan: operation failed")
+        elif reply["status"][0]==2:
+            raise M2Error("can't stop TeraScan: TeraScan not available")
+        if sync:
+            self.wait_for_report()
+    def get_terascan_status(self, scan_type):
+        self._check_terascan_type(scan_type)
+        _,reply=self.query("scan_stitch_status",{"scan":scan_type})
+        status={}
+        if reply["status"][0]==0:
+            status["status"]="stopped"
+            status["range"]=None
+        elif reply["status"][0]==1:
+            if reply["operation"][0]==0:
+                status["status"]="stitching"
+            elif reply["operation"][0]==1:
+                status["status"]="scanning"
+            status["range"]=c/(reply["start"][0]/1E9),c/(reply["stop"][0]/1E9)
+        elif reply["status"][0]==2:
+            raise M2Error("can't stop TeraScan: TeraScan not available")
+        return status
+
+    _fast_scan_types={"etalon_continuous","etalon_single",
+                "cavity_continuous","cavity_single","cavity_triangular",
+                "resonator_continuous","resonator_single","resonator_ramp","resonator_triangular",
+                "ect_continuous","ecd_ramp",
+                "fringe_test"}
+    def _check_fast_scan_type(self, scan_type):
+        if scan_type not in self._fast_scan_types:
+            raise M2Error("unknown fast scan type: {}".format(scan_type))
+    def start_fast_scan(self, scan_type, width, time, sync=False):
+        self._check_fast_scan_type(scan_type)
+        _,reply=self.query("fast_scan_start",{"scan":scan_type,"width":[width/1E9],"time":[time]})
+        if reply["status"][0]==1:
+            raise M2Error("can't start fast scan: width too great for the current tuning position")
+        elif reply["status"][0]==2:
+            raise M2Error("can't start fast scan: reference cavity not fitted")
+        elif reply["status"][0]==3:
+            raise M2Error("can't start fast scan: ERC not fitted")
+        elif reply["status"][0]==4:
+            raise M2Error("can't start fast scan: invalid scan type")
+        elif reply["status"][0]==5:
+            raise M2Error("can't start fast scan: time >10000 seconds")
+        if sync:
+            self.wait_for_report()
+    def stop_fast_scan(self, scan_type, return_to_start=True, sync=False):
+        self._check_fast_scan_type(scan_type)
+        _,reply=self.query("fast_scan_stop" if return_to_start else "fast_scan_stop_nr",{"scan":scan_type})
+        if reply["status"][0]==1:
+            raise M2Error("can't stop fast scan: operation failed")
+        elif reply["status"][0]==2:
+            raise M2Error("can't stop fast scan: reference cavity not fitted")
+        elif reply["status"][0]==3:
+            raise M2Error("can't stop fast scan: ERC not fitted")
+        elif reply["status"][0]==4:
+            raise M2Error("can't stop fast scan: invalid scan type")
+        if sync:
+            self.wait_for_report()
+    def get_fast_scan_status(self, scan_type):
+        self._check_fast_scan_type(scan_type)
+        _,reply=self.query("fast_scan_poll",{"scan":scan_type})
+        status={}
+        if reply["status"][0]==0:
+            status["status"]="stopped"
+        elif reply["status"][0]==1:
+            status["status"]="scanning"
+        elif reply["status"][0]==2:
+            raise M2Error("can't poll fast scan: reference cavity not fitted")
+        elif reply["status"][0]==3:
+            raise M2Error("can't poll fast scan: ERC not fitted")
+        elif reply["status"][0]==4:
+            raise M2Error("can't poll fast scan: invalid scan type")
+        status["value"]=reply["tuner_value"][0]
+        return status
+
+
+    def stop_scan_web(self, scan_type):
+        try:
+            self._check_terascan_type(scan_type)
+            scan_type=scan_type+"_scan"
+        except M2Error:
+            self._check_fast_scan_type(scan_type)
+            scan_type=scan_type.replace("continuous","cont")
+        scan_task=scan_type+"_stop"
+        self._send_websocket_request('{{"message_type":"task_request","task":["{}"]}}'.format(scan_task))
+
+    def stop_all_operation(self, repeated=True):
+        attempts=0
+        while True:
+            operating=False
+            for scan_type in ["medium","fine","line"]:
+                if self.get_terascan_status(scan_type)["status"]!="stopped":
+                    operating=True
+                    self.stop_terascan(scan_type)
+                    if attempts>1:
+                        self.stop_scan_web(scan_type)
+            for scan_type in self._fast_scan_types:
+                try:
+                    if self.get_fast_scan_status(scan_type)["status"]!="stopped":
+                        operating=True
+                        self.stop_fast_scan(scan_type)
+                        if attempts>1:
+                            self.stop_scan_web(scan_type)
+                except M2Error:
+                    pass
+            if self.get_tuning_status()=="tuning":
+                operating=True
+                self.stop_tuning()
+            if self.get_tuning_status_table()=="tuning":
+                operating=True
+                self.stop_tuning_table()
+            if (not repeated) or (not operating):
+                return
+            time.sleep(0.1)
+            attempts+=1
