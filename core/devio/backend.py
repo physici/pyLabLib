@@ -349,17 +349,17 @@ try:
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts","dsrdtr"]
         _default_conn=["COM1",19200,8,"N",1,0,0,0]
     
-        @staticmethod
-        def _conn_to_dict(conn):
+        @classmethod
+        def _conn_to_dict(cls, conn):
             if isinstance(conn, dict):
                 return conn
             if isinstance(conn, (tuple,list)):
-                return dict(zip(SerialDeviceBackend._conn_params,conn))
+                return dict(zip(cls._conn_params,conn))
             return {"port":conn}
-        @staticmethod
-        def combine_serial_conn(conn1, conn2):
-            conn=SerialDeviceBackend._conn_to_dict(conn2).copy()
-            conn.update(SerialDeviceBackend._conn_to_dict(conn1))
+        @classmethod
+        def combine_serial_conn(cls, conn1, conn2):
+            conn=cls._conn_to_dict(conn2).copy()
+            conn.update(cls._conn_to_dict(conn1))
             return conn
 
         def __init__(self, conn, timeout=10., term_write=None, term_read=None, connect_on_operation=False, open_retry_times=3, no_dtr=False):
@@ -541,6 +541,211 @@ try:
         
         
     _backends["serial"]=SerialDeviceBackend
+except ImportError:
+    pass
+
+
+
+
+try:
+    import ft232
+
+    class FT232DeviceBackend(IDeviceBackend):
+        """
+        FT232 backend (via pyft232).
+        
+        Connection is automatically opened on creation.
+        
+        Args:
+            conn: Connection parameters. Can be either a string (for a port),
+                or a list/tuple ``(port, baudrate, bytesize, parity, stopbits, xonxoff, rtscts, dsrdtr)`` supplied to the serial connection
+                (default is ``('COM1',19200,8,'N',1,0,0,0)``),
+                or a dict with the same paramters. 
+            timeout (float): Default timeout (in seconds).
+            term_write (str): Line terminator for writing operations; appended to the data
+            term_read (str): List of possible single-char terminator for reading operations (specifies when :func:`readline` stops).
+            connect_on_operation (bool): If ``True``, the connection is normally closed, and is opened only on the operations
+                (normally two processes can't be simultaneously connected to the same device). 
+            open_retry_times (int): Number of times the connection is attempted before giving up.
+            no_dtr (bool): If ``True``, turn off DTR status line before opening (e.g., turns off reset-on-connection for Arduino controllers).
+        """
+        _default_operation_cooldown=0.0
+        _backend="ft232"
+        Error=ft232.Ft232Exception
+        """Base class for the errors raised by the backend operations"""
+        
+        _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts"]
+        _default_conn=[None,9600,8,"N",1,0,0]
+    
+        @classmethod
+        def _conn_to_dict(cls, conn):
+            if isinstance(conn, dict):
+                return conn
+            if isinstance(conn, (tuple,list)):
+                return dict(zip(cls._conn_params,conn))
+            return {"port":conn}
+        @classmethod
+        def combine_serial_conn(cls, conn1, conn2):
+            conn=cls._conn_to_dict(conn2).copy()
+            conn.update(cls._conn_to_dict(conn1))
+            return conn
+
+        def __init__(self, conn, timeout=10., term_write=None, term_read=None, open_retry_times=3):
+            conn_dict=self.combine_serial_conn(conn,self._default_conn)
+            if term_write is None:
+                term_write="\r\n"
+            if term_read is None:
+                term_read="\n"
+            if isinstance(term_read,anystring):
+                term_read=[term_read]
+            IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read)
+            port=conn_dict.pop("port")
+            self.instr=ft232.Ft232(port,**conn_dict)
+            self._operation_cooldown=self._default_operation_cooldown
+            self._opened_stack=0
+            self._open_retry_times=open_retry_times
+            self.cooldown()
+            self.set_timeout(timeout)
+            
+        def _do_open(self):
+            general.retry_wait(self.instr.open, self._open_retry_times, 0.3)
+        def _do_close(self):
+            #general.retry_wait(self.instr.flush, self._open_retry_times, 0.3)
+            general.retry_wait(self.instr.close, self._open_retry_times, 0.3)
+        def open(self):
+            """Open the connection."""
+            self._do_open()
+        def close(self):
+            """Close the connection."""
+            self._do_close()
+        @contextlib.contextmanager
+        def single_op(self):
+            """
+            Context manager for a single operation.
+            
+            Does nothing.
+            """
+            yield
+            
+        
+        def cooldown(self):
+            """
+            Cooldown between the operations.
+            
+            Sleeping for a short time defined by `_operation_cooldown` attribute (no cooldown by default).
+            Also defined class-wide by `_default_operation_cooldown` class attribute.
+            """
+            if self._operation_cooldown>0:
+                time.sleep(self._operation_cooldown)
+            
+        def set_timeout(self, timeout):
+            """Set operations timeout (in seconds)."""
+            if timeout is not None:
+                if timeout<1E-3:
+                    timeout=1E-3 # 0 is infinite timeout
+                self.instr.timeout=timeout
+                self.cooldown()
+        def get_timeout(self):
+            """Get operations timeout (in seconds)."""
+            return self.instr.timeout
+        
+        
+        def _read_terms(self, terms="", timeout=None, error_on_timeout=True):
+            result=""
+            singlechar_terms=all(len(t)==1 for t in terms)
+            with self.single_op():
+                with self.using_timeout(timeout):
+                    while True:
+                        c=self.instr.read(1 if terms else 8)
+                        result=result+c
+                        if c=="":
+                            if error_on_timeout and terms:
+                                raise self.Error(4)
+                            return result
+                        if singlechar_terms:
+                            if c in terms:
+                                return result
+                        else:
+                            for t in terms:
+                                if result.endswith(t):
+                                    return result
+        def readline(self, remove_term=True, timeout=None, skip_empty=True, error_on_timeout=True):
+            """
+            Read a single line from the device.
+            
+            Args:
+                remove_term (bool): If ``True``, remove terminal characters from the result.
+                timeout: Operation timeout. If ``None``, use the default device timeout.
+                skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
+                error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
+            """
+            while True:
+                result=self._read_terms(self.term_read or "",timeout=timeout,error_on_timeout=error_on_timeout)
+                self.cooldown()
+                if remove_term and self.term_read:
+                    result=remove_longest_term(result,self.term_read)
+                if not (skip_empty and remove_term and (not result)):
+                    break
+            return result
+        def read(self, size=None, error_on_timeout=True):
+            """
+            Read data from the device.
+            
+            If `size` is not None, read `size` bytes (usual timeout applies); otherwise, read all available data (return immediately).
+            """
+            with self.single_op():
+                if size is None:
+                    result=self._read_terms(timeout=0,error_on_timeout=error_on_timeout)
+                else:
+                    result=self.instr.read(size=size)
+                    if len(result)!=size:
+                        raise self.Error(4)
+                self.cooldown()
+                return result
+        def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
+            """
+            Read a single line with multiple possible terminators.
+            
+            Args:
+                term: Either a string (single multi-char terminator) or a list of strings (multiple terminators).
+                remove_term (bool): If ``True``, remove terminal characters from the result.
+                timeout: Operation timeout. If ``None``, use the default device timeout.
+                error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
+            """
+            if isinstance(term,anystring):
+                term=[term]
+            result=self._read_terms(term,timeout=timeout,error_on_timeout=error_on_timeout)
+            self.cooldown()
+            if remove_term and term:
+                result=remove_longest_term(result,term)
+            return result
+        def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
+            """
+            Write data to the device.
+            
+            If ``flush==True``, flush the write buffer.
+            If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
+            """
+            with self.single_op():
+                if self.term_write:
+                    data=data+self.term_write
+                self.instr.write(data)
+                self.cooldown()
+                if flush:
+                    self.instr.flush()
+                    self.cooldown()
+                if read_echo_delay>0.:
+                    time.sleep(read_echo_delay)
+                if read_echo:
+                    for _ in range(read_echo_lines):
+                        self.readline()
+                        self.cooldown()
+
+        def __repr__(self):
+            return "FT232DeviceBackend("+self.instr.__repr__()+")"
+        
+        
+    _backends["ft232"]=FT232DeviceBackend
 except ImportError:
     pass
 
