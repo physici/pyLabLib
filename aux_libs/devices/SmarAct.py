@@ -1,5 +1,8 @@
 from ...core.utils import general
 
+from .misc import default_lib_folder
+
+import os.path
 import ctypes
 import time
 
@@ -10,9 +13,11 @@ class SCU3D(object):
     """
     SCU3D translational stage.
     """
-    def __init__(self, lib_path="SCU3DControl.dll", idx=0, channel_mapping="xyz", channel_dir="+++"):
+    def __init__(self, lib_path=None, idx=0, channel_mapping="xyz", channel_dir="+++"):
         object.__init__(self)
-        self.dll=ctypes.CDLL(lib_path)
+        if lib_path is None:
+            lib_path=os.path.join(default_lib_folder,"SCU3DControl.dll")
+        self.dll=ctypes.cdll.LoadLibrary(lib_path)
         self.dll.SA_MoveStep_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.c_int,ctypes.c_uint,ctypes.c_uint]
         self.dll.SA_GetStatus_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.POINTER(ctypes.c_uint)]
         self.idx=idx

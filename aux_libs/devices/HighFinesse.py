@@ -1,3 +1,6 @@
+from .misc import default_lib_folder
+
+import os.path
 import ctypes
 
 
@@ -8,9 +11,11 @@ class WS7(object):
     """
     WS/7 precision wavemeter.
     """
-    def __init__(self, lib_path="wlmData.dll", idx=0):
+    def __init__(self, lib_path=None, idx=0):
         object.__init__(self)
-        self.dll=ctypes.CDLL(lib_path)
+        if lib_path is None:
+            lib_path=os.path.join(default_lib_folder,"wlmData.dll")
+        self.dll=ctypes.cdll.LoadLibrary(lib_path)
         self.dll.GetFrequencyNum.restype=ctypes.c_double
         self.dll.GetFrequencyNum.argtypes=[ctypes.c_long,ctypes.c_double]
         self.idx=idx
