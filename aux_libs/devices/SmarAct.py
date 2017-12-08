@@ -1,6 +1,6 @@
 from ...core.utils import general
 
-from .misc import default_lib_folder
+from .misc import default_lib_folder, load_lib
 
 import os.path
 import ctypes
@@ -17,7 +17,7 @@ class SCU3D(object):
         object.__init__(self)
         if lib_path is None:
             lib_path=os.path.join(default_lib_folder,"SCU3DControl.dll")
-        self.dll=ctypes.cdll.LoadLibrary(lib_path)
+        self.dll=load_lib(lib_path)
         self.dll.SA_MoveStep_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.c_int,ctypes.c_uint,ctypes.c_uint]
         self.dll.SA_GetStatus_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.POINTER(ctypes.c_uint)]
         self.idx=idx

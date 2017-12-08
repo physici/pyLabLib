@@ -1,4 +1,4 @@
-from .misc import default_lib_folder
+from .misc import default_lib_folder, load_lib
 
 import os.path
 import ctypes
@@ -15,7 +15,7 @@ class WS7(object):
         object.__init__(self)
         if lib_path is None:
             lib_path=os.path.join(default_lib_folder,"wlmData.dll")
-        self.dll=ctypes.cdll.LoadLibrary(lib_path)
+        self.dll=load_lib(lib_path)
         self.dll.GetFrequencyNum.restype=ctypes.c_double
         self.dll.GetFrequencyNum.argtypes=[ctypes.c_long,ctypes.c_double]
         self.idx=idx

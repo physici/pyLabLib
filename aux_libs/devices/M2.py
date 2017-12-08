@@ -174,12 +174,11 @@ class M2ICE(object):
             fact,units=1E6,"MHz/s"
         elif scan_type=="line":
             fact,units=1E3,"kHz/s"
-        params={"scan":scan_type,"start":[c/scan_range[0]*1E9],"stop":[c/scan_range[0]*1E9],"rate":[rate/fact],"units":units}
+        scan_range=max(scan_range),min(scan_range)
+        params={"scan":scan_type,"start":[c/scan_range[0]*1E9],"stop":[c/scan_range[1]*1E9],"rate":[rate/fact],"units":units}
         _,reply=self.query("scan_stitch_initialise",params,report=sync)
         if reply["status"][0]==1:
             raise M2Error("can't setup TeraScan: start ({:.3f} THz) is out of range".format(scan_range[0]/1E12))
-        elif reply["status"][0]==2:
-            raise M2Error("can't setup TeraScan: stop ({:.3f} THz) is out of range".format(scan_range[1]/1E12))
         elif reply["status"][0]==2:
             raise M2Error("can't setup TeraScan: stop ({:.3f} THz) is out of range".format(scan_range[1]/1E12))
         elif reply["status"][0]==3:
