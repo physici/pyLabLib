@@ -3,7 +3,6 @@ Routines for defining a unified interface across multiple backends.
 """
 
 from ..utils.py3 import anystring
-from future.utils import viewitems
 from builtins import range, zip
 
 import time
@@ -950,6 +949,7 @@ class IBackendWrapper(object):
         object.__init__(self)
         self.instr=instr
         self._settings_nodes={}
+        self._settings_nodes_order=[]
         
     def open(self):
         """Open the backend."""
@@ -982,10 +982,12 @@ class IBackendWrapper(object):
         Can be ``None``, meaning that this parameter is ingored when executing :func:`get_settings`/:func:`apply_settings`.
         """
         self._settings_nodes[path]=(getter,setter)
+        self._settings_nodes_order.append(path)
     def get_settings(self):
         """Get dict ``{name: value}`` containing all the device settings."""
         settings={}
-        for k,(g,_) in viewitems(self._settings_nodes):
+        for k in self._settings_nodes_order:
+            g,_=self._settings_nodes[k]
             if g:
                 settings[k]=g()
         return settings
@@ -996,7 +998,8 @@ class IBackendWrapper(object):
         `settings` is the dict ``{name: value}`` of the device available settings.
         Non-applicable settings are ignored.
         """
-        for k,(_,s) in viewitems(self._settings_nodes):
+        for k in self._settings_nodes_order:
+            _,s=self._settings_nodes[k]
             if s and (k in settings):
                 s(settings[k])
     def __getitem__(self, key):

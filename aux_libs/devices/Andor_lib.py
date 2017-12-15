@@ -352,6 +352,18 @@ def ctf_rval(func, rtype, argtypes, argnames, prep_rval=None, conv_rval=None, pa
         else:
             return _get_value(rval)
     return sign.wrap_function(wrapped_func)
+def ctf_rval_str(func, maxlen, argtypes, argnames, passing=None):
+    rval_idx=argtypes.index(None)
+    argtypes=list(argtypes)
+    argtypes[rval_idx]=ctypes.c_char_p
+    sign=functions.FunctionSignature(argnames,name=func.__name__)
+    setup_func(func,argtypes,passing=passing)
+    def wrapped_func(*args):
+        rval=ctypes.create_string_buffer(maxlen)
+        nargs=args[:rval_idx]+(rval,)+args[rval_idx:]
+        func(*nargs)
+        return rval.value
+    return sign.wrap_function(wrapped_func)
 def ctf_rvals(func, rtypes, argtypes, argnames, passing=None):
     template=list(argtypes)
     argtypes=list(argtypes)
@@ -442,6 +454,9 @@ GetCurrentCamera=ctf_rval(lib.GetCurrentCamera, ctypes.c_int32, [None], [])
 SetCurrentCamera=ctf_simple(lib.SetCurrentCamera, [ctypes.c_int32], ["handle"])
 
 GetCapabilities=ctf_rval(lib.GetCapabilities, AndorCapabilities, [None], [], prep_rval=AndorCapabilities_prep, conv_rval=AndorCapabilities_conv)
+GetControllerCardModel=ctf_rval_str(lib.GetControllerCardModel, 256, [None], [])
+GetHeadModel=ctf_rval_str(lib.GetHeadModel, 256, [None], [])
+GetCameraSerialNumber=ctf_rval(lib.GetCameraSerialNumber, ctypes.c_int32, [None], [])
 SetFanMode=ctf_simple(lib.SetFanMode, [ctypes.c_int32], ["mode"])
 
 InAuxPort=ctf_rval(lib.InAuxPort, ctypes.c_int32, [ctypes.c_int32,None], ["port"])
