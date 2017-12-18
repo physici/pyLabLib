@@ -173,6 +173,12 @@ class DataTable(object):
             self._storage.set_columns(idx, val)
         def __delitem__(self, idx):
             self._storage.del_columns(idx)
+        def __contains__(self, idx):
+            try:
+                self._storage.get_columns(idx)
+                return True
+            except IndexError:
+                return False
         def insert(self, idx, val, names=None, transposed="auto"):
             """
             Add new columns at index `idx` (1D).

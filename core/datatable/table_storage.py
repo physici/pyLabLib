@@ -275,7 +275,7 @@ class ColumnDataTableStorage(IDataTableStorage):
             return self._columns[c_idx][r_idx.idx]
         else:
             if r_idx.ndim==0:
-                return np.as_array([self._columns[c][r_idx] for c in c_idx])
+                return np.array([self._columns[c][r_idx] for c in c_idx])
             else:
                 return np.column_stack([self._columns[c][r_idx] for c in c_idx])
     def set_item(self, idx, val):

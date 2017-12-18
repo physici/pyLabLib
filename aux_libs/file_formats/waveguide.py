@@ -143,7 +143,7 @@ def load_sweep(prefix, force_info=True):
 
 
 ##### Normalizing sweep (frequency and column data) #####
-def prepare_sweep_frequency(sweep, allowed_frequency_jump=None, ascending_frequency=True, rescale=True):
+def prepare_sweep_frequency(sweep, allowed_frequency_jump="auto", ascending_frequency=True, rescale=True):
     """
     Clean up the sweep frequency data (exclude jumps and rescale in Hz).
     
@@ -151,22 +151,23 @@ def prepare_sweep_frequency(sweep, allowed_frequency_jump=None, ascending_freque
     If ``ascending_frequency==True``, sort the data so that frequency is in the ascending order.
     If ``rescale==True``, rescale frequency in Hz.
     """
+    if rescale:
+        sweep["Wavemeter"]*=1E12
     if len(sweep)>1:
         fs=sweep["Wavemeter"]
         dfs=fs[1:]-fs[:-1]
         fdir=1. if sum(dfs>0)>sum(dfs<0) else -1.
         valid_dfs=dfs*fdir>0
-        if allowed_frequency_jump is None:
+        if allowed_frequency_jump=="auto":
             mfs=np.median(dfs[valid_dfs])
             maxfs=fdir*np.max(dfs[valid_dfs]*fdir)
             allowed_frequency_jump=(-10*mfs, 1.1*maxfs )
-        bins=filters.collect_into_bins(fs,allowed_frequency_jump,preserve_order=True,to_return="index")
-        max_bin=sorted(bins, key=lambda b: b[1]-b[0])[-1]
-        sweep=sweep.t[max_bin[0]:max_bin[1],:]
+        if allowed_frequency_jump is not None:
+            bins=filters.collect_into_bins(fs,allowed_frequency_jump,preserve_order=True,to_return="index")
+            max_bin=sorted(bins, key=lambda b: b[1]-b[0])[-1]
+            sweep=sweep.t[max_bin[0]:max_bin[1],:]
         if ascending_frequency:
             sweep=sweep.sort_by("Wavemeter")
-    if rescale:
-        sweep["Wavemeter"]*=1E12
     return sweep
 def interpolate_sweep(sweep, columns, frequency_step, rng=None):
     """
