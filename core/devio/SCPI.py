@@ -202,7 +202,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
     _reset_comm="*RST"
     def reset(self):
         """Reset the device"""
-        return self.ask(self._reset_comm)
+        return self.write(self._reset_comm)
     
     _wait_sync_comm="*OPC?"
     def wait_sync(self, timeout=None, wait_callback=None):

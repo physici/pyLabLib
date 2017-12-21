@@ -13,7 +13,14 @@ class LM500(SCPI.SCPIDevice):
         self.instr.term_read="\n"
         self.instr.term_write="\n"
         self._add_settings_node("interval",self.get_interval,self.set_interval)
-    
+        self.write("ERROR 0")
+        self.write("REMOTE")
+
+    def close(self):
+        self.write("LOCAL")
+        SCPI.SCPIDevice.close(self)
+    _reset_comm="*RST;REMOTE"
+
     def _instr_write(self, msg):
         return self.instr.write(msg,read_echo=True,read_echo_delay=0.1)
     def _instr_read(self, raw=False):
@@ -91,3 +98,16 @@ class LM500(SCPI.SCPIDevice):
         if spres[1] in ["s","sec"]:
             return float(spres[0])
         raise ValueError("unxepected response: {}".format(res))
+
+    def get_low_level(self, channel=1):
+        self.set_channel(channel)
+        return float(self.ask("LOW?").split()[0])
+    def set_low_level(self, level, channel=1):
+        self.set_channel(channel)
+        self.write("LOW",level)
+    def get_high_level(self, channel=1):
+        self.set_channel(channel)
+        return float(self.ask("HIGH?").split()[0])
+    def set_high_level(self, level, channel=1):
+        self.set_channel(channel)
+        self.write("HIGH",level)
