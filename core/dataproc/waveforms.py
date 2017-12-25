@@ -298,6 +298,15 @@ class Range(object):
                 return None
             rng=rng._intersect_two(r)
         return rng
+    def rescale(self, mult=1., shift=0.):
+        for i in [0,1]:
+            self._rng[i]=None if self._rng[i] is None else self._rng[i]*mult+shift
+        if mult<0:
+            self._rng=self._rng[::-1]
+        self._reorder()
+        return self
+    def tup(self):
+        return tuple(self._rng)
     
     
 def find_closest_arg(xs, x, approach="both", ordered=False):
