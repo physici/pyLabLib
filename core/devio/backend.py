@@ -144,6 +144,9 @@ def remove_longest_term(msg, terms):
 
 _backends={}
 
+class IBackendOpenError(RuntimeError):
+    pass
+
 try:
     import visa
     class VisaDeviceBackend(IDeviceBackend):
@@ -163,6 +166,11 @@ try:
         _backend="visa"
         Error=visa.VisaIOError
         """Base class for the errors raised by the backend operations""" 
+        class BackendOpenError(visa.VisaIOError,IBackendOpenError):
+            """Visa backend opening error"""
+            def __init__(self, e):
+                IBackendOpenError.__init__(self)
+                visa.VisaIOError.__init__(self,*e.args)
         
         if visa.__version__<"1.6": # older pyvisa versions have a slightly different interface
             def _set_timeout(self, timeout):
@@ -209,11 +217,14 @@ try:
         
         def __init__(self, conn, timeout=10., term_write=None, term_read=None, do_lock=None):
             IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
-            self.instr=self._open_resource(self.conn)
-            self._operation_cooldown=self._default_operation_cooldown
-            self._do_lock=do_lock if do_lock is not None else self._lock_default
-            self.cooldown()
-            self.set_timeout(timeout)
+            try:
+                self.instr=self._open_resource(self.conn)
+                self._operation_cooldown=self._default_operation_cooldown
+                self._do_lock=do_lock if do_lock is not None else self._lock_default
+                self.cooldown()
+                self.set_timeout(timeout)
+            except self.Error as e:
+                raise self.BackendOpenError(e)
             
         def open(self):
             """Open the connection."""
@@ -304,7 +315,7 @@ try:
             if read_echo_delay>0.:
                 time.sleep(read_echo_delay)
             if read_echo:
-                for _ in xrange(read_echo_lines):
+                for _ in range(read_echo_lines):
                     self.readline()
                     self.cooldown()
 
@@ -344,6 +355,11 @@ try:
         _backend="serial"
         Error=serial.SerialException
         """Base class for the errors raised by the backend operations"""
+        class BackendOpenError(serial.SerialException,IBackendOpenError):
+            """Serial backend opening error"""
+            def __init__(self, e):
+                IBackendOpenError.__init__(self)
+                serial.SerialException.__init__(self,*e.args)
         
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts","dsrdtr"]
         _default_conn=["COM1",19200,8,"N",1,0,0,0]
@@ -371,20 +387,23 @@ try:
                 term_read=[term_read]
             IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read)
             port=conn_dict.pop("port")
-            self.instr=serial.serial_for_url(port,do_not_open=True,**conn_dict)
-            if no_dtr:
-                try:
-                    self.instr.setDTR(0)
-                except self.Error:
-                    log.default_log.debug("Cannot set DTR for an unconnected device",origin="backends/serial",level="misc")
-            if not connect_on_operation:
-                self.instr.open()
-            self._operation_cooldown=self._default_operation_cooldown
-            self._connect_on_operation=connect_on_operation
-            self._opened_stack=0
-            self._open_retry_times=open_retry_times
-            self.cooldown()
-            self.set_timeout(timeout)
+            try:
+                self.instr=serial.serial_for_url(port,do_not_open=True,**conn_dict)
+                if no_dtr:
+                    try:
+                        self.instr.setDTR(0)
+                    except self.Error:
+                        log.default_log.debug("Cannot set DTR for an unconnected device",origin="backends/serial",level="misc")
+                if not connect_on_operation:
+                    self.instr.open()
+                self._operation_cooldown=self._default_operation_cooldown
+                self._connect_on_operation=connect_on_operation
+                self._opened_stack=0
+                self._open_retry_times=open_retry_times
+                self.cooldown()
+                self.set_timeout(timeout)
+            except self.Error as e:
+                raise self.BackendOpenError(e)
             
         def _do_open(self):
             general.retry_wait(self.instr.open, self._open_retry_times, 0.3)
@@ -572,6 +591,11 @@ try:
         _backend="ft232"
         Error=ft232.Ft232Exception
         """Base class for the errors raised by the backend operations"""
+        class BackendOpenError(ft232.Ft232Exception,IBackendOpenError):
+            """FT232 backend opening error"""
+            def __init__(self, e):
+                IBackendOpenError.__init__(self)
+                ft232.Ft232Exception.__init__(self,*e.args)
         
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts"]
         _default_conn=[None,9600,8,"N",1,0,0]
@@ -599,12 +623,15 @@ try:
                 term_read=[term_read]
             IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read)
             port=conn_dict.pop("port")
-            self.instr=ft232.Ft232(port,**conn_dict)
-            self._operation_cooldown=self._default_operation_cooldown
-            self._opened_stack=0
-            self._open_retry_times=open_retry_times
-            self.cooldown()
-            self.set_timeout(timeout)
+            try:
+                self.instr=ft232.Ft232(port,**conn_dict)
+                self._operation_cooldown=self._default_operation_cooldown
+                self._opened_stack=0
+                self._open_retry_times=open_retry_times
+                self.cooldown()
+                self.set_timeout(timeout)
+            except self.Error as e:
+                raise self.BackendOpenError(e)
             
         def _do_open(self):
             general.retry_wait(self.instr.open, self._open_retry_times, 0.3)
@@ -776,6 +803,11 @@ class NetworkDeviceBackend(IDeviceBackend):
     _backend="network"
     Error=net.socket.error
     """Base class for the errors raised by the backend operations"""
+    class BackendOpenError(net.socket.error,IBackendOpenError):
+        """Network backend opening error"""
+        def __init__(self, e):
+            IBackendOpenError.__init__(self)
+            net.socket.error.__init__(self,*e.args)
 
     def __init__(self, conn, timeout=10., term_write=None, term_read=None):
         if term_write is None:
@@ -785,10 +817,13 @@ class NetworkDeviceBackend(IDeviceBackend):
         if isinstance(term_read,anystring):
             term_read=[term_read]
         IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
-        self.open()
-        self._operation_cooldown=self._default_operation_cooldown
-        self.cooldown()
-        self.set_timeout(timeout)
+        try:
+            self.open()
+            self._operation_cooldown=self._default_operation_cooldown
+            self.cooldown()
+            self.set_timeout(timeout)
+        except self.Error as e:
+            raise self.BackendOpenError(e)
     
     @staticmethod
     def _get_addr_port(conn):
