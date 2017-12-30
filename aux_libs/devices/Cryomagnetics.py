@@ -13,12 +13,17 @@ class LM500(SCPI.SCPIDevice):
         self.instr.term_read="\n"
         self.instr.term_write="\n"
         self._add_settings_node("interval",self.get_interval,self.set_interval)
-        self.write("ERROR 0")
-        self.write("REMOTE")
+        try:
+            self.write("ERROR 0")
+            self.write("REMOTE")
+        except self.instr.Error:
+            self.close()
 
     def close(self):
-        self.write("LOCAL")
-        SCPI.SCPIDevice.close(self)
+        try:
+            self.write("LOCAL")
+        finally:
+            SCPI.SCPIDevice.close(self)
     _reset_comm="*RST;REMOTE"
 
     def _instr_write(self, msg):
