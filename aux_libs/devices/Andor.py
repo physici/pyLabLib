@@ -307,7 +307,7 @@ class AndorCamera(backend.IBackendWrapper):
             lib.WaitForAcquisitionByHandle(self.handle)
         else:
             lib.WaitForAcquisitionByHandleTimeOut(self.handle,int(timeout*1E3))
-    def cancel_waut(self):
+    def cancel_wait(self):
         self._camsel()
         lib.CancelWait()
 

@@ -145,7 +145,7 @@ IMAQdxEnumItem_p=ctypes.POINTER(IMAQdxEnumItem)
 TIMAQdxEnumItem=collections.namedtuple("TIMAQdxEnumItem",["Value","Name"])
 
 IMAQdxBufferNumberMode=ctypes.c_uint32
-
+IMAQdxBufferNumberMode_enum={"first":0,"last":1,"number":2,"every":3,"last_new":4}
 
 
 
@@ -268,4 +268,4 @@ def IMAQdxGetImageData(sid, size, mode, buffer_num):
     buff=ctypes.create_string_buffer(size)
     actual_buffer_num=ctypes.c_uint32()
     lib.IMAQdxGetImageData(sid,buff,size,mode,buffer_num,ctypes.byref(actual_buffer_num))
-    return ctypes.string_at(buff,size),actual_buffer_num
+    return ctypes.string_at(buff,size),actual_buffer_num.value

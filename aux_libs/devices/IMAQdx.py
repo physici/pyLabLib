@@ -1,6 +1,10 @@
 from . import IMAQdx_lib as lib
 
 from ...core.utils import dictionary
+from ...core.devio import data_format
+
+import numpy as np
+import time
 
 
 class IMAQdxError(RuntimeError):
@@ -27,6 +31,24 @@ class IMAQdxAttribute(object):
         if self._attr_type==4:
             self.values=lib.IMAQdxEnumerateAttributeValues(sid,name)
     
+    def update_minmax(self):
+        if self._attr_type in [0,1,2,5]:
+            self.min=lib.IMAQdxGetAttributeMinimum(self.sid,self.name,self._attr_type)
+            self.max=lib.IMAQdxGetAttributeMaximum(self.sid,self.name,self._attr_type)
+            self.inc=lib.IMAQdxGetAttributeIncrement(self.sid,self.name,self._attr_type)
+    def truncate_value(self, value):
+        self.update_minmax()
+        if self._attr_type in [0,1,2,5]:
+            if value<self.min:
+                value=self.min
+            elif value>self.max:
+                value=self.max
+            else:
+                inc=self.inc
+                if inc>0:
+                    value=((value-self.min)//inc)*inc+self.min
+        return value
+
     def get_value(self, enum_as_str=True):
         if not self.readable:
             raise IMAQdxError("Attribute {} is not readable".format(self.name))
@@ -34,9 +56,11 @@ class IMAQdxAttribute(object):
         if self._attr_type==4 and enum_as_str:
             val=val.Name
         return val
-    def set_value(self, value):
+    def set_value(self, value, truncate=True):
         if not self.writable:
             raise IMAQdxError("Attribute {} is not writable".format(self.name))
+        if truncate:
+            value=self.truncate_value(value)
         return lib.IMAQdxSetAttribute(self.sid,self.name,value,None)
 
     def __repr__(self):
@@ -59,8 +83,9 @@ class IMAQdxCamera(object):
         try:
             attrs=self.list_attributes()
             self.attributes=dictionary.Dictionary(dict([ (a.name.replace("::","/"),a) for a in attrs ]))
-        except lib.IMAQdxLibError:
+        except Exception:
             self.close()
+            raise
 
     def open(self, mode=None):
         mode=self.mode if mode is None else mode
@@ -78,17 +103,21 @@ class IMAQdxCamera(object):
         attrs=lib.IMAQdxEnumerateAttributes2(self.sid,root,visibility)
         return [IMAQdxAttribute(self.sid,a.Name) for a in attrs]
 
-    def get_value(self, name):
+    def get_value(self, name, default=None):
         name.replace("::","/")
+        if (default is not None) and (name not in self.attributes):
+            return default
         return self.attributes[name].get_value()
     __getitem__=get_value
-    def set_value(self, name, value):
+    def set_value(self, name, value, ignore_missing=False, truncate=True):
         name.replace("::","/")
-        self.attributes[name].set_value(value)
+        if (name in self.attributes) or (not ignore_missing):
+            self.attributes[name].set_value(value,truncate=truncate)
     __setitem__=set_value
 
-    def get_settings(self):
-        return self.attributes.copy().filter_self(lambda a: a.readable).map_self(lambda a: a.get_value())
+    def get_settings(self, as_dict=False):
+        settings=self.attributes.copy().filter_self(lambda a: a.readable).map_self(lambda a: a.get_value())
+        return settings.as_dict(style="flat") if as_dict else settings
     def apply_settings(self, settings):
         for k in settings:
             if k in self.attributes and self.attributes[k].writable:
@@ -102,6 +131,126 @@ class IMAQdxCamera(object):
         lib.IMAQdxStartAcquisition(self.sid)
     def stop_acquisition(self):
         lib.IMAQdxStopAcquisition(self.sid)
+    def refresh_acquisition(self, delay=0.005):
+        self.stop_acquisition()
+        self.clear_acquisition()
+        self.setup_acqusition(0,1)
+        self.start_acquisition()
+        time.sleep(delay)
+        self.stop_acquisition()
+        self.clear_acquisition()
 
     def read_data_raw(self, size_bytes, mode, buffer_num=0):
-        return lib.IMAQdxGetImageData(size_bytes,mode,buffer_num)
+        mode=lib.IMAQdxBufferNumberMode_enum.get(mode,mode)
+        return lib.IMAQdxGetImageData(self.sid,size_bytes,mode,buffer_num)
+
+
+
+
+
+
+
+class IMAQdxPhotonFocusCamera(IMAQdxCamera):
+    def __init__(self, name, mode="controller", default_visibility="simple", small_packet_size=True):
+        IMAQdxCamera.__init__(self,name,mode=mode,default_visibility=default_visibility)
+        if small_packet_size:
+            self.set_value("AcquisitionAttributes/PacketSize",1500,ignore_missing=True)
+        self.frame_counter=0
+    
+    def get_exposure(self):
+        return self["CameraAttributes/AcquisitionControl/ExposureTime"]*1E-6
+    def set_exposure(self, exposure):
+        self.stop_acquisition()
+        self["CameraAttributes/AcquisitionControl/ExposureTime"]=exposure*1E6
+        return self.get_exposure()
+
+    def get_detector_size(self):
+        return self.attributes["CameraAttributes/ImageFormatControl/Width"].max,self.attributes["CameraAttributes/ImageFormatControl/Height"].max
+    def get_roi(self):
+        ox=self["CameraAttributes/ImageFormatControl/OffsetX"]
+        oy=self["CameraAttributes/ImageFormatControl/OffsetY"]
+        return ox+1,ox+self["CameraAttributes/ImageFormatControl/Width"],oy+1,oy+self["CameraAttributes/ImageFormatControl/Height"]
+    def set_roi(self, hstart=1, hend=None, vstart=1, vend=None):
+        det_size=self.get_detector_size()
+        if hend is None:
+            hend=det_size[0]
+        if vend is None:
+            vend=det_size[1]
+        self["CameraAttributes/ImageFormatControl/Width"]=self.attributes["CameraAttributes/ImageFormatControl/Width"].min
+        self["CameraAttributes/ImageFormatControl/Height"]=self.attributes["CameraAttributes/ImageFormatControl/Height"].min
+        self["CameraAttributes/ImageFormatControl/OffsetX"]=hstart-1
+        self["CameraAttributes/ImageFormatControl/OffsetY"]=vstart-1
+        self["CameraAttributes/ImageFormatControl/Width"]=hend-hstart+1
+        self["CameraAttributes/ImageFormatControl/Height"]=vend-vstart+1
+        return self.get_roi()
+
+    def setup_acqusition(self, continuous, frames):
+        if continuous:
+            self.buffers_num=frames//2 # seems to be the case
+        else:
+            self.buffers_num=frames
+    def start_acquisition(self):
+        IMAQdxCamera.start_acquisition(self)
+        self.frame_counter=0
+    def _last_buffer(self):
+        return self["StatusInformation/LastBufferNumber"]
+    def _last_buffer_count(self):
+        return self["StatusInformation/LastBufferCount"]
+    def new_frames_num(self):
+        return self._last_buffer_count()-self.frame_counter
+    def wait_for_frame(self, timeout=None, sleepstep=1E-3):
+        t=time.time()
+        while (timeout is None) or (time.time()<t+timeout):
+            new_frames=self.new_frames_num()
+            if new_frames:
+                return new_frames
+            time.sleep(sleepstep)
+
+
+    def _get_bpp(self):
+        return 2
+    def _frame_size_bytes(self):
+        roi=self.get_roi()
+        return (roi[1]-roi[0]+1)*(roi[3]-roi[2]+1)*self._get_bpp()
+    def _bytes_to_frame(self, raw_data):
+        roi=self.get_roi()
+        bpp=self._get_bpp()
+        dtype=data_format.DataFormat(bpp,"i","<")
+        return np.fromstring(raw_data,dtype=dtype.to_desc("numpy")).reshape((roi[3]-roi[2]+1,roi[1]-roi[0]+1))
+    def peek_frame(self, mode="last", buffer_num=0):
+        raw_data,buffer_num=self.read_data_raw(self._frame_size_bytes(),mode=mode,buffer_num=buffer_num)
+        return self._bytes_to_frame(raw_data),buffer_num
+    def read_frames(self, frames_num=None):
+        new_frames=self.new_frames_num()
+        if frames_num is None:
+            frames_num=new_frames
+        else:
+            frames_num=min(frames_num,new_frames)
+        frames=[]
+        for i in range(frames_num):
+            _,buff=self.read_data_raw(0,2,self.frame_counter)
+            if buff!=self.frame_counter:
+                frames.append(None)
+            else:
+                frame,buff=self.peek_frame("number",self.frame_counter)
+                if buff==self.frame_counter:
+                    frames.append(frame)
+            self.frame_counter+=1
+        return frames
+    def skip_frames(self, frames_num=None):
+        new_frames=self.new_frames_num()
+        if frames_num is None:
+            frames_num=new_frames
+        else:
+            frames_num=min(frames_num,new_frames)
+        self.frame_counter+=frames_num
+
+    def snap(self):
+        self.refresh_acquisition()
+        self.setup_acqusition(0,1)
+        self.start_acquisition()
+        self.wait_for_frame()
+        frame=self.read_frames()[0]
+        self.stop_acquisition()
+        self.clear_acquisition()
+        return frame
