@@ -12,7 +12,10 @@ lib=ctypes.windll.niimaqdx
 
 IMAQdxError=ctypes.c_uint32
 
-class IMAQdxLibError(RuntimeError):
+class IMAQdxGenericError(RuntimeError):
+    """Generic IMAQdx error."""
+    pass
+class IMAQdxLibError(IMAQdxGenericError):
     def __init__(self, func, code):
         self.func=func
         self.code=code
@@ -161,6 +164,7 @@ def IMAQdxEnumerateCameras(connected):
     return [struct_to_tuple(c,TMAQdxCameraInformation) for c in cams]
 IMAQdxOpenCamera=ctf_rval(lib.IMAQdxOpenCamera, IMAQdxSession, [ctypes.c_char_p,IMAQdxCameraControlMode,None], ["name","mode"])
 IMAQdxCloseCamera=ctf_simple(lib.IMAQdxCloseCamera, [IMAQdxSession], ["sid"])
+IMAQdxResetCamera=ctf_simple(lib.IMAQdxResetCamera, [ctypes.c_char_p,ctypes.c_uint32], ["name","reset_all"])
 
 
 def _new_attr_value(attr_type):

@@ -7,9 +7,7 @@ import numpy as np
 import time
 
 
-class IMAQdxError(RuntimeError):
-    """Generic IMAQdx error."""
-    pass
+IMAQdxError=lib.IMAQdxGenericError
 
 class IMAQdxAttribute(object):
     def __init__(self, sid, name):
@@ -75,6 +73,7 @@ def list_cameras(connected=True):
 class IMAQdxCamera(object):
     def __init__(self, name="cam0", mode="controller", default_visibility="simple"):
         object.__init__(self)
+        self.init_done=False
         self.name=name
         self.mode=mode
         self.default_visibility=default_visibility
@@ -86,15 +85,29 @@ class IMAQdxCamera(object):
         except Exception:
             self.close()
             raise
+        self.init_done=True
+        self.post_open()
 
+    def post_open(self):
+        pass
     def open(self, mode=None):
         mode=self.mode if mode is None else mode
         mode=lib.IMAQdxCameraControlMode_enum.get(mode,mode)
         self.sid=lib.IMAQdxOpenCamera(self.name,mode)
+        self.post_open()
     def close(self):
         if self.sid is not None:
             lib.IMAQdxCloseCamera(self.sid)
             self.sid=None
+    def reset(self):
+        self.close()
+        lib.IMAQdxResetCamera(self.name,False)
+        self.open()
+    def __enter__(self):
+        return self
+    def __exit__(self, *args, **vargs):
+        self.close()
+        return False
 
     def list_attributes(self, root="", visibility=None):
         visibility=visibility or self.default_visibility
@@ -152,11 +165,13 @@ class IMAQdxCamera(object):
 
 class IMAQdxPhotonFocusCamera(IMAQdxCamera):
     def __init__(self, name, mode="controller", default_visibility="simple", small_packet_size=True):
+        self.small_packet_size=small_packet_size
         IMAQdxCamera.__init__(self,name,mode=mode,default_visibility=default_visibility)
-        if small_packet_size:
-            self.set_value("AcquisitionAttributes/PacketSize",1500,ignore_missing=True)
         self.frame_counter=0
-    
+    def post_open(self):
+        if self.init_done and self.small_packet_size:
+            self.set_value("AcquisitionAttributes/PacketSize",1500,ignore_missing=True)
+
     def get_exposure(self):
         return self["CameraAttributes/AcquisitionControl/ExposureTime"]*1E-6
     def set_exposure(self, exposure):
@@ -185,6 +200,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
         return self.get_roi()
 
     def setup_acqusition(self, continuous, frames):
+        IMAQdxCamera.setup_acqusition(self,continuous,frames)
         if continuous:
             self.buffers_num=frames//2 # seems to be the case
         else:
@@ -208,7 +224,16 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
 
 
     def _get_bpp(self):
-        return 2
+        pform=self["CameraAttributes/ImageFormatControl/PixelFormat"]
+        if pform.startswith("Mono"):
+            pform=pform[4:]
+            if pform.endswith("Packed"):
+                raise IMAQdxError("packed pixel format isn't currently supported: {}".format("Mono"+pform))
+            try:
+                return (int(pform)-1)//8+1
+            except ValueError:
+                pass
+        raise IMAQdxError("unrecognized pixel format: {}".format(pform))
     def _frame_size_bytes(self):
         roi=self.get_roi()
         return (roi[1]-roi[0]+1)*(roi[3]-roi[2]+1)*self._get_bpp()
