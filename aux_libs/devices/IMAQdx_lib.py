@@ -80,18 +80,6 @@ def ctf_rval_str(func, maxlen, argtypes, argnames, passing=None):
         func(*nargs)
         return rval.value
     return sign.wrap_function(wrapped_func)
-def ctf_buff(func, argtypes, argnames, build_buff=None, conv_buff=None, passing=None):
-    buff_idx=argtypes.index(None)
-    argtypes=list(argtypes)
-    argtypes[buff_idx]=ctypes.c_char_p
-    sign=functions.FunctionSignature(argnames,name=func.__name__)
-    setup_func(func,argtypes,passing=passing)
-    def wrapped_func(*args):
-        buff=build_buff(*args)
-        nargs=args[:buff_idx]+(buff,)+args[buff_idx:]
-        func(*nargs)
-        return conv_buff(buff,*args)
-    return sign.wrap_function(wrapped_func)
 
 
 
