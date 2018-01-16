@@ -142,13 +142,15 @@ try:
         """
         _default_retry_delay=5.
         _default_retry_times=5
-        def __init__(self, dev):
+        def __init__(self, dev, voltage_range=10., rate=1E4):
             object.__init__(self)
             self.dev=dev
-            self.voltage_range=10.
-            self.rate=1E4
+            self.voltage_range=voltage_range
+            self.rate=rate
             self._retry_delay=2.
             self._retry_times=5
+            self._task=None
+            self._channels=[]
             
         def close(self):
             pass
@@ -169,6 +171,8 @@ try:
                 "rse":nidaqmx.constants.TerminalConfiguration.RSE,
                 "nrse":nidaqmx.constants.TerminalConfiguration.NRSE}
         def read_channel(self, channel, terminal='diff', points=1E3):
+            if channel in self._channels:
+                return None
             conseq_fails=0
             for t in general.RetryOnException(self._retry_times,RuntimeError):
                 with t:
@@ -187,5 +191,40 @@ try:
                     error_msg="Failure to access NIUSB6009 {} times in a row; retrying...".format(conseq_fails)
                     log.default_log.info(error_msg,origin="devices/NIUSB6009",level="warning")
                 time.sleep(self._retry_delay)
+        def start_continuous(self, channels, terminal='diff'):
+            channels=tuple(channels) if isinstance(channels,list) else (channels,)
+            self.stop_continuous()
+            task=nidaqmx.Task()
+            for ch in channels:
+                task.ai_channels.add_ai_voltage_chan('{0}/ai{1:d}'.format(self.dev,ch),
+                    terminal_config=self._terms[terminal],min_val=-self.voltage_range,max_val=self.voltage_range)
+            task.timing.cfg_samp_clk_timing(rate=self.rate,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS)
+            task.stop()
+            task.start()
+            self._task=task
+            self._channels=channels
+        def read_continuous(self, points=0):
+            if self._task is not None:
+                points=int(points)
+                if points<=0:
+                    points=nidaqmx.constants.READ_ALL_AVAILABLE
+                data=np.array(self._task.read(points))
+                if len(self._channels)==1:
+                    data=np.column_stack((data))
+                return data
+            return None
+        def stop_continuous(self):
+            if self._task is not None:
+                self._task.stop()
+                self._task.close()
+                self._task=None
+                self._channels=[]
+        def wait_for_sample(self, num=1, timeout=10., wait_time=0.001):
+            if self._task is not None:
+                ctd=general.Countdown(timeout)
+                while not ctd.passed():
+                    if self._task.in_stream.avail_samp_per_chan>=num:
+                        return self._task.in_stream.avail_samp_per_chan
+                time.sleep(wait_time)
 except ImportError:
     pass

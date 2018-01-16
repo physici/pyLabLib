@@ -15,7 +15,7 @@ def is_compatible(v, package=None, module=None):
 ### Additional packages routines ###
 _required_packages_names=["future", # generic required packages
                           "numpy","scipy","matplotlib", # standard scientific packages
-                          "pyusb","python-usbtmc","pywinusb","pyserial","pyvisa","pyft232", # general device communication:
+                          "pyusb","python-usbtmc","pywinusb","pyserial","pyvisa","pyft232","websocket-client", # general device communication:
                             # USB (generic USB, requires libusb library), USB-MTC (VISA-like package for Linux), pywinusb(USB HID talking), Serial port, VISA wrapper
                           "nidaqmx","zipython","zhinst" # special device communication: NIDAQmx, ZurichInstrument (2 different versions)
                           "wxpython" # GUI

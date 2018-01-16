@@ -17,18 +17,26 @@ class M2Error(RuntimeError):
     """
     pass
 class M2ICE(object):
-    def __init__(self, addr, port, timeout=3.):
+    def __init__(self, addr, port, timeout=3., start_link=True):
         object.__init__(self)
         self.tx_id=1
         self.conn=(addr,port)
         self.timeout=timeout
         self.open()
+        if start_link:
+            self.start_link()
 
     def open(self):
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen",timeout=self.timeout)
         self.socket.connect(*self.conn)
     def close(self):
         self.socket.close()
+
+    def __enter__(self):
+        return self
+    def __exit__(self, *args, **vargs):
+        self.close()
+        return False
 
     def _build_message(self, op, params, tx_id=None):
         if tx_id is None:

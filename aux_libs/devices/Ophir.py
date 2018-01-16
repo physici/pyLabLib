@@ -1,5 +1,4 @@
 from ...core.devio import backend,units  #@UnresolvedImport
-from ...core.utils import py3
 import collections
 
 _depends_local=["...core.devio.backend"]
@@ -69,3 +68,9 @@ class VegaPowerMeter(OphirDevice):
     def set_range_idx(self, rng_idx):
         self.query("$WN{:d}".format(rng_idx))
         return self.get_range_idx()
+
+    def is_filter_in(self):
+        return int(self.query("$FQ").split()[0].strip())==2
+    def set_filter(self, filter_in):
+        self.query("$FQ{:d}".format(2 if filter_in else 1))
+        return self.is_filter_in()
