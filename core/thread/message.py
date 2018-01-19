@@ -1,6 +1,6 @@
 import threading
 from . import threadprop, notifier
-from ..utils import general, funcargparse, functions
+from ..utils import general, funcargparse, functions, py3
 
 _depends_local=["..utils.general"]
 
@@ -54,7 +54,7 @@ def build_notifier(note_tag, note_value, sync, notification_controller):
     if isinstance(sync,tuple):
         note_tag,note_value=sync
         sync="message"
-    if isinstance(sync,basestring):
+    if isinstance(sync,py3.textstring):
         funcargparse.check_parameter_range(sync,"sync_type",_sync_types)
         if notification_controller is threadprop.no_thread_controller:
             sync=_sync_nothread_substitutes.get(sync,sync)

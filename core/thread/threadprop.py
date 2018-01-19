@@ -1,6 +1,6 @@
 import threading
 import time
-from ..utils import funcargparse
+from ..utils import funcargparse, py3
 
 ### Errors ###
 class ThreadError(RuntimeError):
@@ -126,7 +126,7 @@ def as_controller(ctrl, require_controller=False):
     """
     if ctrl is None:
         return current_controller(require_controller=require_controller)
-    if isinstance(ctrl,basestring):
+    if isinstance(ctrl,py3.textstring):
         return controller_by_name(ctrl,require_controller=require_controller)
     if isinstance(ctrl,threading.Thread):
         try:

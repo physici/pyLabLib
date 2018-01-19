@@ -1,5 +1,5 @@
 from . import threadprop, notifier
-from ..utils import general, observer_pool
+from ..utils import general, observer_pool, py3
 
 import threading
 
@@ -18,7 +18,7 @@ class ValueSynchronizer(notifier.ISkippableNotifier):
         if sync is True:
             sync=_defualt_value_sync_tag
         self._sync=sync
-        if isinstance(note,basestring):
+        if isinstance(note,py3.textstring):
             def note_func(value):
                 try:
                     threadprop.as_controller(self._receiver).add_new_message(note,value,receive_sync="none",schedule_sync="wait_event",on_broken="ignore")
@@ -656,7 +656,7 @@ class ThreadObserverPool(observer_pool.ObserverPool):
         observer_pool.ObserverPool.__init__(self)
         
     def add_observer(self, callback, name=None, tags=None, priority=0):
-        if isinstance(callback,basestring):
+        if isinstance(callback,py3.textstring):
             controller=threadprop.current_controller(require_controller=True)
             callback=controller.add_new_message
         return observer_pool.ObserverPool.add_observer(self,callback,name=name,tags=tags,priority=priority)

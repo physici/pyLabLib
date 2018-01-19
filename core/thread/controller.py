@@ -6,7 +6,7 @@ import threading
 _depends_local=["..utils.general"]
     
 ### Global thread inventory ###
-_running_threads_condition=sync_primitives.Condition()
+# _running_threads_condition=sync_primitives.Condition()
 _running_threads={}
 _thread_uids=general.NamedUIDGenerator()
 
@@ -140,23 +140,23 @@ class IThreadController(object):
         self.start_event.clear()
         self.stop_event.clear()
     def _on_start(self):
-        with _running_threads_condition:
-            if self.name in _running_threads:
-                raise RuntimeError("thread with name {} is already running".format(self.name))
-            _running_threads[self.name]=self
-            _running_threads_condition.notify_all()
-        if _check_daemon_threads():
-            self._stop_self()
+        # with _running_threads_condition:
+        #     if self.name in _running_threads:
+        #         raise RuntimeError("thread with name {} is already running".format(self.name))
+        #     _running_threads[self.name]=self
+        #     _running_threads_condition.notify_all()
+        # if _check_daemon_threads():
+        #     self._stop_self()
         self.start_event.set()
     def _on_stop(self):
         self.stop_event.set()
-        with _running_threads_condition:
-            del _running_threads[self.name]
-            _running_threads_condition.notify_all()
+        # with _running_threads_condition:
+        #     del _running_threads[self.name]
+        #     _running_threads_condition.notify_all()
         with self.running_thread_lock:
             for th in self._dependent_threads:
                 threadprop.kill_thread(th,sync=True)
-        _check_daemon_threads()
+        # _check_daemon_threads()
         
             
     def _run_full(self, stop_after=True):
@@ -386,29 +386,29 @@ class IThreadController(object):
 
 
 
-def wait_for_thread_name(name): # TODO: doesn't work? (thread owner problems in _running_threads_condition.wait())
-    """
-    Wait until a thread with the given name starts.
-    """
-    with _running_threads_condition:
-        while True:
-            if name in _running_threads:
-                return _running_threads[name]
-            _running_threads_condition.wait()
+# def wait_for_thread_name(name): # TODO: doesn't work? (thread owner problems in _running_threads_condition.wait())
+#     """
+#     Wait until a thread with the given name starts.
+#     """
+#     with _running_threads_condition:
+#         while True:
+#             if name in _running_threads:
+#                 return _running_threads[name]
+#             _running_threads_condition.wait()
             
-def _check_daemon_threads(allow_non_controlled=True):
-    """
-    Check all threads. If only daemon threads are left, kill them in sync way.
-    """
-    with _running_threads_condition:
-        all_daemon=all([d.is_daemon() for d in _running_threads.values()])
-        if allow_non_controlled:
-            all_threads=threading.enumerate()
-            has_non_controlled=any([not t.isDaemon() and not threadprop.has_controller(t) for t in all_threads])
-            all_daemon=all_daemon and not has_non_controlled
-    if all_daemon:
-        threadprop.kill_all(sync=True, include_current=False)
-    return all_daemon
+# def _check_daemon_threads(allow_non_controlled=True):
+#     """
+#     Check all threads. If only daemon threads are left, kill them in sync way.
+#     """
+#     with _running_threads_condition:
+#         all_daemon=all([d.is_daemon() for d in _running_threads.values()])
+#         if allow_non_controlled:
+#             all_threads=threading.enumerate()
+#             has_non_controlled=any([not t.isDaemon() and not threadprop.has_controller(t) for t in all_threads])
+#             all_daemon=all_daemon and not has_non_controlled
+#     if all_daemon:
+#         threadprop.kill_all(sync=True, include_current=False)
+#     return all_daemon
 
 
 
@@ -597,17 +597,17 @@ class RepeatingThreadController(IThreadController):
         """
         self.delay=delay
         
-    def start(self, as_dependent=False, as_daemon=False, paused=False, skip_first=False):
+    def start(self, as_dependent=False, as_daemon=False, paused=False, skip_first=None):
         """
         Start the thread.
 
         if `as_dependent` is ``True``, the new thread becomes dependent on the caller thread (it stops when the caller thread stops).
         if `as_deamon` is ``True``, the new thread becomes a daemon (if only daemon threads are running, they get stopped).
         If `paused` is ``True``, the thread starts in a paused state (but it will still execute the first cycle, unless `skip_first` is ``True``).
-        If `skip_first` is ``True``, skip the first cycle execution.
+        If `skip_first` is ``True``, skip the first cycle execution (by default ``True`` if ``paused==True`` and ``False`` otherwise).
         """
         self.paused=paused
-        self.skip=skip_first
+        self.skip=paused if (skip_first is None) else skip_first
         IThreadController.start(self,as_dependent=as_dependent,as_daemon=as_daemon)
         
         
@@ -628,7 +628,7 @@ class TimerThreadController(RepeatingThreadController):
     def __init__(self, period, callback, setup=None, cleanup=None, name=None):
         name=name or _thread_uids("timer")
         RepeatingThreadController.__init__(self,name,callback,period,setup=setup,cleanup=cleanup)
-    def start(self, as_dependent=True, as_daemon=True, skip_first=False, single=False):
+    def start(self, as_dependent=True, as_daemon=True, skip_first=None, single=False):
         """
         Start the thread.
 
@@ -649,8 +649,8 @@ def timer_message_notifier(period, tag="timer", listener=None, queue_limit=None,
     `tag` specifies the message tag. If `queue_limit` is not ``None``, sets the limit to how many notification messages can be in the queue at a given time.
     """
     listener=listener or threadprop.current_controller(require_controller=True)
-    if isinstance(listener, basestring):
-        listener=wait_for_thread_name(listener)
+    # if isinstance(listener, py3.textstring):
+    #     listener=wait_for_thread_name(listener)
     def callback():
         message_queue.send_message(listener,tag,on_broken="stop")
     if queue_limit is not None:
