@@ -6,7 +6,7 @@ import threading
 from ..utils import general
 
 
-class BrokenQueueError(RuntimeError):]
+class BrokenQueueError(RuntimeError):
     """
     An error signalizing that the queue is in a broken (shut down) state.
     """

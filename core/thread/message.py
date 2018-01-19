@@ -1,88 +1,14 @@
 import threading
-from . import threadprop
+from . import threadprop, notifier
 from ..utils import general, funcargparse, functions
 
 _depends_local=["..utils.general"]
 
-class ISafeNotifier(object):
+       
+
+class CallNotifier(notifier.ISkippableNotifier):
     """
-    Safe notifier for message receiving and scheduling.
-
-    Only calls waiting and notifying methods once, duplicate calls are ignored.
-
-    Args:
-        skippable (bool): if ``True``, allows for skippable wait events
-            (if :method:`notify` is called before :method:`wait`, neither methods are actually called).
-    """
-    def __init__(self, skippable=False):
-        object.__init__(self)
-        self._lock=threading.Lock()
-        self._waiting="init"
-        self._notifying="init"
-        self._skippable=skippable # if skippable and Notifier.notify() is called before Notifier.wait(), doesn't call the internal _notify and _wait functions
-    
-    def _do_wait(self, timeout=None):
-        pass
-    def wait(self, timeout=None):
-        """
-        Wait for the notification.
-
-        Can only be called once per notifier lifetime.
-        If the notifier allows skipping, and this method is called after :method:`notify`, return immediately.
-        """
-        with self._lock:
-            if self._waiting!="init":
-                raise RuntimeError("waiting can only be called once")
-            if self._notifying=="skip":
-                self._waiting="skip"
-                return
-            self._waiting="proc"
-        self._do_wait(timeout)
-        with self._lock:
-            self._waiting="done"
-    def _do_notify(self):
-        pass
-    def notify(self):
-        """
-        Notify the waiting process.
-
-        Can only be called once per notifier lifetime.
-        If the notifier allows skipping, and this method is called before :method:`wait`, return immediately.
-        """
-        with self._lock:
-            if self._notifying!="init":
-                raise RuntimeError("notifier can only be called once")
-            if self._skippable and self._waiting=="init":
-                self._notifying="skip"
-                return
-            self._notifying="proc"
-        self._do_notify()
-        with self._lock:
-            self._notifying="done"
-            
-    def waiting(self):
-        """
-        Check if waiting is in progress.
-        """
-        with self._lock:
-            return self._waiting=="proc"
-    def done_wait(self):
-        """
-        Check if waiting is done.
-        """
-        with self._lock:
-            return self._waiting in {"skip","done"}
-    def done_notify(self):
-        """
-        Check if notifying is done.
-        """
-        with self._lock:
-            return self._notifying in {"skip","done"}
-        
-
-class CallNotifier(ISafeNotifier):
-    """
-    Wrapper for :class:`ISafeNotifier`, with external functions provided for :method:`_do_wait` and :method:`_do_notify` methods.
+    Wrapper for :class:`notifier.ISkippableNotifier`, with external functions provided for :method:`_do_wait` and :method:`_do_notify` methods.
 
     Args:
         wait (Callable): function to be called for waiting; if ``None``, nothing is called.
@@ -91,7 +17,7 @@ class CallNotifier(ISafeNotifier):
             (if :method:`notify` is called before :method:`wait`, neither methods are actually called).
     """
     def __init__(self, wait=None, notify=None, skippable=False):
-        ISafeNotifier.__init__(self,skippable=skippable)
+        notifier.ISkippableNotifier.__init__(self,skippable=skippable)
         self._wait=wait
         self._notify=notify
         
@@ -111,7 +37,8 @@ def build_notifier(note_tag, note_value, sync, notification_controller):
 
     `sync` can be:
         - a callable object, in which case it is called as a notifier (waiting is absent);
-        - a tuple ``(note_tag, note_value)``, in which case it is interpreted as a ``"message"`` notifier with the corresponding tags (see below);
+        - a tuple ``(note_tag, note_value)``, in which case it is interpreted as a ``"message"`` notifier with the corresponding tags (see below),
+            while the `note_tag` and `note_value` argumetns are ignored;
         - a string, in which case it determines a synchronization primitive type. Possible types are:
             - ``"none"``: 'dummy' synchronizer (no waiting, return immediately);
             - ``"wait_event"``: standard wite-notify pattern (`wait()` call waits until the `notify()` is called from a different thread).
