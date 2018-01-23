@@ -178,10 +178,12 @@ class Fitter(object):
             if np.iscomplexobj(y_diff):
                 y_diff=np.concatenate((y_diff.real,y_diff.imag))
             return y_diff
-        res,cov=scipy.optimize.leastsq(fit_func,init_p,full_output=True,**kwargs)[:2]
-        tot_err=fit_func(res)
-        if cov is not None:
-            cov=cov*(np.sum(tot_err**2)/(len(tot_err)-len(res)))
+        lsqres=scipy.optimize.least_squares(fit_func,init_p,**kwargs)
+        res,jac,tot_err=lsqres.x,lsqres.jac,lsqres.fun
+        try:
+            cov=np.linalg.inv(np.dot(jac.transpose(),jac))*(np.sum(tot_err**2)/(len(tot_err)-len(res)))
+        except np.linalg.LinAlgError: # singluar matrix
+            cov=None
         res=unpacker(res)
         fit_dict=dict(zip(p_names,res))
         params_dict=fixed_parameters.copy()

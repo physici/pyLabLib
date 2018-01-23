@@ -526,13 +526,13 @@ class Countdown(object):
     """
     def __init__(self, timeout):
         self.timeout=timeout
-        if timeout==0 or timeout is None:
-            return
+        self.reset()
+    def reset(self):
         self.start=time.time()
-        if timeout is None:
+        if self.timeout is None:
             self.end=None
         else:
-            self.end=timeout+self.start
+            self.end=self.timeout+self.start
     def time_left(self, bound_below=True):
         """
         Return the amount of time left. For infinite timeout, return ``None``.
@@ -556,7 +556,55 @@ class Countdown(object):
         else:
             t=time.time()
             return self.end<=t
+
+class Timer(object):
+    """
+    Object for keeping time of repeating tasks.
+    
+    Args:
+        period (float): Timer period.
+    """
+    def __init__(self, period, skip_first=False):
+        self.period=period
+        self.reset(skip_first=skip_first)
+    def reset(self, skip_first=False):
+        """
+        Reset the timer.
+
+        If ``skip_first==False``, timer ticks immediately; otherwise, it starts ticking only after one period.
+        """
+        start=time.time()
+        self.next=start+self.period if skip_first else start
+    def time_left(self, bound_below=True):
+        """
+        Return the amount of time left before the next tick.
         
+        If ``bound_below==True``, instead of negative time return zero.
+        """
+        dtime=self.next-time.time()
+        if bound_below:
+            dtime=max(dtime,0.)
+        return dtime
+    def passed(self):
+        """
+        Return the number of ticks passed.
+        """
+        t=time.time()
+        return int((t-self.next)//self.period)+1
+    def acknowledge(self, n=None, nmin=0):
+        """
+        Acknowledge the timer tick.
+
+        `n` specifies the number of tick to acknowledge (by default, all passed).
+        Return number of actually acknowledget ticks (0 if the timer hasn't ticked since the last acknowledgement).
+        """
+        npassed=max(self.passed(),nmin)
+        if n is None:
+            nack=npassed
+        else:
+            nack=min(npassed,n)
+        self.next+=self.period*nack
+        return nack
         
 ### Debugging ###
 
