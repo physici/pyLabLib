@@ -169,19 +169,18 @@ def prepare_sweep_frequency(sweep, allowed_frequency_jump="auto", ascending_freq
         if ascending_frequency:
             sweep=sweep.sort_by("Wavemeter")
     return sweep
-def interpolate_sweep(sweep, columns, frequency_step, rng=None):
+def interpolate_sweep(sweep, columns, frequency_step, rng=None, frequency_column="Wavemeter"):
     """
     Interpolate sweep data over a regular frequency grid with the spacing `frequency_step`.
     """
-    if rng is None:
-        start_freq=((sweep["Wavemeter"].min())//frequency_step+1)*frequency_step
-        stop_freq=((sweep["Wavemeter"].max())//frequency_step)*frequency_step
-    else:
-        start_freq=(rng[0]//frequency_step)*frequency_step
-        stop_freq=(rng[1]//frequency_step)*frequency_step
+    rng_min,rng_max=rng or (None,None)
+    rng_min=sweep[frequency_column].min() if (rng_min is None) else rng_min
+    rng_max=sweep[frequency_column].max() if (rng_max is None) else rng_max
+    start_freq=(rng_min//frequency_step)*frequency_step
+    stop_freq=(rng_max//frequency_step)*frequency_step
     columns=[funcargparse.as_sequence(c,2) for c in columns]
     freqs=np.arange(start_freq,stop_freq+frequency_step/2.,frequency_step)
-    data=[interpolate.interpolate1D(sweep["Wavemeter"],sweep[src],fill_values="bounds")(freqs) for src,_ in columns]
+    data=[interpolate.interpolate1D(sweep[frequency_column],sweep[src],fill_values="bounds")(freqs) for src,_ in columns]
     return DataTable([freqs]+data,["Frequency"]+[dst for _,dst in columns])
 
 
