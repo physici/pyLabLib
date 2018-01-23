@@ -6,7 +6,9 @@ import threading
 _depends_local=["..utils.general"]
     
 ### Global thread inventory ###
-# _running_threads_condition=sync_primitives.Condition()
+# _running_threads_condition=sync_primitives.Condition(lock=sync_primitives.Lock(blocking_sync=True),blocking_sync=True)
+# _running_threads_condition=sync_primitives.Condition(lock=threading.Lock(),blocking_sync=True)
+_running_threads_condition=sync_primitives.Condition()
 _running_threads={}
 _thread_uids=general.NamedUIDGenerator()
 
@@ -140,23 +142,23 @@ class IThreadController(object):
         self.start_event.clear()
         self.stop_event.clear()
     def _on_start(self):
-        # with _running_threads_condition:
-        #     if self.name in _running_threads:
-        #         raise RuntimeError("thread with name {} is already running".format(self.name))
-        #     _running_threads[self.name]=self
-        #     _running_threads_condition.notify_all()
-        # if _check_daemon_threads():
-        #     self._stop_self()
+        with _running_threads_condition:
+            if self.name in _running_threads:
+                raise RuntimeError("thread with name {} is already running".format(self.name))
+            _running_threads[self.name]=self
+            _running_threads_condition.notify_all()
+        if _check_daemon_threads():
+            self._stop_self()
         self.start_event.set()
     def _on_stop(self):
         self.stop_event.set()
-        # with _running_threads_condition:
-        #     del _running_threads[self.name]
-        #     _running_threads_condition.notify_all()
+        with _running_threads_condition:
+            del _running_threads[self.name]
+            _running_threads_condition.notify_all()
         with self.running_thread_lock:
             for th in self._dependent_threads:
                 threadprop.kill_thread(th,sync=True)
-        # _check_daemon_threads()
+        _check_daemon_threads()
         
             
     def _run_full(self, stop_after=True):
@@ -386,29 +388,29 @@ class IThreadController(object):
 
 
 
-# def wait_for_thread_name(name): # TODO: doesn't work? (thread owner problems in _running_threads_condition.wait())
-#     """
-#     Wait until a thread with the given name starts.
-#     """
-#     with _running_threads_condition:
-#         while True:
-#             if name in _running_threads:
-#                 return _running_threads[name]
-#             _running_threads_condition.wait()
+def wait_for_thread_name(name): # TODO: doesn't work? (thread owner problems in _running_threads_condition.wait())
+    """
+    Wait until a thread with the given name starts.
+    """
+    with _running_threads_condition:
+        while True:
+            if name in _running_threads:
+                return _running_threads[name]
+            _running_threads_condition.wait()
             
-# def _check_daemon_threads(allow_non_controlled=True):
-#     """
-#     Check all threads. If only daemon threads are left, kill them in sync way.
-#     """
-#     with _running_threads_condition:
-#         all_daemon=all([d.is_daemon() for d in _running_threads.values()])
-#         if allow_non_controlled:
-#             all_threads=threading.enumerate()
-#             has_non_controlled=any([not t.isDaemon() and not threadprop.has_controller(t) for t in all_threads])
-#             all_daemon=all_daemon and not has_non_controlled
-#     if all_daemon:
-#         threadprop.kill_all(sync=True, include_current=False)
-#     return all_daemon
+def _check_daemon_threads(allow_non_controlled=True):
+    """
+    Check all threads. If only daemon threads are left, kill them in sync way.
+    """
+    with _running_threads_condition:
+        all_daemon=all([d.is_daemon() for d in _running_threads.values()])
+        if allow_non_controlled:
+            all_threads=threading.enumerate()
+            has_non_controlled=any([not t.isDaemon() and not threadprop.has_controller(t) for t in all_threads])
+            all_daemon=all_daemon and not has_non_controlled
+    if all_daemon:
+        threadprop.kill_all(sync=True, include_current=False)
+    return all_daemon
 
 
 
@@ -609,6 +611,65 @@ class RepeatingThreadController(IThreadController):
         self.paused=paused
         self.skip=paused if (skip_first is None) else skip_first
         IThreadController.start(self,as_dependent=as_dependent,as_daemon=as_daemon)
+
+
+
+class MultiRepeatingThreadController(IThreadController):
+    _new_jobs_check_period=0.1
+    def __init__(self, name, setup=None, cleanup=None, args=None, kwargs=None, self_as_arg=False):
+        IThreadController.__init__(self, name)
+        self.setup=setup
+        self.cleanup=cleanup
+        self.paused=False
+        self.single_shot=False
+        self.args=args or []
+        if self_as_arg:
+            self.args=[self]+self.args
+        self.kwargs=kwargs or {}
+        self.jobs={}
+        self.timers={}
+        self._jobs_list=[]
+        
+    def add_job(self, name, job, period):
+        if name in self.jobs:
+            raise ValueError("job {} already exists".format(name))
+        self.jobs[name]=(job,period)
+        self.timers[name]=general.Timer(period)
+        self._jobs_list.append(name)
+    
+    def _get_next_job(self):
+        if not self._jobs_list:
+            return None,None
+        idx=None
+        left=None
+        for i,n in enumerate(self._jobs_list):
+            t=self.timers[n]
+            l=t.time_left()
+            if l==0:
+                idx,left=i,0
+                break
+            elif (left is None) or (l<left):
+                idx=i
+                left=l
+        n=self._jobs_list.pop(idx)
+        self._jobs_list.append(n)
+        return n,left
+        
+    def run(self):
+        if self.setup:
+            self.setup(*self.args,**self.kwargs)
+        while True:
+            name,to=self._get_next_job()
+            if name is None:
+                self.sleep(self._new_jobs_check_period)
+            else:
+                self.sleep(to)
+                job=self.jobs[name][0]
+                self.timers[name].acknowledge(nmin=1)
+                job(*self.args,**self.kwargs)
+    def finalize(self):
+        if self.cleanup:
+            self.cleanup(*self.args,**self.kwargs)
         
         
         

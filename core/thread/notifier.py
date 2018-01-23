@@ -104,26 +104,22 @@ class ISkippableNotifier(object):
         self._post_notify(*args,**kwargs)
             
     def waiting(self):
-        """
-        Check if waiting is in progress.
-        """
+        """Check if waiting is in progress."""
         with self._lock:
             return self._waiting=="proc"
     def done_wait(self):
-        """
-        Check if waiting is done.
-        """
+        """Check if waiting is done."""
         with self._lock:
             return self._waiting in {"skip","done","fail"}
     def success_wait(self):
-        """
-        Check if waiting is done successfully.
-        """
+        """Check if waiting is done successfully."""
         with self._lock:
             return self._waiting in {"skip","done"}
     def done_notify(self):
-        """
-        Check if notifying is done.
-        """
+        """Check if notifying is done."""
         with self._lock:
             return self._notifying in {"done","skip"}
+    def waiting_state(self):
+        return self._waiting
+    def notifying_state(self):
+        return self._notifying

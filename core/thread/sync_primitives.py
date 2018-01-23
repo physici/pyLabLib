@@ -77,10 +77,6 @@ class ValueSynchronizer(notifier.ISkippableNotifier):
             if self._notifying=="init":
                 raise RuntimeError("value hasn't been set")
             return self._value
-    def waiting_state(self):
-        return self._waiting
-    def notifying_state(self):
-        return self._notifying
     def uid(self):
         return self._uid
 
@@ -114,12 +110,12 @@ class SyncCall(object):
 
 
 class BasicSynchronizer(object):
+    _sync_tag="sync.notify"
     _uid_gen=general.UIDGenerator(thread_safe=True)
-    def __init__(self, tag="sync.notify", receiver=None, blocking_sync=False):
+    def __init__(self, receiver=None, blocking_sync=False):
         object.__init__(self)
         self._receiver=receiver
         self._uid=self._uid_gen()
-        self._tag=tag
         self._notify_lock=threading.Lock()
         self._waiting=False
         self._notified=False
@@ -133,7 +129,7 @@ class BasicSynchronizer(object):
         if (self._receiver is threadprop.no_thread_controller) or self._blocking_sync:
             return self._sync_event.wait(timeout=timeout)
         else:
-            msg=self._receiver.wait_for_message([self._tag],timeout=timeout,filt=(lambda msg: msg.value==self._uid),discard_on_timeout=True)
+            msg=self._receiver.wait_for_message([self._sync_tag],timeout=timeout,filt=(lambda msg: msg.value==self._uid),discard_on_timeout=True)
             return (msg is not None)
     def _do_notify(self):
         if (self._receiver is threadprop.no_thread_controller) or self._blocking_sync:
@@ -141,7 +137,7 @@ class BasicSynchronizer(object):
         else:
             try:
                 dest=threadprop.as_controller(self._receiver)
-                dest.add_new_message(self._tag,self._uid,receive_sync="none",schedule_sync="wait_event",on_broken="ignore")
+                dest.add_new_message(self._sync_tag,self._uid,receive_sync="none",schedule_sync="wait_event",on_broken="ignore")
             except threadprop.NoControllerThreadError:
                 pass
     def wait(self, timeout=None):
@@ -515,7 +511,7 @@ class Condition(ISyncObject):
             self._lock_owner=threading.current_thread()
     def _rel_cond_lock(self):
         with self._owner_lock:
-            self._lock_owner=threading.current_thread()
+            self._lock_owner=None
         if isinstance(self._condition_lock,RLock):
             return self._condition_lock.full_release()
         else:
