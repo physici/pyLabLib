@@ -1,7 +1,7 @@
 """
 Simple threading routines.
 
-A more extensive threading library is contained in the core.thread package.
+A more extensive threading library is contained in the core.mthread package.
 """
 
 import threading

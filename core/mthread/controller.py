@@ -10,7 +10,7 @@ _depends_local=["..utils.general"]
 # _running_threads_condition=sync_primitives.Condition(lock=threading.Lock(),blocking_sync=True)
 _running_threads_condition=sync_primitives.Condition()
 _running_threads={}
-_thread_uids=general.NamedUIDGenerator()
+_thread_uids=general.NamedUIDGenerator(thread_safe=True)
 
 
 
