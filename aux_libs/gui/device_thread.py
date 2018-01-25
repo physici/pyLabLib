@@ -15,6 +15,8 @@ class DeviceThread(thread.QMultiRepeatingThreadController):
         self._cached_var={}
         self._cached_var_lock=threading.Lock()
         self._directed_signal.connect(self._on_directed_signal)
+        self.c=self.CommandAccess(self,sync=False)
+        self.q=self.CommandAccess(self,sync=True)
 
     def setup_device(self, *args, **kwargs):
         pass
@@ -59,3 +61,21 @@ class DeviceThread(thread.QMultiRepeatingThreadController):
         return self._sync_call(self.process_query,args,kwargs,sync=True,timeout=timeout)
     def get_cached(self, name):
         return self._cached_var.get(name)
+
+    class CommandAccess(object):
+        def __init__(self, parent, sync, timeout=None):
+            object.__init__(self)
+            self.parent=parent
+            self.sync=sync
+            self.timeout=timeout
+            self._calls={}
+        def __getattr__(self, name):
+            if name not in self._calls:
+                parent=self.parent
+                device=self.parent.device
+                def devcall(*args, **kwargs):
+                    getattr(device,name).__call__(*args,**kwargs)
+                def remcall(*args, **kwargs):
+                    return parent._sync_call(devcall,args,kwargs,sync=self.sync,timeout=self.timeout)
+                self._calls[name]=remcall
+            return self._calls[name]
