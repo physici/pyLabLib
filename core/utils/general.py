@@ -588,9 +588,11 @@ class Timer(object):
     def passed(self):
         """
         Return the number of ticks passed.
+
+        If timer period is zero, always return 1.
         """
         t=time.time()
-        return int((t-self.next)//self.period)+1
+        return int((t-self.next)//self.period)+1 if self.period>0 else 1
     def acknowledge(self, n=None, nmin=0):
         """
         Acknowledge the timer tick.

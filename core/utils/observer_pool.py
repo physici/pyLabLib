@@ -20,6 +20,7 @@ class ObserverPool(object):
     def __init__(self, expand_tuple=True):
         self._observers={}
         self._expand_tuple=expand_tuple
+        self._call_cache={}
     
     _names_generator=general.NamedUIDGenerator(thread_safe=True)
     Observer=collections.namedtuple("Observer",["filt","callback","priority","attr"])
@@ -41,18 +42,24 @@ class ObserverPool(object):
         elif name in self._observers:
             raise ValueError("observer {} is already subscribed".format(name))
         self._observers[name]=self.Observer(filt,callback,priority,attr)
+        self._call_cache={}
         return name
     def remove_observer(self, name):
         """Remove the observer callback with the given name."""
         del self._observers[name]
+        self._call_cache={}
     
     def find_observers(self, tag):
-        to_call=[]
-        for n,o in self._observers.items():
-            if (o.filt is None) or (o.filt(tag)):
-                to_call.append((n,o))
-        to_call.sort(key=lambda x: x[1].priority)
-        return to_call
+        try:
+            return self._call_cache[tag]
+        except KeyError:
+            to_call=[]
+            for n,o in self._observers.items():
+                if (o.filt is None) or o.filt(tag):
+                    to_call.append((n,o))
+            to_call.sort(key=lambda x: x[1].priority)
+            self._call_cache[tag]=to_call
+            return to_call
     def _call_observer(self, callback, tag, value):
         if self._expand_tuple and isinstance(value,tuple):
             return callback(tag,*value)

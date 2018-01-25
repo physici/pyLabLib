@@ -5,8 +5,9 @@ from PyQt4 import QtCore
 
 import threading
     
-_depends_local=["...thread.controller"]
+_depends_local=["...mthread.notifier"]
 
+_local_data=threading.local()
 
 ### Errors ###
 class ThreadError(RuntimeError):
@@ -37,6 +38,13 @@ class TimeoutThreadError(ThreadError):
     """
     def __init__(self, msg=None):
         msg=msg or "waiting has timed out"
+        ThreadError.__init__(self, msg)
+class NoMessageThreadError(ThreadError):
+    """
+    Thread error for a case of trying to get a non-existant message.
+    """
+    def __init__(self, msg=None):
+        msg=msg or "no message available"
         ThreadError.__init__(self, msg)
 
 ### Interrupts ###
@@ -79,8 +87,8 @@ def is_gui_thread():
     app=get_app()
     return (app is not None) and (QtCore.QThread.currentThread() is app.thread())
 def current_controller(require_controller=True):
-    controller=getattr(QtCore.QThread.currentThread(),"controller",None)
-    if require_controller and controller is None:
+    controller=getattr(_local_data,"controller",None)
+    if require_controller and (controller is None):
         raise NoControllerThreadError("current thread has no controller")
     return controller
     
@@ -115,17 +123,23 @@ class QThreadController(QtCore.QObject):
         self.kind=kind
         if self.kind=="main":
             self.thread=get_gui_thread()
-            if hasattr(self.thread,"controller"):
+            if not is_gui_thread():
+                raise ThreadError("GUI thread controller can only be created in the main thread")
+            if current_controller(require_controller=False):
                 raise DuplicateControllerThreadError()
-            self.thread.controller=self
+            _local_data.controller=self
         else:
             self.thread=QThreadControllerThread(self)
+        self._wait_timer=QtCore.QTimer(self)
+        self._wait_timer.setSingleShot(True)
+        self._wait_timer.timeout.connect(self._on_wait_timeout)
         self._message_queue={}
         self._sync_queue={}
         self._sync_clearance=set()
         self._stopped=(self.kind!="main")
         self.moveToThread(self.thread)
         self.messaged.connect(self._get_message)
+        self.interrupt_called.connect(self._on_call_in_thread)
         self.thread.started.connect(self._on_start_event)
         if self.kind=="main":
             get_app().aboutToQuit.connect(self._on_finish_event)
@@ -135,12 +149,13 @@ class QThreadController(QtCore.QObject):
         self._exec_notes={}
         self._exec_notes_lock=threading.Lock()
         
+    @QtCore.pyqtSlot()
+    def _on_wait_timeout(self):
+        pass
     messaged=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")
     def _get_message(self, msg):
         kind,tag,value=msg
-        if kind=="stop":
-            self._stopped=True
         if kind=="msg":
             if tag.startswith("interrupt."):
                 self._process_interrupt(tag[len("interrupt."):],value)
@@ -153,8 +168,15 @@ class QThreadController(QtCore.QObject):
                 self._sync_clearance.remove((tag,value))
             else:
                 self._sync_queue.setdefault(tag,set()).add(value)
+        elif kind=="stop":
+            self._stopped=True
+    interrupt_called=QtCore.pyqtSignal("PyQt_PyObject")
+    @QtCore.pyqtSlot("PyQt_PyObject")
+    def _on_call_in_thread(self, call):
+        call()
     @QtCore.pyqtSlot()
     def _on_start_event(self):
+        _local_data.controller=self
         self.notify_exec("start")
         self.on_start()
         if self.kind=="run":
@@ -192,6 +214,7 @@ class QThreadController(QtCore.QObject):
         except InterruptExceptionStop:
             pass
     def _wait_for_any_msg(self, is_done, timeout=None):
+        self.check_messages()
         ctd=general.Countdown(timeout)
         while True:
             if self._stopped:
@@ -202,7 +225,8 @@ class QThreadController(QtCore.QObject):
             if timeout is not None:
                 time_left=ctd.time_left()
                 if time_left:
-                    get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents,time_left*1E3)
+                    self._wait_timer.start(int(time_left*1E3))
+                    get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
                 else:
                     raise TimeoutThreadError()
             else:
@@ -214,6 +238,12 @@ class QThreadController(QtCore.QObject):
                 return True,value
             return False,None
         self._wait_for_any_msg(is_done,timeout=timeout)
+    def new_messages_number(self, tag):
+        return len(self._message_queue.setdefault(tag,[]))
+    def pop_message(self, tag):
+        if self.new_messages_number(tag):
+            return self._message_queue[tag].pop(0)
+        raise NoMessageThreadError("no messages with tag '{}'".format(tag))
     def wait_for_sync(self, tag, uid, timeout=None):
         def is_done():
             if uid in self._sync_queue.setdefault(tag,set()):
@@ -235,6 +265,7 @@ class QThreadController(QtCore.QObject):
             self._wait_for_any_msg(is_done,timeout=time)
         except TimeoutThreadError:
             pass
+
     def send_message(self, tag, value):
         self.messaged.emit(("msg",tag,value))
     def send_sync(self, tag, uid):
@@ -260,18 +291,31 @@ class QThreadController(QtCore.QObject):
     def sync_exec(self, point, timeout=None):
         return self._get_exec_note(point).wait(timeout=timeout)
 
-    def call_in_thread(self, func, args=None, kwargs=None, sync=True, timeout=None, default_result=None, pass_exception=True, tag="interrupt.execute"):
+    def call_in_thread_callback(self, func, args=None, kwargs=None, callback=None, tag=None):
+        def call():
+            func(*(args or []),**(kwargs or {}))
+            if callback:
+                callback()
+        if tag is None:
+            self.interrupt_called.emit(call)
+        else:
+            self.send_message(tag,call)
+    def call_in_thread_sync(self, func, args=None, kwargs=None, sync=True, timeout=None, default_result=None, pass_exception=True, tag=None, same_thread_shortcut=True):
+        if same_thread_shortcut and sync and current_controller() is self:
+            return func(*(args or []),**(kwargs or {}))
         call=QSyncCall(func,args=args,kwargs=kwargs,pass_exception=pass_exception)
-        self.send_message(tag,call)
+        if tag is None:
+            self.interrupt_called.emit(call)
+        else:
+            self.send_message(tag,call)
         return call.value(sync=sync,timeout=timeout,default=default_result)
 
 
 class QThreadNotifier(notifier.ISkippableNotifier):
     _uid_gen=general.UIDGenerator(thread_safe=True)
     _notify_tag="_thread_notifier"
-    def __init__(self):
-        notifier.ISkippableNotifier.__init__(self,skippable=True)
-        self._wait_thread=True
+    def __init__(self, skippable=True):
+        notifier.ISkippableNotifier.__init__(self,skippable=skippable)
         self._uid=None
         self.value=None
     def _pre_wait(self, *args, **kwargs):
@@ -354,7 +398,7 @@ class QSyncCall(object):
 
 class QMultiRepeatingThreadController(QThreadController):
     _new_jobs_check_period=0.1
-    def __init__(self, name, setup=None, cleanup=None, args=None, kwargs=None, self_as_arg=False):
+    def __init__(self, name=None, setup=None, cleanup=None, args=None, kwargs=None, self_as_arg=False):
         QThreadController.__init__(self, name, kind="run")
         self.setup=setup
         self.cleanup=cleanup
@@ -406,6 +450,8 @@ class QMultiRepeatingThreadController(QThreadController):
                 job=self.jobs[name][0]
                 self.timers[name].acknowledge(nmin=1)
                 job(*self.args,**self.kwargs)
+            while self.new_messages_number("control.execute"):
+                self.pop_message("control.execute")()
     def on_finish(self):
         if self.cleanup:
             self.cleanup(*self.args,**self.kwargs)
