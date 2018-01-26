@@ -6,12 +6,10 @@ import threading
 
 class DeviceThread(thread.QMultiRepeatingThreadController):
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
-        thread.QMultiRepeatingThreadController.__init__(self,name=name)
+        thread.QMultiRepeatingThreadController.__init__(self,name=name,signal_pool=signal_pool)
         self.devargs=devargs or []
         self.devkwargs=devkwargs or {}
         self.device=None
-        self._signal_pool=signal_pool
-        self._signal_pool_uids=[]
         self._cached_var={}
         self._cached_var_lock=threading.Lock()
         self._directed_signal.connect(self._on_directed_signal)
@@ -32,13 +30,9 @@ class DeviceThread(thread.QMultiRepeatingThreadController):
 
     def on_start(self):
         self.setup_device(*self.devargs,**self.devkwargs)
-        if self._signal_pool:
-            uid=self._signal_pool.subscribe_nonsync(self._recv_directed_signal,dsts=self.name)
-            self._signal_pool_uids.append(uid)
+        self.subscribe_nonsync(self._recv_directed_signal)
     def on_finish(self):
         self.close_device()
-        for uid in self._signal_pool_uids:
-            self._signal_pool.unsubscribe(uid)
 
     _directed_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")
@@ -49,8 +43,6 @@ class DeviceThread(thread.QMultiRepeatingThreadController):
 
     def set_cached(self, name, value):
         self._cached_var[name]=value
-    def send_signal(self, tag, value, dst=None):
-        self._signal_pool.signal(self.name,tag,value,dst=dst)
 
     def _sync_call(self, func, args, kwargs, sync, timeout):
         return self.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute")

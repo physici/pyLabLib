@@ -1,5 +1,5 @@
 from ...utils import observer_pool, py3
-from . import thread
+from . import threadprop
 
 import threading
 import time
@@ -7,7 +7,7 @@ import time
 
 class SignalSynchronizer(object):
     def __init__(self, func, limit_queue=1, limit_period=0, dest_controller=None):
-        dest_controller=dest_controller or thread.current_controller()
+        dest_controller=dest_controller or threadprop.current_controller()
         def call(*args):
             dest_controller.call_in_thread_callback(func,args,callback=self._call_done)
         self.call=call
