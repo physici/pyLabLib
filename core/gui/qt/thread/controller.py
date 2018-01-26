@@ -1,6 +1,5 @@
-from ....mthread import notifier
 from ....utils import general, funcargparse
-from . import signal_pool, threadprop
+from . import signal_pool, threadprop, synchronizing
 
 from PyQt4 import QtCore
 
@@ -9,6 +8,11 @@ import threading
 _depends_local=["....mthread.notifier"]
 
 _default_signal_pool=signal_pool.SignalPool()
+
+_running_threads={}
+_running_threads_lock=threading.Lock()
+_running_threads_notifier=synchronizing.QMultiThreadNotifier()
+_running_threads_stopping=False
 
 class QThreadControllerThread(QtCore.QThread):
     finalized=QtCore.pyqtSignal()
@@ -44,7 +48,7 @@ class QThreadController(QtCore.QObject):
                 raise threadprop.DuplicateControllerThreadError()
             self.thread=threadprop.get_gui_thread()
             threadprop._local_data.controller=self
-            threadprop.register_controller(self)
+            register_controller(self)
         else:
             self.thread=QThreadControllerThread(self)
         self._wait_timer=QtCore.QTimer(self)
@@ -97,9 +101,9 @@ class QThreadController(QtCore.QObject):
     def _on_start_event(self):
         self._stopped=False
         threadprop._local_data.controller=self
-        threadprop.register_controller(self)
-        self.notify_exec("start")
         try:
+            register_controller(self)
+            self.notify_exec("start")
             self.on_start()
             if self.kind=="run":
                 self._do_run()
@@ -112,7 +116,9 @@ class QThreadController(QtCore.QObject):
         for uid in self._signal_pool_uids:
             self._signal_pool.unsubscribe(uid)
         self.notify_exec("stop")
-        threadprop.unregister_controller(self)
+        unregister_controller(self)
+        if self.kind=="main":
+            stop_all_controllers()
     @QtCore.pyqtSlot()
     def _on_last_window_closed(self):
         if threadprop.get_app().quitOnLastWindowClosed():
@@ -224,7 +230,7 @@ class QThreadController(QtCore.QObject):
     def _get_exec_note(self, point):
         with self._exec_notes_lock:
             if point not in self._exec_notes:
-                self._exec_notes[point]=QMultiThreadNotifier()
+                self._exec_notes[point]=synchronizing.QMultiThreadNotifier()
             return self._exec_notes[point]
     def notify_exec(self, point):
         self._get_exec_note(point).notify()
@@ -243,94 +249,12 @@ class QThreadController(QtCore.QObject):
     def call_in_thread_sync(self, func, args=None, kwargs=None, sync=True, timeout=None, default_result=None, pass_exception=True, tag=None, same_thread_shortcut=True):
         if same_thread_shortcut and sync and threadprop.current_controller() is self:
             return func(*(args or []),**(kwargs or {}))
-        call=QSyncCall(func,args=args,kwargs=kwargs,pass_exception=pass_exception)
+        call=synchronizing.QSyncCall(func,args=args,kwargs=kwargs,pass_exception=pass_exception)
         if tag is None:
             self.interrupt_called.emit(call)
         else:
             self.send_message(tag,call)
         return call.value(sync=sync,timeout=timeout,default=default_result)
-
-
-class QThreadNotifier(notifier.ISkippableNotifier):
-    _uid_gen=general.UIDGenerator(thread_safe=True)
-    _notify_tag="_thread_notifier"
-    def __init__(self, skippable=True):
-        notifier.ISkippableNotifier.__init__(self,skippable=skippable)
-        self._uid=None
-        self.value=None
-    def _pre_wait(self, *args, **kwargs):
-        self._controller=threadprop.current_controller(require_controller=True)
-        self._uid=self._uid_gen()
-        return True
-    def _do_wait(self, timeout=None):
-        try:
-            self._controller.wait_for_sync(self._notify_tag,self._uid,timeout=timeout)
-            return True
-        except threadprop.TimeoutThreadError:
-            return False
-    def _pre_notify(self, value=None):
-        self.value=value
-    def _do_notify(self, *args, **kwargs):
-        self._controller.send_sync(self._notify_tag,self._uid)
-        return True
-    def get_value(self):
-        return self.value
-
-class QMultiThreadNotifier(object):
-    def __init__(self):
-        object.__init__(self)
-        self._lock=threading.Lock()
-        self._state=False
-        self._notifiers=[]
-    def wait(self, timeout=None):
-        with self._lock:
-            if self._state:
-                return True
-            n=QThreadNotifier()
-            self._notifiers.append(n)
-        return n.wait(timeout=timeout)
-    def notify(self):
-        with self._lock:
-            if self._state:
-                return
-            self._state=True
-        while self._notifiers:
-            self._notifiers.pop().notify()
-
-class QSyncCall(object):
-    def __init__(self, func, args=None, kwargs=None, pass_exception=True):
-        object.__init__(self)
-        self.func=func
-        self.args=args or []
-        self.kwargs=kwargs or {}
-        self.synchronizer=QThreadNotifier()
-        self.pass_exception=pass_exception
-    def __call__(self):
-        try:
-            res=("fail",None)
-            res=("result",self.func(*self.args,**self.kwargs))
-        except Exception as e:
-            res=("exception",e)
-        finally:
-            self.synchronizer.notify(res)
-    def value(self, sync=True, timeout=None, default=None):
-        if sync:
-            if self.synchronizer.wait(timeout):
-                kind,value=self.synchronizer.get_value()
-                if kind=="result":
-                    return value
-                elif kind=="exception" and self.pass_exception:
-                    raise value
-            else:
-                return default
-        else:
-            return self.synchronizer
-    def wait(self, timeout=None):
-        return self.synchronizer.wait(timeout)
-    def done(self):
-        return self.synchronizer.done_wait()
-
-
 
 
 
@@ -398,3 +322,50 @@ class QMultiRepeatingThreadController(QThreadController):
     def on_finish(self):
         if self.cleanup:
             self.cleanup(*self.args,**self.kwargs)
+
+
+
+def register_controller(controller):
+    with _running_threads_lock:
+        if _running_threads_stopping:
+            raise threadprop.InterruptExceptionStop()
+        name=controller.name
+        if name in _running_threads:
+            raise threadprop.DuplicateControllerThreadError("thread with name {} already exists".format(name))
+        _running_threads[name]=controller
+    _running_threads_notifier.notify()
+def unregister_controller(controller):
+    with _running_threads_lock:
+        name=controller.name
+        if name not in _running_threads:
+            raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
+        del _running_threads[name]
+    _running_threads_notifier.notify()
+def get_controller(name, wait=True, timeout=None):
+    ctd=general.Countdown(timeout)
+    cnt=0
+    while True:
+        with _running_threads_lock:
+            if name not in _running_threads:
+                if not wait:
+                    raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
+            else:
+                return _running_threads[name]
+        cnt=_running_threads_notifier.wait(cnt,timeout=ctd.time_left())
+        # print cnt
+def stop_controller(name, sync=True, require_controller=False):
+    try:
+        controller=get_controller(name,wait=False)
+        controller.stop()
+        if sync:
+            controller.sync_exec("stop")
+    except threadprop.NoControllerThreadError:
+        if require_controller:
+            raise
+def stop_all_controllers(sync=True):
+    global _running_threads_stopping
+    with _running_threads_lock:
+        _running_threads_stopping=True
+        names=_running_threads.values()
+    for n in names:
+        stop_controller(n)

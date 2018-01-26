@@ -7,8 +7,6 @@ import threading
 _local_data=threading.local()
 
 _thread_uids=general.NamedUIDGenerator(thread_safe=True)
-_running_threads={}
-_running_threads_lock=threading.Lock()
 
 ### Errors ###
 class ThreadError(RuntimeError):
@@ -92,32 +90,3 @@ def current_controller(require_controller=True):
     if require_controller and (controller is None):
         raise NoControllerThreadError("current thread has no controller")
     return controller
-def get_controller(name):
-    with _running_threads_lock:
-        if name not in _running_threads:
-            raise NoControllerThreadError("thread with name {} doesn't exist".format(name))
-        return _running_threads[name]
-def stop_controller(name, sync=True, require_controller=False):
-    try:
-        controller=get_controller(name)
-        controller.stop()
-        if sync:
-            controller.sync_exec("stop")
-    except NoControllerThreadError:
-        if require_controller:
-            raise
-
-
-
-def register_controller(controller):
-    with _running_threads_lock:
-        name=controller.name
-        if name in _running_threads:
-            raise DuplicateControllerThreadError("thread with name {} already exists".format(name))
-        _running_threads[name]=controller
-def unregister_controller(controller):
-    with _running_threads_lock:
-        name=controller.name
-        if name not in _running_threads:
-            raise NoControllerThreadError("thread with name {} doesn't exist".format(name))
-        del _running_threads[name]
