@@ -31,7 +31,7 @@ class ObserverPool(object):
         Args:
             callback(callable): callback function; takes at least one argument (notification tag), and possible more depending on the notification value.
             name(str): stored callback name; by default, a unique name is auto-generated
-            filt(Callable or None): a filter function for this obserever (the observer is called only of the :meth:`notify` function tag passes the filter); by default, all tags are accepted
+            filt(Callable or None): a filter function for this obserever (the observer is called only if the :meth:`notify` function tag and value pass the filter); by default, all tags are accepted
             priority(int): callback priority; higher priority callback are invoked first.
             attr: additional observer attributes (can be used by :class:`ObserverPool` subclasses to change their behavior).
         Returns:
@@ -49,13 +49,13 @@ class ObserverPool(object):
         del self._observers[name]
         self._call_cache={}
     
-    def find_observers(self, tag):
+    def find_observers(self, tag, value):
         try:
             return self._call_cache[tag]
         except KeyError:
             to_call=[]
             for n,o in self._observers.items():
-                if (o.filt is None) or o.filt(tag):
+                if (o.filt is None) or o.filt(tag,value):
                     to_call.append((n,o))
             to_call.sort(key=lambda x: x[1].priority)
             self._call_cache[tag]=to_call
@@ -72,6 +72,6 @@ class ObserverPool(object):
         Return a dictionary of the callback results.
         By default the value is an empty tuple: for ``expand_tuple==True`` this means that only one argument (`tag`) is passed to the cakkbacks.
         """
-        to_call=self.find_observers(tag)
+        to_call=self.find_observers(tag,value)
         results=[(n,self._call_observer(o.callback,tag,value)) for n,o in to_call]
         return dict(results)

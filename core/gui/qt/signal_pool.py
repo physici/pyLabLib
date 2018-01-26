@@ -48,7 +48,7 @@ class SignalPool(object):
         srcs=_as_name_list(srcs)
         dsts=_as_name_list(dsts)
         tags=_as_name_list(tags)
-        def full_filt(tag):
+        def full_filt(tag, value):
             src,dst,tag=tag
             if (tags is not None) and (tag is not None) and (tag not in tags):
                 return False
@@ -56,7 +56,7 @@ class SignalPool(object):
                 return False
             if (dsts is not None) and (dst is not None) and (dst not in dsts):
                 return False
-            return filt(src,dst,tag) if (filt is not None) else True
+            return filt(src,dst,tag,value) if (filt is not None) else True
         return self._pool.add_observer(callback,name=id,filt=full_filt,priority=priority,attr=None)
     def subscribe(self, callback, srcs=None, dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, dest_controller=None, id=None):
         sync_callback=SignalSynchronizer(callback,limit_queue=limit_queue,limit_period=limit_period,dest_controller=dest_controller)
@@ -65,7 +65,7 @@ class SignalPool(object):
         self._pool.remove_observer(id)
 
     def signal(self, src, tag, value, dst=None):
-        to_call=self._pool.find_observers((src,dst,tag))
+        to_call=self._pool.find_observers((src,dst,tag),value)
         # if len(to_call)>1:
         #     print(to_call)
         for _,obs in to_call:

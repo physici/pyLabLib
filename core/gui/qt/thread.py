@@ -43,6 +43,7 @@ class QThreadController(QtCore.QObject):
                 raise threadprop.DuplicateControllerThreadError()
             self.thread=threadprop.get_gui_thread()
             threadprop._local_data.controller=self
+            threadprop.register_controller(self)
         else:
             self.thread=QThreadControllerThread(self)
         self._wait_timer=QtCore.QTimer(self)
@@ -134,7 +135,7 @@ class QThreadController(QtCore.QObject):
 
     def _do_run(self):
         self.run()
-    def _wait_for_any_msg(self, is_done, timeout=None):
+    def _wait_in_process_loop(self, is_done, timeout=None):
         self.check_messages()
         ctd=general.Countdown(timeout)
         while True:
@@ -158,7 +159,7 @@ class QThreadController(QtCore.QObject):
                 value=self._message_queue[tag].pop(0)
                 return True,value
             return False,None
-        self._wait_for_any_msg(is_done,timeout=timeout)
+        self._wait_in_process_loop(is_done,timeout=timeout)
     def new_messages_number(self, tag):
         return len(self._message_queue.setdefault(tag,[]))
     def pop_message(self, tag):
@@ -172,18 +173,19 @@ class QThreadController(QtCore.QObject):
                 return True,None
             return False,None
         try:
-            self._wait_for_any_msg(is_done,timeout=timeout)
+            self._wait_in_process_loop(is_done,timeout=timeout)
         except threadprop.TimeoutThreadError:
             self._sync_clearance.add((tag,uid))
+            raise
+    def wait_for_any_message(self, timeout=None):
+        self._wait_in_process_loop(lambda: (True,None),timeout=timeout)
     def check_messages(self):
         threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents)
         if self._stopped:
             raise threadprop.InterruptExceptionStop()
-    def sleep(self, time):
-        def is_done():
-            return False,None
+    def sleep(self, timeout):
         try:
-            self._wait_for_any_msg(is_done,timeout=time)
+            self._wait_in_process_loop(lambda: (False,None),timeout=timeout)
         except threadprop.TimeoutThreadError:
             pass
 
@@ -193,7 +195,7 @@ class QThreadController(QtCore.QObject):
                 limit_queue=limit_queue,limit_period=limit_period,dest_controller=self,id=id)
             self._signal_pool_uids.append(uid)
             return uid
-    def subscribe_nonsync(self, callback, srcs=None, dsts=None, tags=None, filt=None, priority=0, id=None):
+    def subscribe_nonsync(self, callback, srcs=None, tags=None, filt=None, priority=0, id=None):
         if self._signal_pool:
             uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=self.name,tags=tags,filt=filt,priority=priority,id=id)
             self._signal_pool_uids.append(uid)
@@ -383,7 +385,10 @@ class QMultiRepeatingThreadController(QThreadController):
             if name is None:
                 self.sleep(self._new_jobs_check_period)
             else:
-                self.sleep(to)
+                if to:
+                    self.sleep(to)
+                else:
+                    self.check_messages()
                 job=self.jobs[name][0]
                 self.timers[name].acknowledge(nmin=1)
                 job(*self.args,**self.kwargs)
