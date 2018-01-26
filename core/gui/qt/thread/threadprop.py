@@ -1,4 +1,4 @@
-from ...utils import general
+from ....utils import general
 
 from PyQt4 import QtCore
 
@@ -97,18 +97,27 @@ def get_controller(name):
         if name not in _running_threads:
             raise NoControllerThreadError("thread with name {} doesn't exist".format(name))
         return _running_threads[name]
+def stop_controller(name, sync=True, require_controller=False):
+    try:
+        controller=get_controller(name)
+        controller.stop()
+        if sync:
+            controller.sync_exec("stop")
+    except NoControllerThreadError:
+        if require_controller:
+            raise
 
 
 
 def register_controller(controller):
-    name=controller.name
     with _running_threads_lock:
+        name=controller.name
         if name in _running_threads:
             raise DuplicateControllerThreadError("thread with name {} already exists".format(name))
         _running_threads[name]=controller
 def unregister_controller(controller):
-    name=controller.name
     with _running_threads_lock:
+        name=controller.name
         if name not in _running_threads:
             raise NoControllerThreadError("thread with name {} doesn't exist".format(name))
         del _running_threads[name]

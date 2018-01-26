@@ -1,12 +1,12 @@
-from ...mthread import notifier
-from ...utils import general, funcargparse
+from ....mthread import notifier
+from ....utils import general, funcargparse
 from . import signal_pool, threadprop
 
 from PyQt4 import QtCore
 
 import threading
     
-_depends_local=["...mthread.notifier"]
+_depends_local=["....mthread.notifier"]
 
 _default_signal_pool=signal_pool.SignalPool()
 
@@ -27,7 +27,8 @@ class QThreadControllerThread(QtCore.QThread):
         if self.isRunning():
             self.quit()
             self.controller._request_stop()
-            self.wait()
+            if self.currentThread() is not self:
+                self.wait()
             
 
 class QThreadController(QtCore.QObject):
@@ -216,7 +217,7 @@ class QThreadController(QtCore.QObject):
         self.messaged.emit(("stop",None,None))
     def stop(self):
         if self.kind=="main":
-            threadprop.get_app().exit()
+            self.call_in_thread_callback(threadprop.get_app().quit)
         else:
             self.thread.quit_sync()
     

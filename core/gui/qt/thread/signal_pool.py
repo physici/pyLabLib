@@ -1,4 +1,4 @@
-from ...utils import observer_pool, py3
+from ....utils import observer_pool, py3
 from . import threadprop
 
 import threading

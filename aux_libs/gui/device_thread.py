@@ -1,12 +1,12 @@
-from ...core.gui.qt import thread
+from ...core.gui.qt.thread import controller
 
 from PyQt4 import QtCore
 
 import threading
 
-class DeviceThread(thread.QMultiRepeatingThreadController):
+class DeviceThread(controller.QMultiRepeatingThreadController):
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
-        thread.QMultiRepeatingThreadController.__init__(self,name=name,signal_pool=signal_pool)
+        controller.QMultiRepeatingThreadController.__init__(self,name=name,signal_pool=signal_pool)
         self.devargs=devargs or []
         self.devkwargs=devkwargs or {}
         self.device=None
@@ -44,7 +44,7 @@ class DeviceThread(thread.QMultiRepeatingThreadController):
     def set_cached(self, name, value):
         self._cached_var[name]=value
 
-    def _sync_call(self, func, args, kwargs, sync, timeout):
+    def _sync_call(self, func, args, kwargs, sync, timeout=None):
         return self.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute")
     def command(self, *args, **kwargs):
         self._sync_call(self.process_command,args,kwargs,sync=False)

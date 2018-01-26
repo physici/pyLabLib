@@ -1,12 +1,12 @@
-from ...mthread import threadprop, controller, sync_primitives
-from ...utils import funcargparse, general
+from ....mthread import threadprop, controller, sync_primitives
+from ....utils import funcargparse
 
 from PyQt4 import QtCore, QtGui
 
 import threading
 import sys
     
-_depends_local=["...mthread.controller"]
+_depends_local=["....mthread.controller"]
 
 def get_app():
     """
