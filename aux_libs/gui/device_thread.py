@@ -1,8 +1,11 @@
 from ...core.gui.qt.thread import controller
 
 from PyQt4 import QtCore
+import numpy as np
 
+from future.utils import viewitems
 import threading
+import collections
 
 class DeviceThread(controller.QMultiRepeatingThreadController):
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
@@ -71,3 +74,99 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
                     return parent._sync_call(devcall,args,kwargs,sync=self.sync,timeout=self.timeout)
                 self._calls[name]=remcall
             return self._calls[name]
+
+
+
+class DataAccumulatorThread(controller.QThreadController):
+    def __init__(self, name=None, signal_pool=None):
+        controller.QThreadController.__init__(self,name=name,kind="loop",signal_pool=signal_pool)
+        self.channels={}
+        self.table={}
+        self._channel_lock=threading.RLock()
+        self._row_cnt=0
+        self.block_period=1
+        self.new_block_done.connect(self.on_new_block)
+
+    def setup(self):
+        pass
+    def on_new_row(self, row):
+        return row
+    new_block_done=QtCore.pyqtSignal()
+    @QtCore.pyqtSlot()
+    def on_new_block(self):
+        pass
+    def cleanup(self):
+        pass
+
+    def on_start(self):
+        self.setup()
+    def on_finish(self):
+        self.cleanup()
+
+    Channel=collections.namedtuple("Channel",["data","func","required","max_len"])
+    def add_channel(self, name, func=None, required=True, max_len=None):
+        if name in self.channels:
+            raise KeyError("channel {} already exists".format(name))
+        self.channels[name]=self.Channel([],func,required and (func is None),max_len)
+        self.table[name]=[]
+    def subscribe_channel(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
+        def on_signal(src, tag, value):
+            with self._channel_lock:
+                self._add_data(name,src,tag,value,parse=parse)
+        self.subscribe_nonsync(on_signal,srcs=srcs,dsts=dsts,tags=tags,filt=filt)
+
+    def _complete_row(self, row):
+        for n in self.channels:
+            if n not in row:
+                ch=self.channels[n]
+                row[n]=None if ch.func is None else ch.func()
+        return self.on_new_row(row)
+    def _add_data(self, name, src, tag, value, parse=None):
+        if parse is not None:
+            row=parse(src,tag,value)
+        else:
+            row={name:value}
+        added=False
+        for name,value in viewitems(row):
+            ch=self.channels[name]
+            if ch.max_len and len(ch.data)>=ch.max_len:
+                continue
+            ch.data.append(value)
+            added=True
+        if not added:
+            return
+        for _,ch in viewitems(self.channels):
+            if ch.required and not ch.data:
+                return
+        row={}
+        for n,ch in viewitems(self.channels):
+            if ch.data:
+                row[n]=ch.data.pop(0)
+        row=self._complete_row(row)
+        for n,v in viewitems(row):
+            self.table[n].append(v)
+        self._row_cnt+=1
+        if self.block_period and self._row_cnt>self.block_period:
+            self._row_cnt=0
+            self.new_block_done.emit()
+
+
+
+    def get_data(self, nrows=None, columns=None, copy=True):
+        if columns is None and nrows is None:
+            return self.table.copy() if copy else self.table
+        with self._channel_lock:
+            if nrows is None:
+                nrows=len(self.table.values()[0])
+            if columns is None:
+                return dict((n,v[:nrows]) for n,v in viewitems(self.table))
+            else:
+                return np.column_stack([self.table[c][:nrows] for c in columns])
+    def pop_data(self, nrows=None, columns=None):
+        with self._channel_lock:
+            if nrows is None:
+                nrows=len(self.table.values()[0])
+            res=self.get_data(nrows=nrows,columns=columns)
+            for n,c in viewitems(self.table):
+                del c[:nrows]
+            return res

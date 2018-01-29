@@ -1,8 +1,5 @@
-from ...core.gui.qt.thread import controller,threadprop
+from ...core.gui.qt.thread import threadprop
 from ...core.utils import general, dictionary
-
-
-from PyQt4 import QtCore
 
 _controller_uids=general.NamedUIDGenerator(thread_safe=True)
 
@@ -27,11 +24,10 @@ class GuiController(object):
         for uid in self._signal_pool_uids:
             threadprop.current_controller().unsubscribe(uid)
 
-    def send_signal(self, tag, value, dst=None, src=None):
-        src=src or self.name
-        threadprop.current_controller().send_signal(tag,value,dst=dst,src=self.name)
-    def subscribe(self, callback, srcs=None, tags=None, filt=None, dsts="__self__", priority=0, limit_queue=1, limit_period=0, id=None):
-        uid=threadprop.current_controller().subscribe(callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,
+    def send_signal(self, dst, tag, value=None, src=None):
+        threadprop.current_controller().send_signal(dst,tag,value,src=src or self.name)
+    def subscribe(self, callback, srcs="any", dsts=None, tags="any", filt=None, priority=0, limit_queue=1, limit_period=0, id=None):
+        uid=threadprop.current_controller().subscribe(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,
                 limit_queue=limit_queue,limit_period=limit_period,dest_controller=self,id=id)
         self._signal_pool_uids.append(uid)
         return uid

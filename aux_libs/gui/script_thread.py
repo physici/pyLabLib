@@ -1,4 +1,4 @@
-from ...core.gui.qt.thread import controller
+from ...core.gui.qt.thread import controller,signal_pool
 from ...core.utils import general
 
 from PyQt4 import QtCore
@@ -41,10 +41,10 @@ class ScriptThread(controller.QThreadController):
         except KeyError:
             pass
     
-    def add_signal_monitor(self, mon, srcs=None, tags=None, filt=None):
+    def add_signal_monitor(self, mon, srcs="any", dsts="any", tags=None, filt=None):
         if mon in self._monitored_signals:
             raise KeyError("signal monitor {} already exists".format(mon))
-        uid=self.subscribe_nonsync(lambda *msg: self._monitor_signal.emit((mon,msg)),srcs=srcs,tags=tags,filt=filt)
+        uid=self.subscribe_nonsync(lambda *msg: self._monitor_signal.emit((mon,signal_pool.Signal(*msg))),srcs=srcs,dsts=dsts,tags=tags,filt=filt)
         self._monitored_signals[mon]=(uid,[])
     def remove_signal_monitor(self, mon):
         if mon not in self._monitored_signals:

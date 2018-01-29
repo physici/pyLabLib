@@ -9,6 +9,7 @@ _depends_local=["....mthread.notifier"]
 
 _default_signal_pool=signal_pool.SignalPool()
 
+_created_threads={}
 _running_threads={}
 _running_threads_lock=threading.Lock()
 _running_threads_notifier=synchronizing.QMultiThreadNotifier()
@@ -41,6 +42,7 @@ class QThreadController(QtCore.QObject):
         self.name=name or threadprop._thread_uids(type(self).__name__)
         funcargparse.check_parameter_range(kind,"kind",{"loop","run","main"})
         self.kind=kind
+        store_created_controller(self)
         if self.kind=="main":
             if not threadprop.is_gui_thread():
                 raise threadprop.ThreadError("GUI thread controller can only be created in the main thread")
@@ -195,24 +197,22 @@ class QThreadController(QtCore.QObject):
         except threadprop.TimeoutThreadError:
             pass
 
-    def subscribe(self, callback, srcs=None, tags=None, filt=None, dsts="__self__", priority=0, limit_queue=1, limit_period=0, id=None):
-        dsts=self.name if dsts=="__self__" else dsts
+    def subscribe(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, id=None):
         if self._signal_pool:
-            uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,
+            uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,
                 limit_queue=limit_queue,limit_period=limit_period,dest_controller=self,id=id)
             self._signal_pool_uids.append(uid)
             return uid
-    def subscribe_nonsync(self, callback, srcs=None, tags=None, dsts="__self__", filt=None, priority=0, id=None):
-        dsts=self.name if dsts=="__self__" else dsts
+    def subscribe_nonsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, id=None):
         if self._signal_pool:
-            uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,id=id)
+            uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,id=id)
             self._signal_pool_uids.append(uid)
             return uid
     def unsubscribe(self, id):
         self._signal_pool_uids.pop(id)
         self._signal_pool.unsubscribe(id)
-    def send_signal(self, tag, value, dst=None, src=None):
-        self._signal_pool.signal(src or self.name,tag,value,dst=dst)
+    def send_signal(self, dst, tag, value=None, src=None):
+        self._signal_pool.signal(src or self.name,dst,tag,value)
 
     def send_message(self, tag, value):
         self.messaged.emit(("msg",tag,value))
@@ -327,6 +327,14 @@ class QMultiRepeatingThreadController(QThreadController):
 
 
 
+def store_created_controller(controller):
+    with _running_threads_lock:
+        if _running_threads_stopping:
+            raise threadprop.InterruptExceptionStop()
+        name=controller.name
+        if (name in _running_threads) or (name in _created_threads):
+            raise threadprop.DuplicateControllerThreadError("thread with name {} already exists".format(name))
+        _created_threads[name]=controller
 def register_controller(controller):
     with _running_threads_lock:
         if _running_threads_stopping:
@@ -334,7 +342,10 @@ def register_controller(controller):
         name=controller.name
         if name in _running_threads:
             raise threadprop.DuplicateControllerThreadError("thread with name {} already exists".format(name))
+        if name not in _created_threads:
+            raise threadprop.NoControllerThreadError("thread with name {} hasn't been created".format(name))
         _running_threads[name]=controller
+        del _created_threads[name]
     _running_threads_notifier.notify()
 def unregister_controller(controller):
     with _running_threads_lock:
