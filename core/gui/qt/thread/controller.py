@@ -143,23 +143,22 @@ class QThreadController(QtCore.QObject):
     def _do_run(self):
         self.run()
     def _wait_in_process_loop(self, is_done, timeout=None):
-        self.check_messages()
         ctd=general.Countdown(timeout)
         while True:
             if self._stopped:
                 raise threadprop.InterruptExceptionStop()
-            done,value=is_done()
-            if done:
-                return value
             if timeout is not None:
                 time_left=ctd.time_left()
                 if time_left:
                     self._wait_timer.start(int(time_left*1E3))
-                    threadprop.get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
+                    threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents|QtCore.QEventLoop.WaitForMoreEvents)
                 else:
                     raise threadprop.TimeoutThreadError()
             else:
-                threadprop.get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
+                threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents|QtCore.QEventLoop.WaitForMoreEvents)
+            done,value=is_done()
+            if done:
+                return value
     def wait_for_message(self, tag, timeout=None):
         def is_done():
             if self._message_queue.setdefault(tag,[]):
@@ -196,21 +195,24 @@ class QThreadController(QtCore.QObject):
         except threadprop.TimeoutThreadError:
             pass
 
-    def subscribe(self, callback, srcs=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, id=None):
+    def subscribe(self, callback, srcs=None, tags=None, filt=None, dsts="__self__", priority=0, limit_queue=1, limit_period=0, id=None):
+        dsts=self.name if dsts=="__self__" else dsts
         if self._signal_pool:
-            uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=self.name,tags=tags,filt=filt,priority=priority,
+            uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,
                 limit_queue=limit_queue,limit_period=limit_period,dest_controller=self,id=id)
             self._signal_pool_uids.append(uid)
             return uid
-    def subscribe_nonsync(self, callback, srcs=None, tags=None, filt=None, priority=0, id=None):
+    def subscribe_nonsync(self, callback, srcs=None, tags=None, dsts="__self__", filt=None, priority=0, id=None):
+        dsts=self.name if dsts=="__self__" else dsts
         if self._signal_pool:
-            uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=self.name,tags=tags,filt=filt,priority=priority,id=id)
+            uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,id=id)
             self._signal_pool_uids.append(uid)
             return uid
     def unsubscribe(self, id):
+        self._signal_pool_uids.pop(id)
         self._signal_pool.unsubscribe(id)
-    def send_signal(self, tag, value, dst=None):
-        self._signal_pool.signal(self.name,tag,value,dst=dst)
+    def send_signal(self, tag, value, dst=None, src=None):
+        self._signal_pool.signal(src or self.name,tag,value,dst=dst)
 
     def send_message(self, tag, value):
         self.messaged.emit(("msg",tag,value))

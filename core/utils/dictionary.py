@@ -504,6 +504,8 @@ class Dictionary(object):
                     - ``'flat'`` --  single dictionary is formed with full paths as keys.
             copy (bool): If ``False`` and ``style=='nested'``, return the root dictionary. 
         """
+        if isinstance(self,dict):
+            return self.copy() if copy else self
         funcargparse.check_parameter_range(style,"style",{"nested","flat"})
         if style=="nested":
             return self.copy()._data if copy else self._data
