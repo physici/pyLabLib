@@ -22,6 +22,11 @@ class WS(object):
         self.dll.GetFrequencyNum.argtypes=[ctypes.c_long,ctypes.c_double]
         self.idx=idx
 
+    def open(self):
+        pass
+    def close(self):
+        pass
+
     def __enter__(self):
         return self
     def __exit__(self, *args, **vargs):

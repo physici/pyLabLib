@@ -221,10 +221,12 @@ try:
                 self._channels=[]
         def wait_for_sample(self, num=1, timeout=10., wait_time=0.001):
             if self._task is not None:
+                if self._task.in_stream.avail_samp_per_chan>=num:
+                    return self._task.in_stream.avail_samp_per_chan
                 ctd=general.Countdown(timeout)
                 while not ctd.passed():
+                    time.sleep(wait_time)
                     if self._task.in_stream.avail_samp_per_chan>=num:
                         return self._task.in_stream.avail_samp_per_chan
-                time.sleep(wait_time)
 except ImportError:
     pass

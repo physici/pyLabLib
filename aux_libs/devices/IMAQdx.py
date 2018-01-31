@@ -4,6 +4,7 @@ from ...core.utils import dictionary
 from ...core.devio import data_format
 
 import numpy as np
+import contextlib
 import time
 
 
@@ -144,6 +145,8 @@ class IMAQdxCamera(object):
         lib.IMAQdxStartAcquisition(self.sid)
     def stop_acquisition(self):
         lib.IMAQdxStopAcquisition(self.sid)
+    def acquision_in_progress(self):
+        return self["StatusInformation/AcqInProgress"]
     def refresh_acquisition(self, delay=0.005):
         self.stop_acquisition()
         self.clear_acquisition()
@@ -152,6 +155,16 @@ class IMAQdxCamera(object):
         time.sleep(delay)
         self.stop_acquisition()
         self.clear_acquisition()
+    
+    @contextlib.contextmanager
+    def pausing_acuisition(self):
+        acq_in_progress=self.acquision_in_progress()
+        self.stop_acquisition()
+        try:
+            yield
+        finally:
+            if acq_in_progress:
+                self.start_acquisition()
 
     def read_data_raw(self, size_bytes, mode, buffer_num=0):
         mode=lib.IMAQdxBufferNumberMode_enum.get(mode,mode)
@@ -175,8 +188,8 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
     def get_exposure(self):
         return self["CameraAttributes/AcquisitionControl/ExposureTime"]*1E-6
     def set_exposure(self, exposure):
-        self.stop_acquisition()
-        self["CameraAttributes/AcquisitionControl/ExposureTime"]=exposure*1E6
+        with self.pausing_acuisition():
+            self["CameraAttributes/AcquisitionControl/ExposureTime"]=exposure*1E6
         return self.get_exposure()
 
     def get_detector_size(self):
@@ -191,12 +204,13 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
             hend=det_size[0]
         if vend is None:
             vend=det_size[1]
-        self["CameraAttributes/ImageFormatControl/Width"]=self.attributes["CameraAttributes/ImageFormatControl/Width"].min
-        self["CameraAttributes/ImageFormatControl/Height"]=self.attributes["CameraAttributes/ImageFormatControl/Height"].min
-        self["CameraAttributes/ImageFormatControl/OffsetX"]=hstart-1
-        self["CameraAttributes/ImageFormatControl/OffsetY"]=vstart-1
-        self["CameraAttributes/ImageFormatControl/Width"]=hend-hstart+1
-        self["CameraAttributes/ImageFormatControl/Height"]=vend-vstart+1
+        with pausing_acuisition():
+            self["CameraAttributes/ImageFormatControl/Width"]=self.attributes["CameraAttributes/ImageFormatControl/Width"].min
+            self["CameraAttributes/ImageFormatControl/Height"]=self.attributes["CameraAttributes/ImageFormatControl/Height"].min
+            self["CameraAttributes/ImageFormatControl/OffsetX"]=hstart-1
+            self["CameraAttributes/ImageFormatControl/OffsetY"]=vstart-1
+            self["CameraAttributes/ImageFormatControl/Width"]=hend-hstart+1
+            self["CameraAttributes/ImageFormatControl/Height"]=vend-vstart+1
         return self.get_roi()
 
     def setup_acqusition(self, continuous, frames):
