@@ -575,23 +575,24 @@ class Timer(object):
         """
         start=time.time()
         self.next=start+self.period if skip_first else start
-    def time_left(self, bound_below=True):
+    def time_left(self, t=None, bound_below=True):
         """
         Return the amount of time left before the next tick.
         
         If ``bound_below==True``, instead of negative time return zero.
         """
-        dtime=self.next-time.time()
+        t=t or time.time()
+        dtime=self.next-t
         if bound_below:
             dtime=max(dtime,0.)
         return dtime
-    def passed(self):
+    def passed(self, t=None):
         """
         Return the number of ticks passed.
 
         If timer period is zero, always return 1.
         """
-        t=time.time()
+        t=t or time.time()
         return int((t-self.next)//self.period)+1 if self.period>0 else 1
     def acknowledge(self, n=None, nmin=0):
         """

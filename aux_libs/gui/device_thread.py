@@ -107,7 +107,7 @@ class DataAccumulatorThread(controller.QThreadController):
     def add_channel(self, name, func=None, required=True, max_len=None):
         if name in self.channels:
             raise KeyError("channel {} already exists".format(name))
-        self.channels[name]=self.Channel([],func,required and (func is None),max_len)
+        self.channels[name]=self.Channel(collections.deque(),func,required and (func is None),max_len)
         self.table[name]=[]
     def subscribe_channel(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
         def on_signal(src, tag, value):
@@ -141,10 +141,10 @@ class DataAccumulatorThread(controller.QThreadController):
         row={}
         for n,ch in viewitems(self.channels):
             if ch.data:
-                row[n]=ch.data.pop(0)
+                row[n]=ch.data.popleft()
         row=self._complete_row(row)
-        for n,v in viewitems(row):
-            self.table[n].append(v)
+        for n,t in viewitems(self.table):
+            t.append(row[n])
         self._row_cnt+=1
         if self.block_period and self._row_cnt>self.block_period:
             self._row_cnt=0
@@ -163,9 +163,15 @@ class DataAccumulatorThread(controller.QThreadController):
             else:
                 return np.column_stack([self.table[c][:nrows] for c in columns])
     def pop_data(self, nrows=None, columns=None):
+        if nrows is None:
+            with self._channel_lock:
+                table=self.table
+                self.table=dict([(n,[]) for n in table])
+            if columns is None:
+                return dict((n,v) for n,v in viewitems(table))
+            else:
+                return np.column_stack([table[c] for c in columns])
         with self._channel_lock:
-            if nrows is None:
-                nrows=len(self.table.values()[0])
             res=self.get_data(nrows=nrows,columns=columns)
             for n,c in viewitems(self.table):
                 del c[:nrows]

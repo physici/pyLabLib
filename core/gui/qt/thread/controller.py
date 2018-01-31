@@ -4,6 +4,7 @@ from . import signal_pool, threadprop, synchronizing
 from PyQt4 import QtCore
 
 import threading
+import time
     
 _depends_local=["....mthread.notifier"]
 
@@ -53,9 +54,10 @@ class QThreadController(QtCore.QObject):
             register_controller(self)
         else:
             self.thread=QThreadControllerThread(self)
-        self._wait_timer=QtCore.QTimer(self)
-        self._wait_timer.setSingleShot(True)
-        self._wait_timer.timeout.connect(self._on_wait_timeout)
+        # self._wait_timer=QtCore.QTimer(self)
+        # self._wait_timer.setSingleShot(True)
+        # self._wait_timer.timeout.connect(self._on_wait_timeout)
+        self._wait_timer=QtCore.QBasicTimer()
         self._message_queue={}
         self._sync_queue={}
         self._sync_clearance=set()
@@ -152,12 +154,13 @@ class QThreadController(QtCore.QObject):
             if timeout is not None:
                 time_left=ctd.time_left()
                 if time_left:
-                    self._wait_timer.start(int(time_left*1E3))
-                    threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents|QtCore.QEventLoop.WaitForMoreEvents)
+                    self._wait_timer.start(max(int(time_left*1E3),1),self)
+                    threadprop.get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
+                    self._wait_timer.stop()
                 else:
                     raise threadprop.TimeoutThreadError()
             else:
-                threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents|QtCore.QEventLoop.WaitForMoreEvents)
+                threadprop.get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
             done,value=is_done()
             if done:
                 return value
@@ -266,10 +269,10 @@ class QMultiRepeatingThreadController(QThreadController):
     _new_jobs_check_period=0.1
     def __init__(self, name=None, setup=None, cleanup=None, args=None, kwargs=None, self_as_arg=False, signal_pool=None):
         QThreadController.__init__(self,name,kind="run",signal_pool=signal_pool)
+        self.sync_period=0
+        self._last_sync_time=0
         self.setup=setup
         self.cleanup=cleanup
-        self.paused=False
-        self.single_shot=False
         self.args=args or []
         if self_as_arg:
             self.args=[self]+self.args
@@ -285,14 +288,14 @@ class QMultiRepeatingThreadController(QThreadController):
         self.timers[name]=general.Timer(period)
         self._jobs_list.append(name)
     
-    def _get_next_job(self):
+    def _get_next_job(self, ct):
         if not self._jobs_list:
             return None,None
         idx=None
         left=None
         for i,n in enumerate(self._jobs_list):
             t=self.timers[n]
-            l=t.time_left()
+            l=t.time_left(ct)
             if l==0:
                 idx,left=i,0
                 break
@@ -308,14 +311,19 @@ class QMultiRepeatingThreadController(QThreadController):
             self.setup(*self.args,**self.kwargs)
     def run(self):
         while True:
-            name,to=self._get_next_job()
+            ct=time.time()
+            name,to=self._get_next_job(ct)
             if name is None:
                 self.sleep(self._new_jobs_check_period)
             else:
-                if to:
-                    self.sleep(to)
-                else:
-                    self.check_messages()
+                if (self._last_sync_time is None) or (self._last_sync_time+self.sync_period<=ct):
+                    self._last_sync_time=ct
+                    if to:
+                        self.sleep(to)
+                    else:
+                        self.check_messages()
+                elif to:
+                    time.sleep(to)
                 job=self.jobs[name][0]
                 self.timers[name].acknowledge(nmin=1)
                 job(*self.args,**self.kwargs)
