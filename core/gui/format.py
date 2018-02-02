@@ -180,3 +180,15 @@ class IntegerFormatter(object):
         object.__init__(self)
     def __call__(self, value):
         return "{:d}".format(int(value))
+
+def as_formatter(formatter):
+    if hasattr(formatter,"__call__"):
+        return formatter
+    if formatter=="float":
+        return FloatFormatter()
+    if formatter=="int":
+        return IntegerFormatter()
+    if isinstance(formatter,tuple):
+        if formatter[0]=="float":
+            return FloatFormatter(*formatter[1:])
+    raise ValueError("unknown formatter: {}".format(formatter))

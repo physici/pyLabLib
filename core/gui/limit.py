@@ -69,3 +69,4 @@ def as_limiter(limiter):
         return limiter
     if isinstance(limiter,tuple):
         return NumberLimit(*limiter)
+    raise ValueError("unknown limiter: {}".format(limiter))

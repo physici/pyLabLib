@@ -46,13 +46,13 @@ class LVTextEdit(QtGui.QLineEdit):
 class LVNumEdit(QtGui.QLineEdit):
     def __init__(self, parent, value=None, num_limit=None, num_format=None):
         QtGui.QLineEdit.__init__(self, parent)
-        self.num_limit=num_limit or limit.NumberLimit()
-        self.num_format=num_format or format.FloatFormatter()
+        self.num_limit=limit.as_limiter(num_limit) if num_limit is not None else limit.NumberLimit()
+        self.num_format=format.as_formatter(num_format) if num_format is not None else format.FloatFormatter()
         self.returnPressed.connect(self._on_enter)
         self.editingFinished.connect(self._on_edit_done)
         self._value=None
         if value is not None:
-            self.set_value(None)
+            self.set_value(value)
         self.textChanged.connect(self._on_change_text)
     def _on_edit_done(self):
         self.set_value(self._read_input())
