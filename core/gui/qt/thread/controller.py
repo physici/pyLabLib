@@ -66,6 +66,7 @@ class QThreadController(QtCore.QObject):
         self._signal_pool=signal_pool or _default_signal_pool
         self._signal_pool_uids=[]
         self._stopped=(self.kind!="main")
+        self._running=not self._stopped
         self.moveToThread(self.thread)
         self.messaged.connect(self._get_message)
         self.interrupt_called.connect(self._on_call_in_thread)
@@ -108,6 +109,7 @@ class QThreadController(QtCore.QObject):
         try:
             register_controller(self)
             self.notify_exec("start")
+            self._running=True
             self.on_start()
             if self.kind=="run":
                 self._do_run()
@@ -117,6 +119,7 @@ class QThreadController(QtCore.QObject):
     @QtCore.pyqtSlot()
     def _on_finish_event(self):
         self.on_finish()
+        self._running=False
         for uid in self._signal_pool_uids:
             self._signal_pool.unsubscribe(uid)
         self.notify_exec("stop")
@@ -170,7 +173,7 @@ class QThreadController(QtCore.QObject):
                 value=self._message_queue[tag].pop(0)
                 return True,value
             return False,None
-        self._wait_in_process_loop(is_done,timeout=timeout)
+        return self._wait_in_process_loop(is_done,timeout=timeout)
     def new_messages_number(self, tag):
         return len(self._message_queue.setdefault(tag,[]))
     def pop_message(self, tag):
@@ -190,6 +193,8 @@ class QThreadController(QtCore.QObject):
             raise
     def wait_for_any_message(self, timeout=None):
         self._wait_in_process_loop(lambda: (True,None),timeout=timeout)
+    def wait_until(self, check, timeout=None):
+        self._wait_in_process_loop(lambda: (check(),None),timeout=timeout)
     def check_messages(self):
         threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents)
         if self._stopped:
@@ -221,6 +226,8 @@ class QThreadController(QtCore.QObject):
         self.messaged.emit(("msg",tag,value))
     def send_sync(self, tag, uid):
         self.messaged.emit(("sync",tag,uid))
+    def poke(self):
+        self.message.emit(("poke",None,None))
 
     def start(self):
         self.thread.start()
@@ -231,6 +238,8 @@ class QThreadController(QtCore.QObject):
             self.call_in_thread_callback(threadprop.get_app().quit)
         else:
             self.thread.quit_sync()
+    def running(self):
+        return self._running
     
     def _get_exec_note(self, point):
         with self._exec_notes_lock:
@@ -305,6 +314,9 @@ class QMultiRepeatingThreadController(QThreadController):
         n=self._jobs_list.pop(idx)
         self._jobs_list.append(n)
         return n,left
+    def check_commands(self):
+        while self.new_messages_number("control.execute"):
+            self.pop_message("control.execute")()
     
     def on_start(self):
         if self.setup:
@@ -327,8 +339,7 @@ class QMultiRepeatingThreadController(QThreadController):
                 job=self.jobs[name][0]
                 self.timers[name].acknowledge(nmin=1)
                 job(*self.args,**self.kwargs)
-            while self.new_messages_number("control.execute"):
-                self.pop_message("control.execute")()
+            self.check_commands()
     def on_finish(self):
         if self.cleanup:
             self.cleanup(*self.args,**self.kwargs)

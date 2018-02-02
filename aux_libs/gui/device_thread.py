@@ -1,4 +1,5 @@
 from ...core.gui.qt.thread import controller
+from ...core.utils import general
 
 from PyQt4 import QtCore
 import numpy as np
@@ -14,6 +15,7 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         self.devkwargs=devkwargs or {}
         self.device=None
         self._cached_var={}
+        self._cached_exp={}
         self._cached_var_lock=threading.Lock()
         self._directed_signal.connect(self._on_directed_signal)
         self.c=self.CommandAccess(self,sync=False)
@@ -26,6 +28,8 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def process_command(self, *args, **kwargs):
         pass
     def process_query(self, *args, **kwargs):
+        pass
+    def process_interrupt(self, *args, **kwargs):
         pass
     def close_device(self):
         if self.device is not None:
@@ -44,8 +48,11 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def _recv_directed_signal(self, tag, src, value):
         self._directed_signal.emit((tag,src,value))
 
+    _cached_change_tag="#sync.wait.cached"
     def set_cached(self, name, value):
         self._cached_var[name]=value
+        for ctl in self._cached_exp.get(name,[]):
+            ctl.send_message(self._cached_change_tag)
 
     def _sync_call(self, func, args, kwargs, sync, timeout=None):
         return self.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute")
@@ -54,8 +61,25 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def query(self, *args, **kwargs):
         timeout=kwargs.pop("timeout",None)
         return self._sync_call(self.process_query,args,kwargs,sync=True,timeout=timeout)
+    def interrupt(self, *args, **kwargs):
+        return self.call_in_thread_sync(self.process_interrupt,args,kwargs,sync=False)
     def get_cached(self, name):
         return self._cached_var.get(name)
+    def wait_for_cached(self, name, pred, timeout=None):
+        ctl=controller.current_controller()
+        with self._cached_var_lock:
+            self._cached_exp.setdefault(name,[]).append(ctl)
+        ctd=general.Countdown(timeout)
+        try:
+            while True:
+                value=self.get_cached()
+                if pred(value):
+                    return value
+                ctl.wait_for_message(self._cached_change_tag,timeout=ctd.time_left())
+        finally:
+            with self._cached_var_lock:
+                self._cached_exp[name].pop(ctl)
+
 
     class CommandAccess(object):
         def __init__(self, parent, sync, timeout=None):
@@ -104,7 +128,7 @@ class DataAccumulatorThread(controller.QThreadController):
         self.cleanup()
 
     Channel=collections.namedtuple("Channel",["data","func","required","max_len"])
-    def add_channel(self, name, func=None, required=True, max_len=None):
+    def add_channel(self, name, func=None, required=True, max_len=1):
         if name in self.channels:
             raise KeyError("channel {} already exists".format(name))
         self.channels[name]=self.Channel(collections.deque(),func,required and (func is None),max_len)
@@ -129,10 +153,11 @@ class DataAccumulatorThread(controller.QThreadController):
         added=False
         for name,value in viewitems(row):
             ch=self.channels[name]
-            if ch.max_len and len(ch.data)>=ch.max_len:
-                continue
             ch.data.append(value)
-            added=True
+            if ch.max_len and len(ch.data)>ch.max_len:
+                ch.data.popleft()
+            else:
+                added=True
         if not added:
             return
         for _,ch in viewitems(self.channels):
@@ -176,3 +201,11 @@ class DataAccumulatorThread(controller.QThreadController):
             for n,c in viewitems(self.table):
                 del c[:nrows]
             return res
+    def clear_data(self):
+        with self._channel_lock:
+            self.table=dict([(n,[]) for n in self.table])
+
+    def clear_all(self):
+        with self._channel_lock:
+            for _,ch in viewitems(self.channels):
+                ch.data.clear()

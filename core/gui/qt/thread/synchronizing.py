@@ -7,7 +7,7 @@ import  threading
 
 class QThreadNotifier(notifier.ISkippableNotifier):
     _uid_gen=general.UIDGenerator(thread_safe=True)
-    _notify_tag="_thread_notifier"
+    _notify_tag="#sync.notifier"
     def __init__(self, skippable=True):
         notifier.ISkippableNotifier.__init__(self,skippable=skippable)
         self._uid=None
