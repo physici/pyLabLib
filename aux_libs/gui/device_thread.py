@@ -1,4 +1,4 @@
-from ...core.gui.qt.thread import controller
+from ...core.gui.qt.thread import controller, threadprop
 from ...core.utils import general
 
 from PyQt4 import QtCore
@@ -49,10 +49,13 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         self._directed_signal.emit((tag,src,value))
 
     _cached_change_tag="#sync.wait.cached"
-    def set_cached(self, name, value):
+    def set_cached(self, name, value, notify=False, notify_tag="changed.*"):
         self._cached_var[name]=value
         for ctl in self._cached_exp.get(name,[]):
-            ctl.send_message(self._cached_change_tag)
+            ctl.send_message(self._cached_change_tag,value)
+        if notify:
+            notify_tag.replace("*",name)
+            self.send_signal("any",notify_tag,value)
 
     def _sync_call(self, func, args, kwargs, sync, timeout=None):
         return self.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute")
@@ -66,19 +69,22 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def get_cached(self, name):
         return self._cached_var.get(name)
     def wait_for_cached(self, name, pred, timeout=None):
-        ctl=controller.current_controller()
+        if not hasattr(pred,"__call__"):
+            v=pred
+            pred=lambda x: x==v
+        ctl=threadprop.current_controller()
         with self._cached_var_lock:
             self._cached_exp.setdefault(name,[]).append(ctl)
         ctd=general.Countdown(timeout)
         try:
             while True:
-                value=self.get_cached()
+                value=self.get_cached(name)
                 if pred(value):
                     return value
                 ctl.wait_for_message(self._cached_change_tag,timeout=ctd.time_left())
         finally:
             with self._cached_var_lock:
-                self._cached_exp[name].pop(ctl)
+                self._cached_exp[name].remove(ctl)
 
 
     class CommandAccess(object):
@@ -107,9 +113,11 @@ class DataAccumulatorThread(controller.QThreadController):
         self.channels={}
         self.table={}
         self._channel_lock=threading.RLock()
+        self._row_lock=threading.RLock()
         self._row_cnt=0
         self.block_period=1
         self.new_block_done.connect(self.on_new_block)
+        self.new_row_done.connect(self._add_new_row)
 
     def setup(self):
         pass
@@ -163,24 +171,29 @@ class DataAccumulatorThread(controller.QThreadController):
         for _,ch in viewitems(self.channels):
             if ch.required and not ch.data:
                 return
-        row={}
-        for n,ch in viewitems(self.channels):
-            if ch.data:
-                row[n]=ch.data.popleft()
+        self.new_row_done.emit()
+    new_row_done=QtCore.pyqtSignal()
+    def _add_new_row(self):
+        with self._channel_lock:
+            row={}
+            for n,ch in viewitems(self.channels):
+                if ch.data:
+                    row[n]=ch.data.popleft()
         row=self._complete_row(row)
-        for n,t in viewitems(self.table):
-            t.append(row[n])
-        self._row_cnt+=1
-        if self.block_period and self._row_cnt>self.block_period:
-            self._row_cnt=0
-            self.new_block_done.emit()
+        with self._row_lock:
+            for n,t in viewitems(self.table):
+                t.append(row[n])
+            self._row_cnt+=1
+            if self.block_period and self._row_cnt>self.block_period:
+                self._row_cnt=0
+                self.new_block_done.emit()
 
 
 
     def get_data(self, nrows=None, columns=None, copy=True):
         if columns is None and nrows is None:
             return self.table.copy() if copy else self.table
-        with self._channel_lock:
+        with self._row_lock:
             if nrows is None:
                 nrows=len(self.table.values()[0])
             if columns is None:
@@ -189,23 +202,23 @@ class DataAccumulatorThread(controller.QThreadController):
                 return np.column_stack([self.table[c][:nrows] for c in columns])
     def pop_data(self, nrows=None, columns=None):
         if nrows is None:
-            with self._channel_lock:
+            with self._row_lock:
                 table=self.table
                 self.table=dict([(n,[]) for n in table])
             if columns is None:
                 return dict((n,v) for n,v in viewitems(table))
             else:
                 return np.column_stack([table[c] for c in columns])
-        with self._channel_lock:
+        with self._row_lock:
             res=self.get_data(nrows=nrows,columns=columns)
             for n,c in viewitems(self.table):
                 del c[:nrows]
             return res
     def clear_data(self):
-        with self._channel_lock:
+        with self._row_lock:
             self.table=dict([(n,[]) for n in self.table])
 
     def clear_all(self):
-        with self._channel_lock:
+        with self._row_lock:
             for _,ch in viewitems(self.channels):
                 ch.data.clear()

@@ -33,6 +33,8 @@ def _get_default_getter(widget):
         return lambda: str(widget.text())
     if isinstance(widget,(QtGui.QCheckBox,QtGui.QPushButton)):
         return widget.isChecked
+    if isinstance(widget,(QtGui.QProgressBar)):
+        return widget.value
     if isinstance(widget,(QtGui.QComboBox)):
         return widget.currentIndex
     if hasattr(widget,"get_value"):
@@ -48,6 +50,8 @@ def _get_default_setter(widget):
         return lambda x: widget.setText(str(x))
     if isinstance(widget,(QtGui.QCheckBox,QtGui.QPushButton)):
         return widget.setChecked
+    if isinstance(widget,(QtGui.QProgressBar)):
+        return lambda x: widget.setValue(int(x))
     if isinstance(widget,(QtGui.QComboBox)):
         return widget.setCurrentIndex
     if hasattr(widget,"set_value"):
@@ -85,11 +89,12 @@ class ParamTable(QtGui.QWidget):
         self.params[name]=self.ParamRow(widget,wlabel,getter or _get_default_getter(widget),setter or _get_default_setter(widget))
         return widget
 
-    def add_button(self, name, caption, checkable=False, label=None):
+    def add_button(self, name, caption, checkable=False, value=False, label=None):
         widget=QtGui.QPushButton(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(name))
-        widget.setCheckable
+        widget.setCheckable(checkable)
+        widget.setChecked(value)
         return self.add_widget(name,widget,label=label)
     def add_text_label(self, name, value=None, label=None):
         widget=QtGui.QLabel(self)
@@ -108,7 +113,13 @@ class ParamTable(QtGui.QWidget):
     def add_num_edit(self, name, value=None, limiter=None, formatter=None, label=None):
         widget=edit.LVNumEdit(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(name))
-        self.add_widget(name,widget,label=label)
+        return self.add_widget(name,widget,label=label)
+    def add_progress_bar(self, name, value=None, label=None):
+        widget=QtGui.QProgressBar(self)
+        widget.setObjectName(_fromUtf8(name))
+        if value is not None:
+            widget.setValue(value)
+        return self.add_widget(name,widget,label=label)
 
     def add_spacer(self, height):
         spacer=QtGui.QSpacerItem(1,height,QtGui.QSizePolicy.Minimum,QtGui.QSizePolicy.Expanding)

@@ -118,14 +118,19 @@ class QThreadController(QtCore.QObject):
             self.thread.stop_request.emit()
     @QtCore.pyqtSlot()
     def _on_finish_event(self):
-        self.on_finish()
-        self._running=False
-        for uid in self._signal_pool_uids:
-            self._signal_pool.unsubscribe(uid)
-        self.notify_exec("stop")
-        unregister_controller(self)
-        if self.kind=="main":
-            stop_all_controllers()
+        is_stopped=self._stopped
+        self._stopped=False
+        try:
+            self.on_finish()
+        finally:
+            self._stopped=is_stopped
+            self._running=False
+            for uid in self._signal_pool_uids:
+                self._signal_pool.unsubscribe(uid)
+            self.notify_exec("stop")
+            unregister_controller(self)
+            if self.kind=="main":
+                stop_all_controllers()
     @QtCore.pyqtSlot()
     def _on_last_window_closed(self):
         if threadprop.get_app().quitOnLastWindowClosed():
@@ -161,6 +166,7 @@ class QThreadController(QtCore.QObject):
                     threadprop.get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
                     self._wait_timer.stop()
                 else:
+                    self.check_messages()
                     raise threadprop.TimeoutThreadError()
             else:
                 threadprop.get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
