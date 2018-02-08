@@ -18,6 +18,7 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         self._cached_exp={}
         self._cached_var_lock=threading.Lock()
         self._directed_signal.connect(self._on_directed_signal)
+        self._commands={}
         self.c=self.CommandAccess(self,sync=False)
         self.q=self.CommandAccess(self,sync=True)
 
@@ -26,7 +27,7 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def process_signal(self, src, tag, value):
         pass
     def process_command(self, *args, **kwargs):
-        pass
+        self.process_named_command()
     def process_query(self, *args, **kwargs):
         pass
     def process_interrupt(self, *args, **kwargs):
@@ -48,6 +49,10 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def _recv_directed_signal(self, tag, src, value):
         self._directed_signal.emit((tag,src,value))
 
+    def process_named_command(self, name, *args, **kwargs):
+        if name in self._commands:
+            self._commands[name](*args,**kwargs)
+
     _cached_change_tag="#sync.wait.cached"
     def set_cached(self, name, value, notify=False, notify_tag="changed.*"):
         self._cached_var[name]=value
@@ -56,6 +61,10 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         if notify:
             notify_tag.replace("*",name)
             self.send_signal("any",notify_tag,value)
+    def add_command(self, name, command):
+        if name in self._commands:
+            raise ValueError("command {} already exists".format(name))
+        self._commands[name]=command
 
     def _sync_call(self, func, args, kwargs, sync, timeout=None):
         return self.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute")

@@ -295,6 +295,7 @@ class QMultiRepeatingThreadController(QThreadController):
         self.jobs={}
         self.timers={}
         self._jobs_list=[]
+        self.batch_jobs={}
         
     def add_job(self, name, job, period):
         if name in self.jobs:
@@ -302,6 +303,34 @@ class QMultiRepeatingThreadController(QThreadController):
         self.jobs[name]=(job,period)
         self.timers[name]=general.Timer(period)
         self._jobs_list.append(name)
+    def remove_job(self, name):
+        if name not in self.jobs:
+            raise ValueError("job {} doesn't exists".format(name))
+        self._jobs_list.remove(name)
+        del self.jobs[name]
+        del self.timers[name]
+
+    def add_batch_job(self, name, job):
+        if name in self.jobs or name in self.batch_jobs:
+            raise ValueError("job {} already exists".format(name))
+        self.batch_jobs[name]=job
+    def start_batch_job(self, name, period, *args, **kwargs):
+        if name not in self.batch_jobs:
+            raise ValueError("job {} doesn't exists".format(name))
+        if name in self.jobs:
+            self.stop_batch_job(name)
+        gen=self.batch_jobs[name](*args,**kwargs)
+        def do_step():
+            try:
+                gen.next()
+            except StopIteration:
+                self.stop_batch_job(name)
+                return
+        self.add_job(name,do_step,period)
+    def stop_batch_job(self, name):
+        if name not in self.jobs or name not in self.batch_jobs:
+            raise ValueError("job {} doesn't exists".format(name))
+        self.remove_job(name)
     
     def _get_next_job(self, ct):
         if not self._jobs_list:
