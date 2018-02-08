@@ -37,10 +37,12 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
             self.device.close()
 
     def on_start(self):
+        controller.QMultiRepeatingThreadController.on_start(self)
         self.setup_device(*self.devargs,**self.devkwargs)
         self.subscribe_nonsync(self._recv_directed_signal)
     def on_finish(self):
         self.close_device()
+        controller.QMultiRepeatingThreadController.on_finish(self)
 
     _directed_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")

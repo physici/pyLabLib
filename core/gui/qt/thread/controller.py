@@ -296,6 +296,7 @@ class QMultiRepeatingThreadController(QThreadController):
         self.timers={}
         self._jobs_list=[]
         self.batch_jobs={}
+        self._batch_jobs_args={}
         
     def add_job(self, name, job, period):
         if name in self.jobs:
@@ -310,27 +311,40 @@ class QMultiRepeatingThreadController(QThreadController):
         del self.jobs[name]
         del self.timers[name]
 
-    def add_batch_job(self, name, job):
+    def add_batch_job(self, name, job, cleanup=None):
         if name in self.jobs or name in self.batch_jobs:
             raise ValueError("job {} already exists".format(name))
-        self.batch_jobs[name]=job
+        self.batch_jobs[name]=(job,cleanup)
     def start_batch_job(self, name, period, *args, **kwargs):
         if name not in self.batch_jobs:
             raise ValueError("job {} doesn't exists".format(name))
         if name in self.jobs:
             self.stop_batch_job(name)
-        gen=self.batch_jobs[name](*args,**kwargs)
+        self._batch_jobs_args[name]=(args,kwargs)
+        job=self.batch_jobs[name][0]
+        gen=job(*args,**kwargs)
         def do_step():
             try:
                 gen.next()
             except StopIteration:
                 self.stop_batch_job(name)
-                return
         self.add_job(name,do_step,period)
-    def stop_batch_job(self, name):
-        if name not in self.jobs or name not in self.batch_jobs:
+    def batch_job_running(self, name):
+        if name not in self.batch_jobs:
             raise ValueError("job {} doesn't exists".format(name))
+        return name in self.jobs
+    def stop_batch_job(self, name, error_on_stopped=False):
+        if name not in self.batch_jobs:
+            raise ValueError("job {} doesn't exists".format(name))
+        if name not in self.jobs:
+            if error_on_stopped:
+                raise ValueError("job {} doesn't exists".format(name))
+            return
         self.remove_job(name)
+        args,kwargs=self._batch_jobs_args.pop(name)
+        cleanup=self.batch_jobs[name][1]
+        if cleanup:
+            cleanup(*args,**kwargs)
     
     def _get_next_job(self, ct):
         if not self._jobs_list:
@@ -376,6 +390,9 @@ class QMultiRepeatingThreadController(QThreadController):
                 job(*self.args,**self.kwargs)
             self.check_commands()
     def on_finish(self):
+        for n in self.batch_jobs:
+            if n in self.jobs:
+                self.stop_batch_job(n)
         if self.cleanup:
             self.cleanup(*self.args,**self.kwargs)
 
