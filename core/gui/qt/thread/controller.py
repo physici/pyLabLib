@@ -298,12 +298,14 @@ class QMultiRepeatingThreadController(QThreadController):
         self.batch_jobs={}
         self._batch_jobs_args={}
         
-    def add_job(self, name, job, period):
+    def add_job(self, name, job, period, initial_call=True):
         if name in self.jobs:
             raise ValueError("job {} already exists".format(name))
         self.jobs[name]=(job,period)
         self.timers[name]=general.Timer(period)
         self._jobs_list.append(name)
+        if initial_call:
+            job()
     def remove_job(self, name):
         if name not in self.jobs:
             raise ValueError("job {} doesn't exists".format(name))

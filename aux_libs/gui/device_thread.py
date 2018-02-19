@@ -29,12 +29,21 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def process_command(self, *args, **kwargs):
         self.process_named_command()
     def process_query(self, *args, **kwargs):
-        pass
+        self.process_named_command()
     def process_interrupt(self, *args, **kwargs):
         pass
     def close_device(self):
         if self.device is not None:
             self.device.close()
+
+    def update_status(self, kind, status, text=None, notify=True):
+        status_str="status."+kind if kind else "status"
+        self.set_cached(status_str,status)
+        if notify:
+            self.send_signal("any",status_str+"."+status)
+        if text:
+            self.set_cached("status.text",text)
+            self.send_signal("any","status.text",text)
 
     def on_start(self):
         controller.QMultiRepeatingThreadController.on_start(self)
