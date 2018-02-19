@@ -4,6 +4,7 @@ from ...core.devio import backend
 from ...core.utils import funcargparse
 
 import collections
+import contextlib
 
 class AndorError(RuntimeError):
     "Generic Andor camera error."
@@ -59,7 +60,7 @@ class AndorCamera(backend.IBackendWrapper):
         self._add_settings_node("trigger_mode",lambda:self.trigger_mode,self.set_trigger_mode)
         self._add_settings_node("acq_mode",lambda:self.acq_mode,self.set_acquisition_mode)
         self._add_settings_node("frame_transfer",lambda:self.frame_transfer_mode,self.enable_frame_transfer_mode)
-        self._add_settings_node("exposure",lambda:self.get_timings()[0],self.set_exposure)
+        self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
         self._add_settings_node("read_mode",lambda:self.read_mode,self.set_read_mode)
         self._add_settings_node("read_parameters",lambda:self.read_params[self.read_mode],self._setup_read_parameters)
         self._add_settings_node("detector_size",self.get_detector_size)
@@ -272,6 +273,8 @@ class AndorCamera(backend.IBackendWrapper):
     def set_exposure(self, exposure):
         self._camsel()
         lib.SetExposureTime(exposure)
+    def get_exposure(self):
+        return self.get_timings()[0]
     def enable_frame_transfer_mode(self, enable=True):
         self._camsel()
         lib.SetFrameTransferMode(enable)
@@ -300,7 +303,7 @@ class AndorCamera(backend.IBackendWrapper):
     AcqProgress=collections.namedtuple("AcqProgress",["frames_done","cycles_done"])
     def get_progress(self):
         self._camsel()
-        return self.AcqProgress(lib.GetAcquisitionProgress())
+        return self.AcqProgress(*lib.GetAcquisitionProgress())
     def wait_for_frame(self, timeout=None):
         self._camsel()
         if timeout is None:
@@ -310,6 +313,16 @@ class AndorCamera(backend.IBackendWrapper):
     def cancel_wait(self):
         self._camsel()
         lib.CancelWait()
+    @contextlib.contextmanager
+    def pausing_acquisition(self):
+        acq=self.get_status()=="acquiring"
+        try:
+            if acq:
+                self.stop_acquisition()
+            yield
+        finally:
+            if acq:
+                self.start_acquisition()
 
     ### Image settings and transfer controls ###
     def get_detector_size(self):

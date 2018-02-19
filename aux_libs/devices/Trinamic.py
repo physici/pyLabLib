@@ -38,7 +38,10 @@ class TMCM1100(backend.IBackendWrapper):
         module=strpack.unpack_uint(reply[1:2])
         status=strpack.unpack_uint(reply[2:3])
         comm=strpack.unpack_uint(reply[3:4])
-        value=data_format.DataFormat.from_desc(">"+result_format).convert_from_str(reply[4:8])[-1]
+        if result_format=="str":
+            value=reply[4:8]
+        else:
+            value=data_format.DataFormat.from_desc(">"+result_format).convert_from_str(reply[4:8])[-1]
         return TMCM1100.ReplyData(comm,status,value,addr,module)
     _status_codes={100:"Success", 101:"Command loaded", 1:"Wrong checksum", 2:"Invalid command", 3:"Wrong type", 4:"Invalid value", 5:"EEPROM locked", 6:"Command not available"}
     @classmethod
@@ -80,12 +83,12 @@ class TMCM1100(backend.IBackendWrapper):
         return self.query(3,0,0)
 
     def get_move_speed(self, bank=0, addr=0):
-        return self.get_axis_parameter(4)
+        return self.get_axis_parameter(4,bank=bank,addr=addr)
     def set_move_speed(self, speed, bank=0, addr=0):
-        return self.set_axis_parameter(speed)
+        return self.set_axis_parameter(4,speed,bank=bank,addr=addr)
 
     def get_current_speed(self, bank=0, addr=0):
-        return self.get_axis_parameter(3)
+        return self.get_axis_parameter(3,bank=bank,addr=addr)
     def wait_move(self, bank=0, addr=0):
-        while self.get_current_speed():
+        while self.get_current_speed(bank=bank,addr=addr):
             time.sleep(0.05)

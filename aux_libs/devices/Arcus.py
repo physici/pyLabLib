@@ -24,6 +24,8 @@ class PerformaxStage(object):
         self.handle=None
         self.rbuff=ctypes.create_string_buffer(65536)
         self.open()
+        self.set_absolute_mode()
+        self.enable_all_outputs()
 
     def open(self):
         if self.handle:
@@ -66,6 +68,15 @@ class PerformaxStage(object):
             raise ArcusError("unrecognized axis: {}".format(axis))
         return axis.upper()
 
+    def set_absolute_mode(self):
+        self.query("ABS")
+    def enable_output(self, axis, enable=True):
+        axis=self._check_axis(axis)
+        axisn="XYZU".index(axis)+1
+        self.query("EO{}={}".format(axisn,"1" if enable else "0"))
+    def enable_all_outputs(self, enable=True):
+        self.query("EO={}".format("15" if enable else "0"))
+
     def get_pos(self, axis):
         axis=self._check_axis(axis)
         return int(self.query("P"+axis))
@@ -87,6 +98,9 @@ class PerformaxStage(object):
     def stop(self, axis):
         axis=self._check_axis(axis)
         self.query("STOP"+axis)
+    def stop_all(self):
+        for axis in "XYZU":
+            self.query("STOP"+axis)
 
     def get_speed(self):
         return int(self.query("HS"))
@@ -108,6 +122,8 @@ class PerformaxStage(object):
     def get_axis_status(self, axis):
         statn=self.get_axis_status_n(axis)
         return set([ k for k in self._status_bits if self._status_bits[k]&statn ])
+    def is_moving(self, axis):
+        return self.get_axis_status_n(axis)&0x007
 
     def check_limit_error(self, axis):
         stat=self.get_axis_status_n(axis)

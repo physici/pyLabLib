@@ -17,7 +17,7 @@ class M2Error(RuntimeError):
     """
     pass
 class M2ICE(object):
-    def __init__(self, addr, port, timeout=3., start_link=True):
+    def __init__(self, addr, port, timeout=3., start_link=True, use_websocket=True):
         object.__init__(self)
         self.tx_id=1
         self.conn=(addr,port)
@@ -25,10 +25,13 @@ class M2ICE(object):
         self.open()
         if start_link:
             self.start_link()
+        self._last_status={}
+        self.use_websocket=use_websocket and (websocket is not None)
 
     def open(self):
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen",timeout=self.timeout)
         self.socket.connect(*self.conn)
+        self._last_status={}
     def close(self):
         self.socket.close()
 
@@ -69,27 +72,50 @@ class M2ICE(object):
             raise M2Error(error_msg)
         return pmsg["op"],pmsg["parameters"]
     
+    def _recv_reply(self, expected=None):
+        while True:
+            reply=net.recv_JSON(self.socket)
+            preply=self._parse_reply(reply)
+            if preply[0].endswith("_f_r") and preply[0]!=expected:
+                self._last_status[preply[0][:-4]]=preply[1]
+            else:
+                return preply
     def flush(self):
         self.socket.recv_all()
     def query(self, op, params, reply_op="auto", report=False):
         if report:
             params["report"]="finished"
+            self._last_status[op]=None
         msg=self._build_message(op,params)
         self.socket.send(msg)
-        reply=net.recv_JSON(self.socket)
-        preply=self._parse_reply(reply)
+        preply=self._recv_reply()
         if reply_op=="auto":
             reply_op=op+"_reply"
         if reply_op and preply[0]!=reply_op:
             raise M2Error("unexpected reply op: '{}' (expected '{}')".format(preply[0],reply_op))
         return preply
-
-    def wait_for_report(self, timeout=None):
+    def check_reports(self, timeout=0.):
+        timeout=max(timeout,0.001)
+        try:
+            with self.socket.using_timeout(timeout):
+                preport=self._recv_reply()
+                raise M2Error("received reply while waiting for a report: '{}'".format(preport[0]))
+        except net.SocketTimeout:
+            pass
+    def get_last_report(self, op):
+        rep=self._last_status.get(op,None)
+        if rep:
+            return "fail" if rep["report"][0] else "success"
+        return None
+    def wait_for_report(self, op, error_msg=None, timeout=None):
         with self.socket.using_timeout(timeout):
-            report=net.recv_JSON(self.socket)
-            preport=self._parse_reply(report)
+            preport=self._recv_reply(expected=op+"_f_r")
             if not preport[0].endswith("_f_r"):
                 raise M2Error("unexpected report op: '{}'".format(preport[0]))
+        if preport[1]["report"][0]!=0:
+            if error_msg is None:
+                error_msg="error on operation {}; error report {}".format(preport[0][:-4],preport[1])
+            raise M2Error(error_msg)
         return preport
 
 
@@ -99,11 +125,19 @@ class M2ICE(object):
             raise M2Error("couldn't establish link: reply status '{}'".format(reply["status"]))
 
     def _send_websocket_request(self, msg):
-        if websocket:
+        if self.use_websocket:
             ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
             time.sleep(1.)
             ws.send(msg)
             ws.close()
+        else:
+            raise RuntimeError("'websocket' library is requried to communicate this request")
+    def _read_websocket_status(self):
+        if self.use_websocket:
+            ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+            data=ws.recv()
+            ws.close()
+            return json.loads(data)
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def connect_wavemeter(self):
@@ -112,7 +146,21 @@ class M2ICE(object):
         self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
 
     def get_system_status(self):
-        return self.query("get_status",{})[1]
+        _,reply=self.query("get_status",{})
+        for k in reply:
+            if isinstance(reply[k],list):
+                reply[k]=reply[k][0]
+        return reply
+    def get_full_web_status(self):
+        return self._read_websocket_status()
+    def _as_web_status(self, status):
+        if status=="auto":
+            status="new" if self.use_websocket else None
+        if status=="new":
+            return self.get_full_web_status()
+        if status is None:
+            return None
+        return status
     
     def get_full_tuning_status(self):
         return self.query("poll_wave_m",{})[1]
@@ -130,7 +178,7 @@ class M2ICE(object):
         elif reply["status"][0]==2:
             raise M2Error("can't tune wavelength: {}nm is out of range".format(wavelength*1E9))
         if sync:
-            self.wait_for_report(timeout=timeout)
+            self.wait_for_report("set_wave_m",timeout=timeout)
     def get_tuning_status(self):
         status=self.get_full_tuning_status()["status"][0]
         return ["lock_off","nolink","tuning","done"][status]
@@ -148,7 +196,7 @@ class M2ICE(object):
         elif reply["status"][0]==2:
             raise M2Error("can't tune wavelength: {}nm is out of range".format(wavelength*1E9))
         if sync:
-            self.wait_for_report()
+            self.wait_for_report("move_wave_t")
     def get_full_tuning_status_table(self):
         return self.query("poll_move_wave_t",{})[1]
     def get_tuning_status_table(self):
@@ -166,7 +214,61 @@ class M2ICE(object):
         elif reply["status"][0]==2:
             raise M2Error("can't tune etalon: command failed")
         if sync:
-            self.wait_for_report()
+            self.wait_for_report("tune_etalon")
+    def lock_etalon(self, sync=True):
+        _,reply=self.query("etalon_lock",{"operation":"on"},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't lock etalon")
+        if sync:
+            self.wait_for_report("etalon_lock")
+    def unlock_etalon(self, sync=True):
+        self.unlock_reference_cavity(sync=True)
+        _,reply=self.query("etalon_lock",{"operation":"off"},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't unlock etalon")
+        if sync:
+            self.wait_for_report("etalon_lock")
+    def get_etalon_lock_status(self):
+        _,reply=self.query("etalon_lock_status",{})
+        if reply["status"][0]==1:
+            raise M2Error("can't get etalon status")
+        return reply["condition"]
+
+    def tune_reference_cavity(self, perc, fine=False, sync=True):
+        _,reply=self.query("fine_tune_cavity" if fine else "tune_cavity",{"setting":[perc]},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't tune reference cavity: {} is out of range".format(perc))
+        elif reply["status"][0]==2:
+            raise M2Error("can't tune reference cavity: command failed")
+        if sync:
+            self.wait_for_report("fine_tune_cavity")
+    def lock_reference_cavity(self, sync=True):
+        self.lock_etalon(sync=True)
+        _,reply=self.query("cavity_lock",{"operation":"on"},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't lock reference cavity")
+        if sync:
+            self.wait_for_report("cavity_lock")
+    def unlock_reference_cavity(self, sync=True):
+        _,reply=self.query("cavity_lock",{"operation":"off"},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't unlock reference cavity")
+        if sync:
+            self.wait_for_report("cavity_lock")
+    def get_reference_cavity_lock_status(self):
+        _,reply=self.query("cavity_lock_status",{})
+        if reply["status"][0]==1:
+            raise M2Error("can't get etalon status")
+        return reply["condition"]
+
+    def tune_laser_resonator(self, perc, fine=False, sync=True):
+        _,reply=self.query("fine_tune_resonator" if fine else "tune_resonator",{"setting":[perc]},report=sync)
+        if reply["status"][0]==1:
+            raise M2Error("can't tune resonator: {} is out of range".format(perc))
+        elif reply["status"][0]==2:
+            raise M2Error("can't tune resonator: command failed")
+        if sync:
+            self.wait_for_report("fine_tune_resonator")
 
     
     def _check_terascan_type(self, scan_type):
@@ -174,17 +276,23 @@ class M2ICE(object):
             raise M2Error("unknown TeraScan type: {}".format(scan_type))
         if scan_type=="coarse":
             raise M2Error("coarse scan is not currently available")
-    def setup_terascan(self, scan_type, scan_range, rate, sync=True):
+    def setup_terascan(self, scan_type, scan_range, rate):
         self._check_terascan_type(scan_type)
-        if scan_type=="medium":
+        if rate>=1E9:
             fact,units=1E9,"GHz/s"
-        elif scan_type=="fine":
+        elif rate>=1E6:
             fact,units=1E6,"MHz/s"
-        elif scan_type=="line":
+        else:
             fact,units=1E3,"kHz/s"
-        scan_range=max(scan_range),min(scan_range)
+        # if scan_type=="medium":
+        #     fact,units=1E9,"GHz/s"
+        # elif scan_type=="fine":
+        #     fact,units=1E6,"MHz/s"
+        # elif scan_type=="line":
+        #     fact,units=1E3,"kHz/s"
+        # scan_range=max(scan_range),min(scan_range)
         params={"scan":scan_type,"start":[c/scan_range[0]*1E9],"stop":[c/scan_range[1]*1E9],"rate":[rate/fact],"units":units}
-        _,reply=self.query("scan_stitch_initialise",params,report=sync)
+        _,reply=self.query("scan_stitch_initialise",params)
         if reply["status"][0]==1:
             raise M2Error("can't setup TeraScan: start ({:.3f} THz) is out of range".format(scan_range[0]/1E12))
         elif reply["status"][0]==2:
@@ -193,18 +301,19 @@ class M2ICE(object):
             raise M2Error("can't setup TeraScan: scan out of range")
         elif reply["status"][0]==4:
             raise M2Error("can't setup TeraScan: TeraScan not available")
-        if sync:
-            self.wait_for_report()
     def start_terascan(self, scan_type, sync=False):
         self._check_terascan_type(scan_type)
-        _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"start"},report=sync)
+        _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"start"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't start TeraScan: operation failed")
         elif reply["status"][0]==2:
             raise M2Error("can't start TeraScan: TeraScan not available")
         if sync:
-            self.wait_for_report()
-    def stop_terascan(self, scan_type, sync=True):
+            self.wait_for_report("scan_stitch_op")
+    def check_terascan_report(self):
+        self.check_reports()
+        return self.get_last_report("scan_stitch_op")
+    def stop_terascan(self, scan_type, sync=False):
         self._check_terascan_type(scan_type)
         _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"stop"},report=sync)
         if reply["status"][0]==1:
@@ -212,8 +321,9 @@ class M2ICE(object):
         elif reply["status"][0]==2:
             raise M2Error("can't stop TeraScan: TeraScan not available")
         if sync:
-            self.wait_for_report()
-    def get_terascan_status(self, scan_type):
+            self.wait_for_report("scan_stitch_op")
+    _web_scan_status_str=['off','cont','single','flyback','on','fail']
+    def get_terascan_status(self, scan_type, web_status="auto"):
         self._check_terascan_type(scan_type)
         _,reply=self.query("scan_stitch_status",{"scan":scan_type})
         status={}
@@ -226,8 +336,14 @@ class M2ICE(object):
             elif reply["operation"][0]==1:
                 status["status"]="scanning"
             status["range"]=c/(reply["start"][0]/1E9),c/(reply["stop"][0]/1E9)
+            status["current"]=c/(reply["current"][0]/1E9)
         elif reply["status"][0]==2:
             raise M2Error("can't stop TeraScan: TeraScan not available")
+        web_status=self._as_web_status(web_status)
+        if web_status:
+            status["web"]=self._web_scan_status_str[web_status["scan_status"]]
+        else:
+            status["web"]=None
         return status
 
     _fast_scan_types={"etalon_continuous","etalon_single",
@@ -252,7 +368,7 @@ class M2ICE(object):
         elif reply["status"][0]==5:
             raise M2Error("can't start fast scan: time >10000 seconds")
         if sync:
-            self.wait_for_report()
+            self.wait_for_report("fast_scan_start")
     def stop_fast_scan(self, scan_type, return_to_start=True, sync=False):
         self._check_fast_scan_type(scan_type)
         _,reply=self.query("fast_scan_stop" if return_to_start else "fast_scan_stop_nr",{"scan":scan_type})
@@ -265,7 +381,7 @@ class M2ICE(object):
         elif reply["status"][0]==4:
             raise M2Error("can't stop fast scan: invalid scan type")
         if sync:
-            self.wait_for_report()
+            self.wait_for_report("fast_scan_stop")
     def get_fast_scan_status(self, scan_type):
         self._check_fast_scan_type(scan_type)
         _,reply=self.query("fast_scan_poll",{"scan":scan_type})
@@ -293,23 +409,32 @@ class M2ICE(object):
             scan_type=scan_type.replace("continuous","cont")
         scan_task=scan_type+"_stop"
         self._send_websocket_request('{{"message_type":"task_request","task":["{}"]}}'.format(scan_task))
-
+    _default_terascan_rates={"line":10E6,"fine":100E6,"medium":5E9}
     def stop_all_operation(self, repeated=True):
         attempts=0
         while True:
             operating=False
             for scan_type in ["medium","fine","line"]:
-                if self.get_terascan_status(scan_type)["status"]!="stopped":
+                stat=self.get_terascan_status(scan_type)
+                if stat["status"]!="stopped":
                     operating=True
                     self.stop_terascan(scan_type)
-                    if attempts>1:
+                    time.sleep(0.5)
+                    if attempts>3:
                         self.stop_scan_web(scan_type)
+                    if attempts>6:
+                        rate=self._default_terascan_rates[scan_type]
+                        self.setup_terascan(scan_type,(stat["current"],stat["current"]+rate*10),rate)
+                        self.start_terascan(scan_type)
+                        time.sleep(1.)
+                        self.stop_terascan(scan_type)
             for scan_type in self._fast_scan_types:
                 try:
                     if self.get_fast_scan_status(scan_type)["status"]!="stopped":
                         operating=True
                         self.stop_fast_scan(scan_type)
-                        if attempts>1:
+                        time.sleep(0.5)
+                        if attempts>3:
                             self.stop_scan_web(scan_type)
                 except M2Error:
                     pass
