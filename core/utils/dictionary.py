@@ -9,7 +9,7 @@ from . import funcargparse, general, strdump
 import re
 import collections
 
-
+_depends_local=["..utils.strdump"]
 
 def split_path(path, omit_empty=True, sep=None):
     """
@@ -348,7 +348,8 @@ class Dictionary(object):
         """
         return sorted(self._data) if ordered else self._data
     iterkeys=viewkeys # for compatibility
-    __iter__=viewkeys
+    def __iter__(self):
+        return self._data.__iter__()
     keys=viewkeys
     def paths(self, ordered=False, topdown=False):
         """
@@ -503,6 +504,8 @@ class Dictionary(object):
                     - ``'flat'`` --  single dictionary is formed with full paths as keys.
             copy (bool): If ``False`` and ``style=='nested'``, return the root dictionary. 
         """
+        if isinstance(self,dict):
+            return self.copy() if copy else self
         funcargparse.check_parameter_range(style,"style",{"nested","flat"})
         if style=="nested":
             return self.copy()._data if copy else self._data

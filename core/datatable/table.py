@@ -1,4 +1,5 @@
 from builtins import zip
+from ..utils.py3 import textstring
 
 from ..utils import iterator as iterator_utils #@UnresolvedImport
 from ..utils import funcargparse, general, strdump
@@ -6,7 +7,7 @@ from . import table_storage, column, indexing
 
 import numpy as np
 
-_depends_local=[".table_storage"]
+_depends_local=[".table_storage","..utils.strdump"]
 
 
 _storage_types={"columns":table_storage.ColumnDataTableStorage,"array":table_storage.ArrayDataTableStorage}
@@ -172,6 +173,12 @@ class DataTable(object):
             self._storage.set_columns(idx, val)
         def __delitem__(self, idx):
             self._storage.del_columns(idx)
+        def __contains__(self, idx):
+            try:
+                self._storage.get_columns(idx)
+                return True
+            except IndexError:
+                return False
         def insert(self, idx, val, names=None, transposed="auto"):
             """
             Add new columns at index `idx` (1D).
@@ -267,7 +274,7 @@ class DataTable(object):
         if c_ndim==0:
             new_names[idx]=val
         else:
-            if isinstance(val,basestring):
+            if isinstance(val,textstring):
                 raise ValueError("can't assign single name to multiple columns")
             for i,v in zip(idx,val):
                 new_names[i]=v
@@ -398,9 +405,9 @@ class DataTable(object):
         def self_func(self, *args, **vargs):
             return func(self.as_array(force_copy=False),*args,**vargs)
         if alias is None:
-            alias=func.func_name
+            alias=func.__name__
         try:
-            self_func.func_doc=func.func_doc
+            self_func.__doc__=func.__doc__
         except AttributeError:
             pass
         setattr(cls,alias,self_func)
@@ -424,9 +431,9 @@ class DataTable(object):
             else:
                 return func(self[c],*args,**vargs)
         if alias is None:
-            alias=func.func_name
+            alias=func.__name__
         try:
-            self_func.func_doc=func.func_doc
+            self_func.__doc__=func.__doc__
         except AttributeError:
             pass
         setattr(cls,alias,self_func)
@@ -446,9 +453,9 @@ class DataTable(object):
                 raise TypeError("argument '{}' is not supplied".format(column_arg_name))
             return func(self.c[c],*args,**vargs)
         if alias is None:
-            alias=func.func_name
+            alias=func.__name__
         try:
-            self_func.func_doc=func.func_doc
+            self_func.__doc__=func.__doc__
         except AttributeError:
             pass
         setattr(cls,alias,self_func)

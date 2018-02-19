@@ -22,10 +22,11 @@ class AccessIterator(object):
         self.access_function=access_function
     def __iter__(self):
         return self
-    def next(self):
+    def __next__(self):
         try:
             result=self.access_function(self.obj,self.idx)
             self.idx=self.idx+1
             return result
         except IndexError:
             raise StopIteration()
+    next=__next__

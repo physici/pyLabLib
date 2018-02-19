@@ -1,4 +1,4 @@
-from io import open
+# from io import open
 
 import time
 import os.path

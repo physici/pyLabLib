@@ -231,7 +231,8 @@ class Column1DWrapper(I1DWrapper):
         """
         return Column1DWrapper(self.cont.subcolumn(idx)) if wrapped else self.cont.subcolumn(idx)
     @staticmethod
-    def from_array(array, force_copy=False, force_numpy=True, try_optimizing=False, wrapped=True):"""
+    def from_array(array, force_copy=False, force_numpy=True, try_optimizing=False, wrapped=True):
+        """
         Build a new object of the type corresponding to the wrapper from the supplied `array` (a 1D numpy array or a list).
 
         If ``force_copy==True``, make a copy of supplied array.

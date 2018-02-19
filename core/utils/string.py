@@ -265,7 +265,7 @@ def to_string(value, location="element", custom_representations=None):
         return tr.get("float",_default_float_representaion).format(float(value))
     if isinstance(value,bool):
         return str(value)
-    if isinstance(value,int) or isinstance(value,np.integer) or isinstance(value,long):
+    if isinstance(value,int) or isinstance(value,np.long) or isinstance(value,np.integer):
         return tr.get("int",_default_int_representation).format(int(value))
     if isinstance(value,textstring):
         return escape_string(value, location=location)
@@ -288,7 +288,7 @@ def to_string(value, location="element", custom_representations=None):
     for ec in "\n\v\r":
         value=value.replace(ec,"\t")
     return value
-_conv_types=[float,int,np.floating,np.integer,textstring,complex,long,bool]
+_conv_types=[float,int,np.floating,np.integer,textstring,complex,np.long,bool]
 _cont_types=[list,tuple,set]
 def is_convertible(value):
     """
@@ -385,7 +385,7 @@ def _parse_parenthesis_struct(line, start=0):
     while True:
         quote_pos=find_first_entry(line,_quotation_characters,pos,len(line))
         delim_pos=find_first_entry(line,[',',':'],pos,len(line))
-        open_par_pos=find_first_entry(line,_parenthesis_pairs.keys(),pos,len(line))
+        open_par_pos=find_first_entry(line,_parenthesis_pairs,pos,len(line))
         clos_par_pos=find_first_entry(line,_parenthesis_pairs.values(),pos,len(line))
         if clos_par_pos==len(line):
             raise ValueError("malformatted parenthesis structure")

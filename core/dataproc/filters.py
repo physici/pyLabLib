@@ -10,11 +10,9 @@ from ..datatable import column #@UnresolvedImport
 from ..datatable import table #@UnresolvedImport
 from ..datatable.wrapping import wrap #@UnresolvedImport
 from ..utils import funcargparse, general as general_utils #@UnresolvedImport
-from . import waveforms
+from . import waveforms, specfunc, iir_transform
 
 import numpy as np
-import specfunc
-import iir_transform
 import scipy.ndimage as ndimage
 
 _depends_local=["..datatable.column","..datatable.table",".waveforms"]

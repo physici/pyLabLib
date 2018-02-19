@@ -3,23 +3,21 @@ A wrapper for built-in TCP/IP routines.
 """
 
 
-import socket
-from . import funcargparse, strpack, general
+import socket, json, contextlib
+from . import funcargparse, strpack, general, py3
 
 
 class SocketError(socket.error):
     """
     Base socket error class.
     """
-    def __init__(self, msg):
-        socket.error.__init__(self,msg)
+    pass
         
 class SocketTimeout(SocketError):
     """
     Socket timeout error.
     """
-    def __init__(self, msg):
-        SocketError.__init__(self,msg)
+    pass
 
 
 def _wait_sock_func(func, timeout, wait_callback):
@@ -40,7 +38,7 @@ class ClientSocket(object):
     
     Args:
         sock (socket.socket): If not ``None``, use already created socket.
-        timeout (float): The timeout used for connecting and sending/receving.
+        timeout (float): The timeout used for connecting and sending/receving (``None`` means no timeout).
         wait_callback (Callable): Called periodically (every 100ms by default) while waiting for connecting or sending/receiving.
         send_method (str): Default sending method.
         recv_method (str): Default receiving method.
@@ -84,6 +82,20 @@ class ClientSocket(object):
         self.timeout=timeout
         if self.wait_callback is None:
             self.sock.settimeout(self.timeout)
+    def get_timeout(self):
+        """Get timeout for connecting or sending/receiving."""
+        return self.timeout
+    @contextlib.contextmanager
+    def using_timeout(self, timeout=None):
+        """Context manager for usage of a different timeout inside a block."""
+        if timeout is not None:
+            to=self.get_timeout()
+            self.set_timeout(timeout)
+        try:
+            yield
+        finally:
+            if timeout is not None:
+                self.set_timeout(to)
     
     def _connect_callback(self):
         self.sock.close()
@@ -99,6 +111,13 @@ class ClientSocket(object):
         """Close the connection."""
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
+
+    def get_local_name(self):
+        """Return IP address and port of this socket."""
+        return self.sock.getsockname()
+    def get_peer_name(self):
+        """Return IP address and port of the peer socket."""
+        return self.sock.getpeername()
         
     def _recv_wait(self, l):
         sock_func=lambda: self.sock.recv(l)
@@ -119,15 +138,21 @@ class ClientSocket(object):
                 raise SocketError("connection closed while receiving")
             buf=buf+recvd
         return buf
-    def recv_delimiter(self, delim, lmax=None, chunk_l=1024):
+    def recv_delimiter(self, delim, lmax=None, chunk_l=1024, strict=False):
         """
         Receive a single message ending with a delimiter `delim` (can be several characters).
         
         `lmax` specifies the maximal received length (`None` means no limit).
         `chunk_l` specifies the size of data chunk to be read in one try.
+        If ``strict==False``, keep receiving as much data as possible until a delimiter is found in the end (only works properly if a single line is expected);
+        otherwise, receive the data byte-by-byte and stop as soon as a delimiter is found (equivalent ot setting ``chunk_l=1``).
         """
         buf=""
-        while not buf.endswith(delim):
+        if isinstance(delim, py3.anystring):
+            delim=[delim]
+        if strict:
+            chunk_l=1
+        while not any([buf.endswith(d) for d in delim]):
             try:
                 recvd=self._recv_wait(chunk_l)
             except socket.timeout:
@@ -155,6 +180,20 @@ class ClientSocket(object):
             return self.recv_decllen()
         else:
             return self.recv_fixedlen(l)
+    def recv_all(self, chunk_l=1024):
+        """
+        Receive all of the data currently in the socket.
+
+        `chunk_l` specifies the size of data chunk to be read in one try.
+        For technical reasons, use 1ms timeout (i.e., this operation takes 1ms).
+        """
+        data=b""
+        with self.using_timeout(1E-3):
+            try:
+                while True:
+                    data+=self.recv_fixedlen(chunk_l)
+            except SocketTimeout:
+                pass
     def recv_ack(self, l=None):
         """Receive a message using the default method and send an acknowledgement (message length)."""
         msg=self.recv(l=l)
@@ -209,7 +248,23 @@ class ClientSocket(object):
         return res
         
         
-        
+
+def recv_JSON(socket, chunk_l=1024, strict=True):
+    """
+    Receive a complete JSON tokent from the socket.
+
+    `chunk_l` specifies the size of data chunk to be read in one try.
+    If ``strict==False``, keep receiving as much data as possible until the received data forms a complete JSON token.
+    otherwise, receive the data byte-by-byte and stop as soon as a token is formed (equivalent ot setting ``chunk_l=1``).
+    """
+    msg=""
+    while True:
+        msg+=socket.recv_delimiter("}",chunk_l=chunk_l,strict=strict)
+        try:
+            json.loads(msg)
+            return msg
+        except ValueError:
+            pass
         
         
 _listen_wait_callback_timeout=0.1

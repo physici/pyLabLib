@@ -3,7 +3,7 @@ Collection of small utilities.
 """
 
 from builtins import input
-from future.utils import viewitems
+from future.utils import viewitems, viewvalues
 
 import time
 import threading
@@ -36,15 +36,15 @@ def try_method_wrapper(func, method_name=None, inherit_signature=True):
     If ``inherit_signature==True``, completely copy the signature of the wrapped method (name, args list, docstring, etc.).
     """
     if method_name is None:
-        method_name=func.func_name
+        method_name=func.__name__
     def wrapped(*args, **kwargs):
         if args:
             self,args=args[0],args[1:]
             if "self" in kwargs:
-                raise TypeError("{}() got multiple values for keyword argument 'self'".format(func.func_name))
+                raise TypeError("{}() got multiple values for keyword argument 'self'".format(func.__name__))
         elif kwargs:
             if "self" not in kwargs:
-                raise TypeError("{}() reqiqres jeyword argument 'self'".format(func.func_name))
+                raise TypeError("{}() reqiqres jeyword argument 'self'".format(func.__name__))
             self=kwargs.pop("self")
         try:
             return getattr(self,method_name)(*args,**kwargs)
@@ -53,7 +53,7 @@ def try_method_wrapper(func, method_name=None, inherit_signature=True):
     if inherit_signature:
         wrapped=functions.getargsfrom(func)(wrapped)
     else:
-        wrapped.func_doc=func.func_doc
+        wrapped.__doc__=func.__doc__
     return wrapped
 
 
@@ -229,7 +229,7 @@ def split_in_groups(key_func, l, continuous=True, max_group_size=None):
         groups={}
         for e in l:
             groups.get(key_func(e),[]).append(e)
-        return groups.values()
+        return list(viewvalues(groups))
 def sort_set_by_list(s, l, keep_duplicates=True):
     """
     Convert the set `s` into a list ordered by a list `l`.
@@ -338,7 +338,7 @@ class RetryOnException(object):
                     return True
             return False
         def reraise(self):
-            raise self.error
+            raise
     def __iter__(self):
         cnt=0
         while True:
@@ -445,14 +445,14 @@ def topological_order(graph, visit_order=None):
     order=[]
     visited=set()
     if visit_order is None:
-        nodes=set(graph.keys())
+        nodes=set(graph)
         while len(nodes)>0:
             start=nodes.pop()
             _topological_order_dfs(graph,start,visited=visited,order=order)
             nodes.difference_update(visited)
     else:
         vo_set=set(visit_order)
-        nodes=visit_order+[n for n in graph.keys() if n not in vo_set]
+        nodes=visit_order+[n for n in graph if n not in vo_set]
         priority=dict([(v,i) for i,v in enumerate(nodes)])
         while len(nodes)>0:
             start=nodes.pop(0)
@@ -526,13 +526,13 @@ class Countdown(object):
     """
     def __init__(self, timeout):
         self.timeout=timeout
-        if timeout==0 or timeout is None:
-            return
+        self.reset()
+    def reset(self):
         self.start=time.time()
-        if timeout is None:
+        if self.timeout is None:
             self.end=None
         else:
-            self.end=timeout+self.start
+            self.end=self.timeout+self.start
     def time_left(self, bound_below=True):
         """
         Return the amount of time left. For infinite timeout, return ``None``.
@@ -556,7 +556,58 @@ class Countdown(object):
         else:
             t=time.time()
             return self.end<=t
+
+class Timer(object):
+    """
+    Object for keeping time of repeating tasks.
+    
+    Args:
+        period (float): Timer period.
+    """
+    def __init__(self, period, skip_first=False):
+        self.period=period
+        self.reset(skip_first=skip_first)
+    def reset(self, skip_first=False):
+        """
+        Reset the timer.
+
+        If ``skip_first==False``, timer ticks immediately; otherwise, it starts ticking only after one period.
+        """
+        start=time.time()
+        self.next=start+self.period if skip_first else start
+    def time_left(self, t=None, bound_below=True):
+        """
+        Return the amount of time left before the next tick.
         
+        If ``bound_below==True``, instead of negative time return zero.
+        """
+        t=t or time.time()
+        dtime=self.next-t
+        if bound_below:
+            dtime=max(dtime,0.)
+        return dtime
+    def passed(self, t=None):
+        """
+        Return the number of ticks passed.
+
+        If timer period is zero, always return 1.
+        """
+        t=t or time.time()
+        return int((t-self.next)//self.period)+1 if self.period>0 else 1
+    def acknowledge(self, n=None, nmin=0):
+        """
+        Acknowledge the timer tick.
+
+        `n` specifies the number of tick to acknowledge (by default, all passed).
+        Return number of actually acknowledget ticks (0 if the timer hasn't ticked since the last acknowledgement).
+        """
+        npassed=max(self.passed(),nmin)
+        if n is None:
+            nack=npassed
+        else:
+            nack=min(npassed,n)
+        self.next+=self.period*nack
+        return nack
         
 ### Debugging ###
 

@@ -46,6 +46,9 @@ def interpolate1D(x, y, kind="linear", axis=-1, copy=True, bounds_error=True, fi
     
     Simply a wrapper around :func:`scipy.interpolate.interp1d`. 
     """
+    if fill_values=="bounds":
+        fill_values=y[x.argmin()],y[x.argmax()]
+        bounds_error=False
     if funcargparse.is_sequence(fill_values,"array"):
         fill_values=tuple(fill_values[:2])
     return scipy.interpolate.interp1d(x,y,kind=kind,axis=axis,copy=copy,bounds_error=bounds_error,fill_value=fill_values,assume_sorted=assume_sorted)

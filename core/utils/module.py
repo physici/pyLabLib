@@ -88,7 +88,7 @@ def get_reload_order(modules):
         for ch_name in modules:
             if ch_name!=name and ch_name.startswith(name+"."):
                 deps.setdefault(name,[]).append(ch_name)
-    for name in deps.keys():
+    for name in deps:
         deps[name]=list(set(deps[name]))
     order=general.topological_order(deps)
     order=[name for name in modules if not name in order]+order

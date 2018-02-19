@@ -145,11 +145,11 @@ class GenericPlotter(IRecurrentPlot):
     def __init__(self, axes_num=1, plots_num=1, axes_names=None, log_x=False, log_y=False, xlabel="", ylabel="", legend=None, xscale=1., yscale=1., fig=None):
         IRecurrentPlot.__init__(self,fig=fig)
         self.axes_num=axes_num
-        self.axes_names=axes_names or range(axes_num)
+        self.axes_names=axes_names or list(range(axes_num))
         self.plots_num=funcargparse.as_sequence(plots_num,axes_num)
         #plot_names=funcargparse.as_sequence(plot_names,axes_num)
         #self.plot_names=[funcargparse.as_sequence(pns,pn) if pn else range(pn) for pn,xs in zip(self.plots_num,plot_names)]
-        self.plot_names=[range(pn) for pn in self.plots_num]
+        self.plot_names=[list(range(pn)) for pn in self.plots_num]
         self.log_x=funcargparse.as_sequence(log_x,axes_num)
         self.log_y=funcargparse.as_sequence(log_y,axes_num)
         self.xlabel=funcargparse.as_sequence(xlabel,axes_num)

@@ -1,8 +1,8 @@
 """
 Mixing class for converting object into dict structure.
-If attribute of an object is also serializable, it's going to be added to the top level of the dict.
-Avoid recursive attributes (x.a=y, y.b=x), since they will lead to error while trying to load an object.
-Avoid recursive containers (x[0]=y, y[0]=x), since they will lead to infinite loop while serializing.
+If an attribute of an object is also serializable, it is going to be added to the top level of the dict.
+Avoid recursive attributes (``x.a=y; y.b=x``), since they will lead to errors while trying to load an object.
+Avoid recursive containers (``x[0]=y; y[0]=x``), since they will lead to an infinite loop while serializing.
 Choice of the attributes to serialize is the same for all objects of the same class
 """
 
@@ -13,12 +13,16 @@ import inspect
 from . import string
 
 class Serializable(object):
+    """
+    A serializable object: can be converted to/from a dictionary structure.
+    """
     _classes={}
     @staticmethod
     def _find_class(name, case_sensitive=True):
         """
-        Find class name in the list of registered classes (can be case insensitive).
-        Raise error if class isn't found.
+        Find the class name in the list of registered classes (can be case insensitive).
+
+        Raise error if the class isn't found.
         """
         try:
             _,cls=string.find_dict_string(name,Serializable._classes,case_sensitive=case_sensitive)
@@ -28,7 +32,7 @@ class Serializable(object):
     @classmethod
     def _register_class(cls, name=None, attributes=None):
         """
-        To be called after class definition to initialize necessary state. 
+        To be called after class definition to register it in the main class list. 
         """
         if name is None:
             name=cls.__name__
@@ -47,7 +51,9 @@ class Serializable(object):
     @classmethod
     def _find_attribute_name(cls, name, case_sensitive=True):
         """
-        Find attribute name in the attribute list (can be case insensitive) and return exact name and type (init or attr).
+        Find the attribute name in the attribute list (can be case insensitive).abs
+        
+        Return tuple ``(name, type)``, where type can be ``'init'`` (attribute is passed to the constructor) or ``'attr'`` (attribute is assigned later).
         Raise error if attribute isn't found.
         """
         for attr_type in ["init","attr"]:
@@ -60,7 +66,7 @@ class Serializable(object):
     @classmethod
     def _new_object_name(cls):
         """
-        Generate new unique object name using counter.
+        Generate a new unique object name using the shared counter.
         """
         name="{0}_{1}".format(cls._class_name,cls._objects_count)
         cls._objects_count=cls._objects_count+1
@@ -75,25 +81,31 @@ class Serializable(object):
     
     def _get_init_parameter(self, name):
         """
+        Get the ``'init'`` parameter with the given name.
+
         Can be overloaded if init parameter isn't stored plainly in the object.
-        If parameter doesn't need to be saved, raise AttirbuteError.
+        If parameter doesn't need to be saved, raise :exc:`AttirbuteError`.
         """
         return getattr(self,name)
     def _get_attr_parameter(self, name):
         """
+        Get the ``'attr'`` parameter with the given name.
+
         Can be overloaded if attr parameter isn't stored plainly in the object.
-        If parameter doesn't need to be saved, raise AttirbuteError.
+        If parameter doesn't need to be saved, raise :exc:`AttirbuteError`.
         """
         return getattr(self,name)
     def _set_attr_parameter(self, name, value):
         """
-        Can be overloaded if attr parameter setting isn't just assigning value.
+        Set the ``'attr'`` parameter with the given name.
+
+        Can be overloaded if attr parameter setting isn't just equivalent to the value assignment.
         """
         setattr(self,name,value)
     
     def _serialize(self, full_dict):
         """
-        Add the object into dictionary and return corresponding dict key (its name).
+        Add the object into the dictionary `full_dict` and return the corresponding dict key (its name).
         """
         name=self._object_name
         if name in full_dict:
@@ -115,9 +127,11 @@ class Serializable(object):
     @staticmethod
     def _deserialize(name, full_dict, loaded, case_sensitive=True):
         """
-        Initiate and add object to the loaded from the description saved in full_dict.
-        Just do initiation; assign additional attributes later if needed.
-        If deserialization is case insensitive, exact name is the object key in the full_dict.
+        Load the object with the given name from the `full_dict` dictionary.
+
+        Return the loaded object, which is also added to the `loaded` dict under the given name.
+        Only the initialization (assinging ``'init'`` attributes) of the object is performed; assign additional (``'attr'``) attributes is done later.
+        `case_sensitive` determines if the object name matching in `full_dict` is case insensitive.
         """
         if name in loaded["#incomplete"]:
             raise ValueError("initialization loops for object {0}".format(name))
@@ -179,8 +193,12 @@ class Serializable(object):
 
 def _serialize(obj, full_dict, deep_copy=True):
     """
-    Return value corresponding to a given object to be put as value in the dictionary (adds it to the full_dict if it's Serializable)
-    All Serializable children are added by reference, all standard containers are added by value.
+    Serialize object `obj` into the dictionary.
+
+    Return the value which is to be stored in the dictionary and later used to deserialize the object.
+    If the object is :class:`Serializable`, store it on the top level of `full_dict` and return its name. Otherwise, return the object itsel.
+    Containeres (lists, tuples and dictionaries) are processed recursively.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before returning them.
     """
     if isinstance(obj, Serializable):
         return obj._serialize(full_dict)
@@ -202,8 +220,12 @@ def _serialize(obj, full_dict, deep_copy=True):
     
 def _deserialize(obj, full_dict, loaded, case_sensitive, deep_copy=True):
     """
-    Construct value from the obj. If obj is a string, assume that it's a serializable object first; otherwise treat it as a string
-    If value is Serializeble, add it into loaded 
+    Deserialize object `obj` from the dictionary.
+
+    If `obj` is a string, try to interpret it as a name of a stored :class:`Serializable` object and add it into `loaded` dict;
+    if this name is missing, treat it as a string value.
+    Containere (lists, tuples and dictionaries) objects are processed recursively.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before returning them.
     """
     if isinstance(obj,textstring):
         if obj in full_dict:
@@ -229,7 +251,7 @@ def _deserialize(obj, full_dict, loaded, case_sensitive, deep_copy=True):
 
 def init_name(object_name_arg="name"):
     """
-    __init__ function decorator for convenience 
+    ``__init__`` function decorator. 
     """
     if object_name_arg is None:
         def decorator(init_func):
@@ -251,8 +273,11 @@ init=init_name()
 
 def to_dict(objects, full_dict=None, deep_copy=True):
     """
-    Serialize list of objects into a dictionary.
-    Only Serializable objects get added.
+    Serialize the list of objects into the dictionary.
+
+    Return `full_dict`.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before storing them in the dictionary.
+    Only :class:`Serializable` objects get serialized.
     """
     if full_dict is None:
         full_dict={}
@@ -263,8 +288,11 @@ def to_dict(objects, full_dict=None, deep_copy=True):
     return full_dict
 def from_dict(full_dict, case_sensitive=True, deep_copy=True):
     """
-    Deserialize objects from full_dict and return their dictionary.
-    Only Serializable objects get returned.
+    Deserialize objects from the dictionary.
+
+    Return a dictionary ``{name: object}`` containing the extracted objects.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before assiging them as objects attributes.
+    Only :class:`Serializable` objects get deserialized.
     """
     loaded={"#incomplete":[]} #contains list of object currently being created, to escape recursive loops
     for name in full_dict:

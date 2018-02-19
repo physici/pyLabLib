@@ -109,8 +109,10 @@ def _try_columns_line(line, row_size):
 
 def _parse_dict_line(line):
     s=line.split(None,1)
-    if len(s)!=2:
+    if len(s)==0:
         return None
+    if len(s)==1:
+        return tuple(s)
     key,value=tuple(s)
     value=string.from_string(value)
     return key,value
@@ -131,9 +133,12 @@ def _load_dict_and_comments(f, case_normalization="lower", inline_dtype="generic
             if line[:1]!='#': #dict row
                 parsed=_parse_dict_line(line)
                 if parsed is not None:
-                    key,value=parsed
-                    data[key]=value
-                    prev_key=key
+                    if len(parsed)==1:
+                        prev_key=parsed # single-key line possibly means that an inline table follows
+                    else:
+                        key,value=parsed
+                        data[key]=value
+                        prev_key=key
             else:
                 if _dicttable_start_regexp.match(line[1:]) is not None:
                     table,comments,_=parse_csv.load_table(f,dtype=inline_dtype,stop_comment=_dicttable_end_regexp)
@@ -319,7 +324,7 @@ class DictionaryInputFileFormat(ITextInputFileFormat):
                 return ptr
         if entry_format!="branch":
             data.map_self(map_entries,to_visit="branches",topdown=False)
-        if data.keys()==["__data__"]: # special case of files with preamble
+        if len(data)==1 and list(data.keys())==["__data__"]: # special case of files with preamble
             data=data["__data__"]
         return datafile.DataFile(data=data,comments=comments,creation_time=creation_time,filetype="dict")
     

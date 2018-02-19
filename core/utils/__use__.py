@@ -5,7 +5,8 @@ from . import files as file_utils  #@UnresolvedImport
 from .files import get_file_creation_time, get_file_modification_time
 from .files import copy_file, move_file
 from .files import retry_copy, retry_move, retry_remove
-from .files import ensure_dir, remove_dir, clean_dir, remove_dir_if_empty, copy_dir, move_dir, list_dir, dir_empty, walk_dir, cmp_dirs
+from .files import ensure_dir, remove_dir, clean_dir, remove_dir_if_empty, copy_dir, move_dir
+from .files import list_dir, list_dir_recursive, dir_empty, walk_dir, cmp_dirs
 from .files import retry_ensure_dir, retry_remove_dir, retry_clean_dir, retry_remove_dir_if_empty, retry_copy_dir, retry_move_dir
 from .files import zip_file, unzip_file, zip_folder, unzip_folder
 
@@ -22,7 +23,8 @@ from .general import RetryOnException, SilenceException, retry_wait
 from .general import UIDGenerator, NamedUIDGenerator, Countdown
 from .general import setbp
 
-#from . import log as log_utils
+from . import log as log_utils
+from .log import default_log
 
 from . import numclass  #@UnresolvedImport
 
@@ -46,4 +48,4 @@ from . import versioning  #@UnresolvedImport
 from . import module as module_utils  #@UnresolvedImport
 
 from . import net as net_utils  #@UnresolvedImport
-from .net import ClientSocket
+from .net import ClientSocket, listen

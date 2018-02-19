@@ -3,6 +3,7 @@ Universal function fitting interface.
 """
 
 from __future__ import division
+from ..utils.py3 import textstring
 
 from ..utils import general as general_utils #@UnresolvedImport
 from ..utils import funcargparse #@UnresolvedImport
@@ -18,8 +19,8 @@ class Fitter(object):
     Can handle variety of different functions, complex arguments or return values, array arguments.
     
     Args:
-        func: Fit function. Can be anything callable (function, method, object with ``__call__`` method, etc.).
-        xarg_name: Name (or multiple names) for x arguments. These arguments are passed to `func` (as named arguments) when calling for fitting.
+        func(Callable): Fit function. Can be anything callable (function, method, object with ``__call__`` method, etc.).
+        xarg_name(str or list): Name (or multiple names) for x arguments. These arguments are passed to `func` (as named arguments) when calling for fitting.
             Can be a string (single argument) or a list (arbitrary number of arguments, including zero).
         fit_paramters (dict): Dictionary ``{name: value}`` of parameters to be fitted (`value` is the starting value for the fitting procedure).
             If `value` is ``None``, try and get the default value from the `func`.
@@ -38,7 +39,7 @@ class Fitter(object):
         fit_parameters=general_utils.to_pairs_list(fit_parameters)
         parameters={}
         for name,val in fit_parameters:
-            if isinstance(val,basestring) and val=="complex":
+            if isinstance(val,textstring) and val=="complex":
                 val=complex(self.func.get_arg_default(name))
             elif val is None:
                 val=self.func.get_arg_default(name)
@@ -125,7 +126,7 @@ class Fitter(object):
             self.fit_parameters.pop(name,None)
             
     def _get_unaccounted_parameters(self, fixed_parameters, fit_parameters):
-        supplied_names=set(self.xarg_name+fixed_parameters.keys()+fit_parameters.keys())
+        supplied_names=set(self.xarg_name)|set(fixed_parameters)|set(fit_parameters)
         unaccounted_names=set.difference(self.func.get_mandatory_args(),supplied_names)
         return unaccounted_names
     
@@ -144,14 +145,13 @@ class Fitter(object):
             return_residual: If not ``False``, append `residual` to the output.
         
         Returns:
-            tuple: ``(params, bound_func[, stderr][, residual])``.
-            
+            tuple: ``(params, bound_func[, stderr][, residual])``:
                 - `params`: a dictionary ``{name: value}`` of the parameters supplied to the function (both fit and fixed).
                 - `bound_func`: the fit function with all the parameters bound (i.e., it only requires x parameters).
                 - `stderr`: a dictionary ``{name: error}`` of standard deviation for fit parameters to the return parameters.
-                if the fitting routine returns no residuals (usually for a bad or an underconstrained fit), all residuals are set to NaN.
+                    If the fitting routine returns no residuals (usually for a bad or an underconstrained fit), all residuals are set to NaN.
                 - `residual`: either a full array of residuals ``func(x,**params)-y`` (if ``return_residual=='full'``) or
-                  a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``).
+                    a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``).
         """
         # Applying order: self.fixed_parameters < self.fit_parameters < fixed_parameters < fit_parameters
         fit_parameters=self._prepare_parameters(fit_parameters)
@@ -167,7 +167,7 @@ class Fitter(object):
         else:
             x=[np.asarray(e) for e in x]
         y=np.asarray(y)
-        p_names=fit_parameters.keys()
+        p_names=list(fit_parameters.keys())
         bound_func=self.func.bind_namelist(self.xarg_name+p_names,**fixed_parameters)
         props=[fit_parameters[name] for name in p_names]
         init_p=self._pack_parameters(props)
@@ -178,10 +178,12 @@ class Fitter(object):
             if np.iscomplexobj(y_diff):
                 y_diff=np.concatenate((y_diff.real,y_diff.imag))
             return y_diff
-        res,cov=scipy.optimize.leastsq(fit_func,init_p,full_output=True,**kwargs)[:2]
-        tot_err=fit_func(res)
-        if cov is not None:
-            cov=cov*(np.sum(tot_err**2)/(len(tot_err)-len(res)))
+        lsqres=scipy.optimize.least_squares(fit_func,init_p,**kwargs)
+        res,jac,tot_err=lsqres.x,lsqres.jac,lsqres.fun
+        try:
+            cov=np.linalg.inv(np.dot(jac.transpose(),jac))*(np.sum(tot_err**2)/(len(tot_err)-len(res)))
+        except np.linalg.LinAlgError: # singluar matrix
+            cov=None
         res=unpacker(res)
         fit_dict=dict(zip(p_names,res))
         params_dict=fixed_parameters.copy()
@@ -221,7 +223,7 @@ class Fitter(object):
         bound_func=self.func.bind_namelist(self.xarg_name,**params_dict)
         return_val=params_dict,bound_func
         if return_stderr:
-            p_names=fit_parameters.keys()
+            p_names=list(fit_parameters.keys())
             props=[fit_parameters[name] for name in p_names]
             init_p=self._pack_parameters(props)
             unpacker=self._build_unpacker(props)

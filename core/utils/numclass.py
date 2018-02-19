@@ -58,7 +58,7 @@ class NumClass(object):
     Methods:
         _perform_numop_l: Binary operations with the object as the first argument (e.g., ``obj + x``).
         _perform_numop_r: Binary operations with the object as the second argument (e.g., ``x + obj``).
-        _perform_numop_i: Binary in-place operations (e.g., ``obj += ``).
+        _perform_numop_i: Binary in-place operations (e.g., ``obj += x``).
         _perform_numop_u: Unary operations (e.g., ``-obj``).
         _perform_numop_comp: Binary comparison operation (e.g., ``obj < x``).
         

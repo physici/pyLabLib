@@ -1,9 +1,8 @@
 from future.utils import viewitems
+from builtins import zip
 
 from ..utils import functions as function_utils #@UnresolvedImport
 import numpy as np
-from itertools import izip
-
 
 class ICallable(object):
     """
@@ -49,7 +48,7 @@ class ICallable(object):
     def bind(self, arg_names, **bound_params):
         """Bind function to a given parameters set, leaving `arg_names` as free parameters (in the given order)."""
         bound_params=bound_params.copy()
-        covered_args=set(bound_params.keys())
+        covered_args=set(bound_params)
         covered_args.update(arg_names)
         uncovered_mand_args=self.get_mandatory_args().difference(covered_args)
         if len(uncovered_mand_args)>0:
@@ -88,7 +87,9 @@ class ICallable(object):
 
 def _join_list_results(res_vec, join_method="stack"):
     if len(res_vec)>0 and np.ndim(res_vec[0])>0:
-        if join_method=="stack":
+        if join_method=="list":
+            return res_vec
+        elif join_method=="stack":
             return np.column_stack(res_vec)
         elif join_method=="concatenate":
             return np.concatenate(res_vec)
@@ -111,7 +112,8 @@ class MultiplexedCallable(ICallable):
         func (Callable): Function to be parallelized.
         multiplex_by (str): Name of the argument to be multiplexed by.
         join_method (str): Method for combining individual results together if they're non-scalars.
-            Can be either ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result)
+            Can be either ``'list'`` (combine the results in a single list),
+            ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result),
             or ``'concatenate'`` (concatenate the return values; the dimension of the result stays the same).
     
     Multiplexing also makes use of call signatures for underlying function even if ``__call__`` is used.
@@ -186,7 +188,8 @@ class JoinedCallable(ICallable):
     Args:
         funcs ([Callable]): List of functions to be joined together.
         join_method (str): Method for combining individual results together if they're non-scalars.
-            Can be either ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result)
+            Can be either ``'list'`` (combine the results in a single list),
+            ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result),
             or ``'concatenate'`` (concatenate the return values; the dimension of the result stays the same).
     """
     def __init__(self, funcs, join_method="stack"):
@@ -341,7 +344,7 @@ class FunctionCallable(ICallable):
             self._named_params.update(func._apply_unalias_dict(bound_params))
         def __call__(self, *params):
             n_par=self._named_params
-            for p,d in izip(params,self._names_dest):
+            for p,d in zip(params,self._names_dest):
                 if d[0]=='named':
                     n_par[d[1]]=p
             return self._func(**n_par)
@@ -375,7 +378,7 @@ class MethodCallable(FunctionCallable):
     This callable is implemented largely to be used with :class:`~core.theory.calculator.TheoryCalculator`.
     """
     def __init__(self, method, function_signature=None, defaults=None, alias=None):
-        if method.im_self is None:
+        if method.__self__ is None:
             raise ValueError("supplied method is unbound; use FunctionCallable instead")
         if function_signature is None:
             function_signature=function_utils.FunctionSignature.from_function(method)
@@ -405,7 +408,7 @@ class MethodCallable(FunctionCallable):
                 raise TypeError("mandatory parameter not supplied: {0}".format(n))
         named_params=self._defaults.copy()
         named_params.update(self._apply_unalias_dict(params))
-        for n in named_params.keys():
+        for n in named_params:
             if not self._is_func_arg(n):
                 if hasattr(self._obj,n):
                     setattr(self._obj,n,named_params.pop(n))
@@ -445,7 +448,7 @@ class MethodCallable(FunctionCallable):
             for n,p in self._object_params:
                 setattr(obj,n,p)
             n_par=self._named_params
-            for p,d in izip(params,self._names_dest):
+            for p,d in zip(params,self._names_dest):
                 if d[0]=='named':
                     n_par[d[1]]=p
                 elif d[0]=='attr':
@@ -462,7 +465,7 @@ def to_callable(func):
     if isinstance(func, ICallable):
         return func
     else:
-        if getattr(func,"im_self",None) is None:
+        if getattr(func,"__self__",None) is None:
             return FunctionCallable(func)
         else:
             return MethodCallable(func)

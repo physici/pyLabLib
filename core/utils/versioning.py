@@ -2,7 +2,7 @@
 Fetching, storing and recalling different script and library configurations.
 """
 
-from io import open
+# from io import open
 from builtins import range
 
 from . import files as file_utils #@UnresolvedImport
@@ -20,17 +20,20 @@ _depends_local=[".string"]
 
 _storage_folder=".versions"
 def _shelf_folder(shelf, coverage=None):
+    """Get the shelf folder for the given coverage."""
     if coverage is None:
         return os.path.join(_storage_folder,shelf)
     else:
         return os.path.join(_storage_folder,shelf,coverage)
 def _shelf_content(shelf, coverage=None, full_path=False):
+    """Get the content of the shelf folder for the given coverage."""
     shelf_folder=_shelf_folder(shelf,coverage)
     files=file_utils.list_dir(shelf_folder,file_filter=r".*\.zip$").files
     if full_path:
         files=[os.path.join(shelf_folder,f) for f in files]
     return files
 def _store_file_path(shelf, label=None, coverage="full"):
+    """Store file with the given label in the shelf folder for the given coverage."""
     shelf_folder=_shelf_folder(shelf,coverage)
     file_utils.ensure_dir(shelf_folder)
     prefix=datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -43,15 +46,18 @@ def _recall_file_path(shelf, coverage, name):
 
 
 def _temp_folder(name):
+    """Empty the temporary folder and return its path."""
     temp_dir=os.path.join(_storage_folder,".tmp",name)
     file_utils.retry_remove_dir(temp_dir,error_on_file=False)
     file_utils.retry_ensure_dir(temp_dir)
     return temp_dir
 def _unpack_temp(store_path):
+    """Unpack a zip archive into the temp folder."""
     temp_dir=_temp_folder("unpacked")
     file_utils.unzip_folder(store_path,temp_dir)
     return temp_dir
 def _open_temp_file():
+    """Create and open the temp file."""
     temp_dir=os.path.join(_storage_folder,".tmp","files")
     file_utils.retry_ensure_dir(temp_dir)
     return file_utils.TempFile(folder=temp_dir)
@@ -60,7 +66,7 @@ def _open_temp_file():
 
 def _cleanup_shelf(shelf, coverage, max_items):
     """
-    Remove zip files so that there are at most max_items stored.
+    Clean the shelf by removing zip files so that there are at most `max_items` stored (leave the most recent files).
     """
     if max_items<=0:
         return 0
@@ -77,6 +83,9 @@ def _cleanup_shelf(shelf, coverage, max_items):
 
 
 def generate_version_idx():
+    """
+    Generate a unique string id based on the current time and a random number.
+    """
     t=int(time.time()*1E3)
     r=os.urandom(10)
     r="".join(["{:02x}".format(ord(c)) for c in r])
@@ -87,6 +96,20 @@ _store_files_filter=string_utils.get_string_filter(exclude=r"\.|.*\.pyc$|make\.b
 _store_folder_filter=string_utils.get_string_filter(exclude=r"\.|__.*__$")
 _scripts_template=r".*\.py$"
 class VersionConfig(object):
+    """
+    Current version configuration.
+
+    Combines information about included library packages, additional scripts, package versions, and comments.
+
+    Args:
+        store_path(str): root folder of the configuration
+        lib_path(str): library path inside the root folder
+        libs(list or None): included packages inside the library (any package includes all of its sub-packages);
+            by default, includes the ``'core'`` package and all individual ``'aux_libs'`` sub-packages
+        additional_scripts(list or None): additional scripts (outside of the inlcuded libraries); by default, none are included
+        versions(dict): list of versions of versions (e.g., of library packages); by default, none are supplied
+        comments(str): config comment.
+    """
     def __init__(self, store_path=".", lib_path="lib", libs=None, additional_scripts=None, versions=None, comments=None):
         object.__init__(self)
         self.store_path=store_path
@@ -116,6 +139,9 @@ class VersionConfig(object):
         return dict([ (k.strip(),v.strip()) for k,v in pairs ])
     
     def to_file(self, f):
+        """
+        Save the config data to a file.
+        """
         if self.lib_path is not None:
             f.write("lib_path\t{}\n".format(self.lib_path))
         if self.libs:
@@ -128,6 +154,11 @@ class VersionConfig(object):
             f.write("comments\t{}\n".format(self.comments.replace("\n"," ")))
     @staticmethod
     def from_path(path, **additional_args):
+        """
+        Build the config data from the folder.
+
+        `additional_args` include arguments supplied to the :class:`VersionConfig` constructor overriding the ones extracted from the config file (if it's present).
+        """
         if os.path.isdir(path):
             store_path=path
             config_path=os.path.join(path,_version_config_file)
@@ -151,6 +182,12 @@ class VersionConfig(object):
         return VersionConfig(**data)
     
     def update(self, other, override=True):
+        """
+        Merge this config with the other one.
+
+        Combine information about libraries, comments, and additional scripts.
+        If ``override==True``, the priority versions data is taken from the other config; otherwise, it's taken from this config.
+        """
         libs=list(set(self.libs+other.libs))
         additional_scripts=list(set(self.additional_scripts+other.additional_scripts))
         if override:
@@ -167,6 +204,9 @@ class VersionConfig(object):
     def copy(self):
         return VersionConfig(self.store_path,self.lib_path,list(self.libs),list(self.additional_scripts),self.versions.copy(),self.comments)
     def update_versions(self, parts, force_update=True):
+        """
+        Update versions to a new unique idx.
+        """
         v=generate_version_idx()
         for p in parts:
             if force_update:
@@ -174,6 +214,9 @@ class VersionConfig(object):
             else:
                 self.versions.setdefault(p,v)
     def includes(self, other):
+        """
+        Check if this config includes the other one.
+        """
         if self.lib_path!=other.lib_path:
             return False
         if not (set(self.libs)>=set(other.libs)):
@@ -217,13 +260,22 @@ class VersionConfig(object):
         else:
             return [os.path.join(self.store_path,self.lib_path,f) for f in files]
     def template_script_files(self):
+        """
+        Get all script files in the main folder.
+        """
         return file_utils.list_dir(self.store_path,file_filter=_scripts_template)[1]
     def script_files(self):
+        """
+        Get all included standalone script files (all scirpt files in the main folder and the additional scripts).
+        """
         if self.lib_path=="": # library source config; no non-libarary scripts
             return []
         template_files=self.template_script_files()
         return list(set(template_files+self.additional_scripts))
     def exists(self):
+        """
+        Check if this configuration exists on the hard drive.
+        """
         libs_exist=any([os.path.exists(self.get_lib_path(l)) for l in self.libs])
         scripts_exist=any([os.path.exists(f) for f in self.script_files()])
         return libs_exist or scripts_exist
@@ -231,6 +283,19 @@ class VersionConfig(object):
 
 
 class RevisionDiff(object):
+    """
+    Describes the difference between two different script folder states.
+
+    Args:
+        lib_diffs (dict): dictionary with four entries:
+            - ``"+"`` - list of libraries which are added in the first state compared to the second one;
+            - ``"-"`` - list of libraries which are removed in the first state compared to the second one;
+            - ``"*"`` - list of libraries which are changed in the first state compared to the second one;
+            - ``"="`` - list of libraries which are the same in both states;
+        common_lib_files_diff (str): difference in the common library files (files in the folders contatining library subfolders).
+            Can be ``"+"``, ``"-"``, ``"*"``, or ``"="``; the meaning is the same as for `lib_diffs`.
+        scripts_diff (str): difference in the scirpt files (files outside of the root library folder); the meaning is the same as for `common_lib_files_diff`.
+    """
     def __init__(self, libs_diff=None, common_lib_files_diff="=", scripts_diff="="):
         self.libs_diff={"+":[],"-":[],"*":[],"=":[]} # additional, missing, modified, same
         if libs_diff:
@@ -238,6 +303,9 @@ class RevisionDiff(object):
         self.scripts_diff=scripts_diff
         self.common_lib_files_diff=common_lib_files_diff
     def all_libs_diff(self):
+        """
+        Combine all library difference into one verdict.
+        """
         diff_lens=dict([(k,len(v)) for k,v in self.libs_diff.items()])
         diff_lens[self.common_lib_files_diff]=diff_lens[self.common_lib_files_diff]+1
         if diff_lens["*"]>0 or (diff_lens["-"]>0 and diff_lens["+"]>0):
@@ -248,8 +316,18 @@ class RevisionDiff(object):
             return "+"
         return "="
     def all_diff(self):
+        """
+        Combine all differences (libraries and files) into one verdict.
+        """
         return file_utils.combine_diff(self.all_libs_diff(),self.scripts_diff)
     def coverage(self, replace=True):
+        """
+        Get the coverage required to store changes of the first revision if it is to be replaced with the second one.
+
+        Return either ``'script'`` (only store scripts, libraries are the same) or ``'full'`` (store both scripts and libraries).
+        If ``replace==True``, assume that the new revision completely replaces the current one; otherwise, assume that it's added
+        (i.e., if the current revision is larger than the new one, no need to store it).
+        """
         if replace:
             if self.all_libs_diff()!="=":
                 return "full"
@@ -257,14 +335,19 @@ class RevisionDiff(object):
                 return "script"
             return None
         else:
-            if self.all_libs_diff()=="*":
+            if self.all_libs_diff() in "*-":
                 return "full"
-            if self.scripts_diff=="*":
+            if self.scripts_diff in "*-":
                 return "script"
             return None
 def _compare_source_folders(a, b):
     return file_utils.cmp_dirs(a,b,folder_filter=_store_folder_filter,file_filter=_store_files_filter,return_difference=True)
 def _compare_source_files(a, a_dir, b, b_dir):
+    """
+    Compare two sets of files in different folders.
+
+    `a` and `b` are two lists of files located in `a_dir` and `b_dir` respectively.
+    """
     a=[os.path.normcase(n) for n in a]
     a.sort()
     b=[os.path.normcase(n) for n in b]
@@ -280,6 +363,9 @@ def _compare_source_files(a, a_dir, b, b_dir):
         return "*"
     return "="
 def _compare_revisions(a_config, b_config):
+    """
+    Compare two configs and return :class:`RevisionDiff` describing the difference.
+    """
     diff=RevisionDiff()
     all_libs=set(a_config.libs+b_config.libs)
     for l in all_libs:
@@ -290,6 +376,9 @@ def _compare_revisions(a_config, b_config):
     diff.scripts_diff=_compare_source_files(a_config.script_files(),a_config.store_path,
                                             b_config.script_files(),b_config.store_path)
     return diff
+
+
+
 
 
 
@@ -371,8 +460,9 @@ def _clean_revision(version_config, diff=None):
             file_utils.retry_remove(f)
 def _modify_revision(current_config, new_config):
     """
-    Clean all parts of revision to match the the target state (defined by new_config).
-    This includes removing unused libraries and changing lib folder.
+    Clean all parts of the revision to match the target state (defined by `new_config`).
+
+    This includes removing unused libraries and changing the library folder.
     """
     for l in current_config.libs:
         source=current_config.get_lib_path(l)
@@ -420,9 +510,10 @@ def _copy_revision(source_config, dest_config, overwrite=False):
             file_utils.retry_copy(source_path,dest_path,overwrite=overwrite)
 def _recall_config(source_config, current_config, merged_config, replace=False, overwrite=True):
     """
-    Recall code from the source_config to the place of current_config to form merged_config.
+    Recall code from the `source_config` to the place of `current_config` to form `merged_config`.
+
     Store history of the current config if necessary.
-    If replace is True, remove all parts of the dest revision which are different from the source; otherwise, source is added to dest.
+    If ``replace==True``, remove all parts of the dest revision which are different from the source; otherwise, source is added to dest.
     """
     if current_config.exists(): 
         diff=_compare_revisions(a_config=current_config,b_config=source_config)
@@ -443,6 +534,8 @@ def _recall_config(source_config, current_config, merged_config, replace=False, 
 def recall_from_folder(source_path, dest_path=".", replace=False, overwrite=True, source_config_params=None, recall_config_params=None):
     """
     Recall code from the source folder to the dest folder.
+
+    If the configuration is changed, store the current state on the history shelf before changing it.
     
     Args:
         source_path (str): Path to the source folder.
@@ -463,6 +556,8 @@ def recall_from_folder(source_path, dest_path=".", replace=False, overwrite=True
 def recall_from_file(file_name, dest_path=".", replace=False, overwrite=True, source_config_params=None, recall_config_params=None):
     """
     Recall code from the zip file.
+
+    If the configuration is changed, store the current state on the history shelf before changing it.
     
     Arguments are the same as in :func:`recall_from_folder`, only instead of folder path it's zip file path.
     """
@@ -475,6 +570,8 @@ def recall_from_file(file_name, dest_path=".", replace=False, overwrite=True, so
 def recall_from_shelf(shelf, name, coverage, dest_path=".", replace=False, overwrite=True, source_config_params=None, recall_config_params=None):
     """
     Recall code from the shelf.
+
+    If the configuration is changed, store the current state on the history shelf before changing it.
     
     Arguments are the same as in :func:`recall_from_file`, only instead of a path the file is specified by shelf, name and coverage.
     """
@@ -489,13 +586,15 @@ def recall(shelf, name, coverage=None, replace=False, overwrite=True, **recall_c
 def fetch(source_path, dest_path=".", overwrite=True, preserve_libs=True, **recall_config_params):
     """
     Fetch code library.
+
+    If the configuration is changed, store the current state on the history shelf before changing it.
     
     Args:
         source_path (str): Path to the library root.
         dest_path (str): Path to the destination folder.
         overwrite (bool): If ``True``, overwrite the old files.
         preserve_libs (bool): If ``True``, preserve sub-libraries even if they are not specified in the `recall_config_params`.
-        recall_config_params (dict): Overrides merged verson config parameters.
+        recall_config_params (dict): Overrides merged verson config parameters (see :class:`VersionConfig`).
     """
     source_config=VersionConfig.from_path(source_path,lib_path="",libs=recall_config_params.get("libs",None))
     current_config=VersionConfig.from_path(dest_path)
@@ -554,7 +653,7 @@ def fetch_and_store_script(source_path=None, dest_path=".", overwrite=True, once
         overwrite (bool): If ``True``, overwrite the old files.
         once_per_run (bool): If ``True``, only perform operation once per run of the script. All subsequent call will return immediately.
         preserve_libs (bool): If ``True``, preserve sub-libraries even if they are not specified in the `recall_config_params`.
-        recall_config_params (dict): Overrides merged verson config parameters.
+        recall_config_params (dict): Overrides merged verson config parameters (see :class:`VersionConfig`).
     """
     global _fetched
     if (once_per_run and _fetched):

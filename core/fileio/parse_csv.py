@@ -3,6 +3,7 @@ Utilities for parsing CSV files.
 """
 
 from builtins import range, zip
+from ..utils.py3 import textstring
 
 from ..utils import string, funcargparse  #@UnresolvedImport
 from ..datatable import table as datatable  #@UnresolvedImport
@@ -40,12 +41,11 @@ def read_table_and_comments(f, delimiters=_table_delimiters_regexp, empty_entry_
     delimiters=re.compile(delimiters)
     data=[]
     comment_lines=[]
-    p=f.tell()
     line=f.readline()
     cnt=0
     while line:
         line=line.strip()
-        if line!="":
+        if line:
             if line[:1]!='#': # data row
                 if simple_entries:
                     line=delimiters.split(line)
@@ -62,11 +62,9 @@ def read_table_and_comments(f, delimiters=_table_delimiters_regexp, empty_entry_
                 data.append(line)
             else:
                 if stop_comment is not None and re.match(stop_comment,line[1:]) is not None: #end of continuous block
-                    f.seek(p)
                     break
                 else:
                     comment_lines.append(line.lstrip("# \t"))
-        p=f.tell()
         cnt=cnt+1
         if chunk_size is not None and cnt==chunk_size:
             return data,comment_lines,False
@@ -118,7 +116,7 @@ def _try_convert_column(column, dtype, min_dtype="int"):
     If dtype=="generic" or dtype=="numeric", min_dtype determines "minimal" (in a sense that int<float<complex<generic) dtype.
         If min_dtype!="generic", the routine first tries to convert the whole column into a numpy array, gradually increasing types on fails. 
     """
-    if len(column)>0 and not isinstance(column[0],basestring):
+    if len(column)>0 and not isinstance(column[0],textstring):
         raise ValueError("_try_convert_column only works for string input")
     if dtype=="raw":
         return column, dtype

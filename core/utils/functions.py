@@ -68,15 +68,15 @@ class FunctionSignature(object):
         """
         eval_string="lambda {0}: _func_({1})".format(self.signature(),self.signature(pass_order))
         wrapped=eval(eval_string,{'_func_':func})
-        wrapped.func_defaults=tuple(self.get_defaults_list())
+        wrapped.__defaults__=tuple(self.get_defaults_list())
         if self.doc:
-            wrapped.func_doc=self.doc
+            wrapped.__doc__=self.doc
         else:
-            wrapped.func_doc=func.func_doc
+            wrapped.__doc__=func.__doc__
         if self.name:
-            wrapped.func_name=self.name
+            wrapped.__name__=self.name
         else:
-            wrapped.func_name=func.func_name
+            wrapped.__name__=func.__name__
         if self.cls is not None:
             wrapped=MethodType(wrapped,self.obj,self.cls)
         return wrapped
@@ -119,13 +119,13 @@ class FunctionSignature(object):
             args=inspect.getargspec(func)
         defaults=args.defaults and dict(zip(args.args[::-1],args.defaults[::-1]))
         try:
-            cls=func.im_class
-            obj=func.im_self
-            func=func.im_func
+            cls=func.__self__.__class__
+            obj=func.__self__
+            func=func.__func__
         except AttributeError:
             cls=None
             obj=None
-        return FunctionSignature(args.args,defaults,args.varargs,args.keywords,cls,obj,func.func_name,func.func_doc)
+        return FunctionSignature(args.args,defaults,args.varargs,args.keywords,cls,obj,func.__name__,func.__doc__)
     @staticmethod
     def merge(original, addition, add_place="front", merge_duplicates=True, overwrite=None):
         """
@@ -219,7 +219,7 @@ def getattr_call(obj, attr_name, *args, **vargs):
     """
     Call the getter for the attribute `attr_name` of `obj`.
 
-    If the attribute is a property, pass *args and **kwargs to the getter (`fget`); otherwise, ignore them.
+    If the attribute is a property, pass ``*args`` and ``**kwargs`` to the getter (`fget`); otherwise, ignore them.
     """
     try:
         return getattr(type(obj),attr_name).fget(obj,*args,**vargs)
@@ -229,7 +229,7 @@ def setattr_call(obj, attr_name, *args, **vargs):
     """
     Call the setter for the attribute `attr_name` of `obj`.
 
-    If the attribute is a propert, pass *args and **kwargs to the setter (`fset`);
+    If the attribute is a propert, pass ``*args`` and ``**kwargs`` to the setter (`fset`);
     otherwise, the set value is assumed to be either the first argument, or the keyword argument with the name ``'value'``.
     """
     try:
@@ -241,7 +241,7 @@ def delattr_call(obj, attr_name, *args, **vargs):
     """
     Call the deleter for the attribute `attr_name` of `obj`.
 
-    If the attribute is a property, pass *args and **kwargs to the deleter (`fdel`); otherwise, ignore them.
+    If the attribute is a property, pass ``*args`` and ``**kwargs`` to the deleter (`fdel`); otherwise, ignore them.
     """
     try:
         return getattr(type(obj),attr_name).fdel(obj,*args,**vargs)
