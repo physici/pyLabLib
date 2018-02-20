@@ -15,7 +15,8 @@ import platform
 import numpy as np
 import sys
 
-use_fallback=False
+use_fallback=True
+notify_fallback=True
 
 arch=platform.architecture()[0]
 ver="{}{}".format(sys.version_info.major,sys.version_info.minor)
@@ -57,6 +58,8 @@ except (ImportError):
                 for yi,yc in enumerate(ycoeff):
                     new_trace[i]+=new_trace[i-yi-1]*yc
             return new_trace
+        if notify_fallback:
+            print("Couldn't find appropriate precompiled IIR filter implementation, using pure Python fallback instead; expect sever performance drop.")
     else:
         raise
 

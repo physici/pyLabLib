@@ -398,24 +398,38 @@ class DataTable(object):
     
     ## External functions adding ##
     @classmethod
-    def add_array_function(cls, func, alias=None):
+    def add_array_function(cls, func, alias=None, doc=None):
         """
-        Add function to the class definition, which is automatically applied to the array representation.
+        Turns a function into a method, hich is automatically applied to the array representation.
+
+        Arguments:
+            func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
+            alias (str): the method name; by default, it's ``func.__name__``
+            doc (str): the method docstring; by default, it's ``func.__doc__``
         """
         def self_func(self, *args, **vargs):
             return func(self.as_array(force_copy=False),*args,**vargs)
         if alias is None:
             alias=func.__name__
-        try:
-            self_func.__doc__=func.__doc__
-        except AttributeError:
-            pass
+        if doc is None:
+            try:
+                self_func.__doc__=func.__doc__
+            except AttributeError:
+                pass
+        else:
+            self_func.__doc__=doc
         setattr(cls,alias,self_func)
     @classmethod
-    def add_columnwise_function(cls, func, alias=None, collection_type="list", column_arg_name=None):
+    def add_columnwise_function(cls, func, alias=None, collection_type="list", column_arg_name=None, doc=None):
         """
         Add function to the class definition, which is automatically applied to each column.
-        Results are collected in containers depending on collection_type.
+
+        Arguments:
+            func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
+            alias (str): the method name; by default, it's ``func.__name__``
+            collection_type (str): determines the type of the result; can be ``"list"``, ``"array"``, or ``"table"``
+            column_arg_name (str): name of the column argument supplied to the function, in which case it is only applied to this specified column (by default, the function has no such argument)
+            doc (str): the method docstring; by default, it's ``func.__doc__``
         """
         if not collection_type in ["list","array","table"]:
             raise ValueError("unrecognized collection type: {}".format(collection_type))
@@ -432,16 +446,26 @@ class DataTable(object):
                 return func(self[c],*args,**vargs)
         if alias is None:
             alias=func.__name__
-        try:
-            self_func.__doc__=func.__doc__
-        except AttributeError:
-            pass
+        if doc is None:
+            try:
+                self_func.__doc__=func.__doc__
+            except AttributeError:
+                pass
+        else:
+            self_func.__doc__=doc
         setattr(cls,alias,self_func)
     @classmethod
-    def add_column_function(cls, func, alias=None, column_arg_name="column", column_arg_default=None):
+    def add_column_function(cls, func, alias=None, column_arg_name="column", column_arg_default=None, doc=None):
         """
         Add function to the class definition, which is automatically applied to a single column.
         Column number should be given as a first argument of the function.
+
+        Arguments:
+            func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
+            alias (str): the method name; by default, it's ``func.__name__``
+            column_arg_name (str): name of the column argument supplied to the function, in which case it is only applied to this specified column
+            column_arg_default: default name of the column, if no column argument os supplied to the function
+            doc (str): the method docstring; by default, it's ``func.__doc__``
         """
         def self_func(self, *args, **vargs):
             if len(args)>0:
@@ -454,22 +478,25 @@ class DataTable(object):
             return func(self.c[c],*args,**vargs)
         if alias is None:
             alias=func.__name__
-        try:
-            self_func.__doc__=func.__doc__
-        except AttributeError:
-            pass
+        if doc is None:
+            try:
+                self_func.__doc__=func.__doc__
+            except AttributeError:
+                pass
+        else:
+            self_func.__doc__=doc
         setattr(cls,alias,self_func)
         
-DataTable.add_column_function(np.argsort)
-DataTable.add_column_function(np.nonzero)
-DataTable.add_column_function(np.unique)
-DataTable.add_columnwise_function(np.argmin, column_arg_name="column")
-DataTable.add_columnwise_function(np.argmax, column_arg_name="column")
-DataTable.add_columnwise_function(np.min,"min", column_arg_name="column")
-DataTable.add_columnwise_function(np.max,"max", column_arg_name="column")
-DataTable.add_columnwise_function(np.mean, column_arg_name="column")
-DataTable.add_columnwise_function(np.std, column_arg_name="column")
-DataTable.add_columnwise_function(np.sum, column_arg_name="column")
+DataTable.add_column_function(np.argsort,doc="Same as :func:`np.argsort`.")
+DataTable.add_column_function(np.nonzero,doc="Same as :func:`np.nonzero`.")
+DataTable.add_column_function(np.unique,doc="Same as :func:`np.unique`.")
+DataTable.add_columnwise_function(np.argmin, column_arg_name="column",doc="Same as :func:`np.argmin`.")
+DataTable.add_columnwise_function(np.argmax, column_arg_name="column",doc="Same as :func:`np.argmax`.")
+DataTable.add_columnwise_function(np.min,"min", column_arg_name="column",doc="Same as :func:`np.min`.")
+DataTable.add_columnwise_function(np.max,"max", column_arg_name="column",doc="Same as :func:`np.max`.")
+DataTable.add_columnwise_function(np.mean, column_arg_name="column",doc="Same as :func:`np.mean`.")
+DataTable.add_columnwise_function(np.std, column_arg_name="column",doc="Same as :func:`np.std`.")
+DataTable.add_columnwise_function(np.sum, column_arg_name="column",doc="Same as :func:`np.sum`.")
 
 
 ### strdump definitions ###
