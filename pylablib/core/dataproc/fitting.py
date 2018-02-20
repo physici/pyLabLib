@@ -121,7 +121,7 @@ class Fitter(object):
         fit_parameters=self._prepare_parameters(fit_parameters)
         self.fit_parameters.update(fit_parameters)
     def del_fit_parameters(self, fit_parameters):
-        """Change fit parameters."""
+        """Remove fit parameters."""
         for name in fit_parameters:
             self.fit_parameters.pop(name,None)
             
@@ -145,7 +145,8 @@ class Fitter(object):
             return_residual: If not ``False``, append `residual` to the output.
         
         Returns:
-            tuple: ``(params, bound_func[, stderr][, residual])``:
+            tuple: ``(params, bound_func[, stderr][, residual])``
+            
                 - `params`: a dictionary ``{name: value}`` of the parameters supplied to the function (both fit and fixed).
                 - `bound_func`: the fit function with all the parameters bound (i.e., it only requires x parameters).
                 - `stderr`: a dictionary ``{name: error}`` of standard deviation for fit parameters to the return parameters.
@@ -213,7 +214,7 @@ class Fitter(object):
             fixed_parameters (dict): Overrides the default `fixed_parameters` of the fitter.
         
         Returns:
-            tuple: ``(params, bound_func)``.
+            tuple: ``(params, bound_func)``
             
                 - `params`: a dictionary ``{name: value}`` of the parameters supplied to the function (both fit and fixed).
                 - `bound_func`: the fit function with all the parameters bound (i.e., it only requires x parameters).
