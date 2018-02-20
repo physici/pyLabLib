@@ -7,8 +7,9 @@ from io import open
 
 from ...core.utils import string, funcargparse, files as file_utils
 from ...core.fileio import loadfile
-from ...core.dataproc import interpolate, filters
+from ...core.dataproc import interpolate, filters, waveforms
 from ...core.datatable.table import DataTable
+from ...core.datatable.wrapping import wrap
 import os.path
 
 import numpy as np
@@ -143,6 +144,21 @@ def load_sweep(prefix, force_info=True):
 
 
 ##### Normalizing sweep (frequency and column data) #####
+def cut_outliers(sweep, jump_size, length, padding=0, x_column=None):
+    xs=waveforms.get_x_column(sweep,x_column=x_column)
+    dxs=xs[1:]-xs[:-1]
+    jumps=abs(dxs)>jump_size
+    jump_locs=jumps.nonzero()[0]
+    prev_jump=-1
+    include=np.ones(len(xs)).astype("bool")
+    for jl in jump_locs:
+        if jl-prev_jump<length:
+            start=max(prev_jump+1-padding,0)
+            end=min(jl+2+padding,len(include))
+            include[start:end]=False
+        prev_jump=jl
+    return wrap(sweep).t[include,:].copy()
+
 def prepare_sweep_frequency(sweep, allowed_frequency_jump="auto", ascending_frequency=True, rescale=True):
     """
     Clean up the sweep frequency data (exclude jumps and rescale in Hz).
@@ -156,8 +172,8 @@ def prepare_sweep_frequency(sweep, allowed_frequency_jump="auto", ascending_freq
     if len(sweep)>1:
         fs=sweep["Wavemeter"]
         dfs=fs[1:]-fs[:-1]
-        fdir=1. if sum(dfs>0)>sum(dfs<0) else -1.
-        valid_dfs=dfs*fdir>0
+        fdir=1. if np.sum(dfs>0)>len(dfs)//2 else -1.
+        valid_dfs=(dfs*fdir)>0
         if allowed_frequency_jump=="auto":
             mfs=np.median(dfs[valid_dfs])
             maxfs=fdir*np.max(dfs[valid_dfs]*fdir)
