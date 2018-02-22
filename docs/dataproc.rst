@@ -9,7 +9,7 @@ Data processing utlities
 Fitting
 -------
 
-Class :class:`Fitter` is a user-frendly wrapper around :func:`scipy.least_squares` routine. Dealing with fitting is made more convenient in a couple of ways:
+Class :class:`Fitter` is a user-frendly wrapper around :func:`scipy.optimize.least_squares` routine. Dealing with fitting is made more convenient in a couple of ways:
 
 - it is easy to specify the x-parameter name (in the case it is not the first parameter), or specify multiple x-parameters;
 - all of the fit and fixed parameters are specified by name; it is easy to switch between any parameter being fit or fixed;
@@ -28,7 +28,7 @@ Fitting a Lorentzian::
     ## creating the fitter
     # fit_parameters dictionary specifies the initial guess
     fit_par = {"position":0.5, "height":1.}
-    fitter = Fitter(lorentzian, xarg_name="frequency", fit_parameters=fit_par)
+    fitter = pll.Fitter(lorentzian, xarg_name="frequency", fit_parameters=fit_par)
     # additional fit parameter is supplied during the call
     fit_par, fit_func = fitter.fit(xdata, ydata, fit_parameters={"width":1.0})
     plot(xdata, ydata)  # plot the experimental data
@@ -46,13 +46,13 @@ Fitting a sum of complex Lorentzians with the same width::
     # fit_parameters dictionary specifies the initial guess
     #     (complex initial guess for the "amplitude" parameter hints that this parameter is complex)
     fit_par = {"positions":[0.,0.5,1.], "amplitudes":[1.+0.j]*3}
-    fitter = Fitter(lorentzian_sum, xarg_name="frequency", fit_parameters=fit_par)
+    fitter = pll.Fitter(lorentzian_sum, xarg_name="frequency", fit_parameters=fit_par)
     # fixed parameter is supplied during the call (could have also been supplied on Fitter initialization)
     fit_par, fit_func = fitter.fit(xdata, ydata, fixed_parameters = {"width":0.3})
     plot(xdata, ydata.real)  # plot the experimental data
     plot(xdata, fit_func(xdata).real)  # plot fit result
 
-Fitting 2D Gaussian::
+Fitting 2D Gaussian and getting the parameter estimation errors::
 
     def gaussian(x, y, pos, width, height):
         return np.exp( -((x-pos[0])**2+(y-pos[1])**2)/(2*width**2) )*height
@@ -60,9 +60,10 @@ Fitting 2D Gaussian::
     ## creating the fitter
     # fit_parameters dictionary specifies the initial guess
     fit_par = {"pos":(100,100), "width":10., "height":5.}
-    fitter = Fitter(gaussian, xarg_name=["x","y"], fit_parameters=fit_par)
+    fitter = pll.Fitter(gaussian, xarg_name=["x","y"], fit_parameters=fit_par)
     xs, ys = np.meshgrid(np.arange(img.shape[0]), np.arange(img.shape[1])) # building x and y coordinates for the image
-    fit_par, fit_func = fitter.fit([xs,ys], img)
+    # fit_stderr is a dictionary containing the fit error for the corresponding parameters
+    fit_par, fit_func, fit_stderr = fitter.fit([xs,ys], img, return_stderr=True)
     imshow(fit_func(xs, ys))  # plot fit result
 
 The full module documentation is given at :mod:`pylablib.core.dataproc.fitting`.

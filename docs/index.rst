@@ -11,6 +11,7 @@ Welcome to pyLabLib's documentation!
     :caption: Contents:
 
     dataproc
+    utils
 
 Indices and tables
 ==================
