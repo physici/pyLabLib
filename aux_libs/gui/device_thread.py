@@ -1,5 +1,5 @@
 from ...core.gui.qt.thread import controller, threadprop
-from ...core.utils import general
+from ...core.utils import general, py3
 
 from PyQt4 import QtCore
 import numpy as np
@@ -27,9 +27,9 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def process_signal(self, src, tag, value):
         pass
     def process_command(self, *args, **kwargs):
-        self.process_named_command()
+        self.process_named_command(*args,**kwargs)
     def process_query(self, *args, **kwargs):
-        self.process_named_command()
+        self.process_named_command(*args,**kwargs)
     def process_interrupt(self, *args, **kwargs):
         pass
     def close_device(self):
@@ -42,16 +42,16 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         if notify:
             self.send_signal("any",status_str+"."+status)
         if text:
-            self.set_cached("status.text",text)
-            self.send_signal("any","status.text",text)
+            self.set_cached(status_str+".text",text)
+            self.send_signal("any",status_str+".text",text)
 
     def on_start(self):
         controller.QMultiRepeatingThreadController.on_start(self)
         self.setup_device(*self.devargs,**self.devkwargs)
         self.subscribe_nonsync(self._recv_directed_signal)
     def on_finish(self):
-        self.close_device()
         controller.QMultiRepeatingThreadController.on_finish(self)
+        self.close_device()
 
     _directed_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")
@@ -72,9 +72,13 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         if notify:
             notify_tag.replace("*",name)
             self.send_signal("any",notify_tag,value)
-    def add_command(self, name, command):
+    def add_command(self, name, command=None):
         if name in self._commands:
             raise ValueError("command {} already exists".format(name))
+        if command is None:
+            command=name
+        if isinstance(command,py3.anystring):
+            command=getattr(self.device,command)
         self._commands[name]=command
 
     def _sync_call(self, func, args, kwargs, sync, timeout=None):
@@ -117,11 +121,11 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         def __getattr__(self, name):
             if name not in self._calls:
                 parent=self.parent
-                device=self.parent.device
-                def devcall(*args, **kwargs):
-                    getattr(device,name).__call__(*args,**kwargs)
                 def remcall(*args, **kwargs):
-                    return parent._sync_call(devcall,args,kwargs,sync=self.sync,timeout=self.timeout)
+                    if self.sync:
+                        return parent.query(name,*args,timeout=self.timeout,**kwargs)
+                    else:
+                        return parent.command(name,*args,**kwargs)
                 self._calls[name]=remcall
             return self._calls[name]
 

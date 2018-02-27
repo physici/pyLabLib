@@ -70,6 +70,7 @@ class QSyncCall(object):
             res=("result",self.func(*self.args,**self.kwargs))
         except Exception as e:
             res=("exception",e)
+            raise
         finally:
             self.synchronizer.notify(res)
     def value(self, sync=True, timeout=None, default=None):

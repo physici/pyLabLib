@@ -102,6 +102,7 @@ class QThreadController(QtCore.QObject):
     @QtCore.pyqtSlot("PyQt_PyObject")
     def _on_call_in_thread(self, call):
         call()
+    started=QtCore.pyqtSignal()
     @QtCore.pyqtSlot()
     def _on_start_event(self):
         self._stopped=False
@@ -111,15 +112,18 @@ class QThreadController(QtCore.QObject):
             self.notify_exec("start")
             self._running=True
             self.on_start()
+            self.started.emit()
             if self.kind=="run":
                 self._do_run()
                 self.thread.stop_request.emit()
         except threadprop.InterruptExceptionStop:
             self.thread.stop_request.emit()
+    finished=QtCore.pyqtSignal()
     @QtCore.pyqtSlot()
     def _on_finish_event(self):
         is_stopped=self._stopped
         self._stopped=False
+        self.finished.emit()
         try:
             self.on_finish()
         finally:
