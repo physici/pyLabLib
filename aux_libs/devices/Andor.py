@@ -1,8 +1,11 @@
 from . import Andor_lib as lib
 
+from .Andor_lib import AndorLibError
+
 from ...core.devio import backend
 from ...core.utils import funcargparse
 
+import numpy as np
 import collections
 import contextlib
 
@@ -20,6 +23,8 @@ class AndorCamera(backend.IBackendWrapper):
         self.ini_path=ini_path
         self.handle=None
         self.open()
+        self.temperature_setpoint=None
+        self.set_temperature(0)
         self.channel=None
         self.oamp=None
         self.hsspeed=None
@@ -32,10 +37,14 @@ class AndorCamera(backend.IBackendWrapper):
         self.set_shutter("close")
         self.trigger_mode=None
         self.set_trigger_mode("int")
+        self.set_exposure(10E-3)
         self.acq_mode=None
         self.set_acquisition_mode("cont")
+        self.acq_params=dict(zip(self._acq_modes,[None]*len(self._acq_modes)))
+        self.setup_accum_mode(1)
+        self.setup_kinetic_mode(1)
+        self.setup_fast_kinetic_mode(1)
         self.setup_cont_mode()
-        self.set_exposure(10E-3)
         self.frame_transfer_mode=None
         self.enable_frame_transfer_mode(False)
         self.read_mode=None
@@ -48,8 +57,10 @@ class AndorCamera(backend.IBackendWrapper):
         self.flush_buffer()
 
         self._add_settings_node("model_data",lambda: tuple(self.get_model_data()))
-        self._add_settings_node("temperature",self.get_temperature,self.set_temperature)
-        self._add_settings_node("cooler",self.is_cooler_on,self.set_cooler)
+        self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
+        self._add_settings_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
+        self._add_settings_node("temperature_status",self.get_temperature_status,ignore_error=AndorLibError)
+        self._add_settings_node("cooler",self.is_cooler_on,self.set_cooler,ignore_error=AndorLibError)
         self._add_settings_node("channel",lambda:self.channel,lambda x:self.set_amp_mode(channel=x))
         self._add_settings_node("oamp",lambda:self.oamp,lambda x:self.set_amp_mode(oamp=x))
         self._add_settings_node("hsspeed",lambda:self.hsspeed,lambda x:self.set_amp_mode(hsspeed=x))
@@ -58,11 +69,19 @@ class AndorCamera(backend.IBackendWrapper):
         self._add_settings_node("EMCCD_gain",lambda:self.EMCCD_gain,lambda x: self.set_EMCCD_gain(*x))
         self._add_settings_node("shutter",lambda:self.shutter_mode,self.set_shutter)
         self._add_settings_node("trigger_mode",lambda:self.trigger_mode,self.set_trigger_mode)
+        self._add_settings_node("acq_parameters/accum",lambda:self.acq_params["accum"],lambda p: self.setup_accum_mode(*p))
+        self._add_settings_node("acq_parameters/kinetics",lambda:self.acq_params["kinetics"],lambda p: self.setup_kinetic_mode(*p))
+        self._add_settings_node("acq_parameters/fast_kinetics",lambda:self.acq_params["fast_kinetics"],lambda p: self.setup_fast_kinetic_mode(*p))
+        self._add_settings_node("acq_parameters/cont",lambda:self.acq_params["cont"],self.setup_cont_mode)
         self._add_settings_node("acq_mode",lambda:self.acq_mode,self.set_acquisition_mode)
         self._add_settings_node("frame_transfer",lambda:self.frame_transfer_mode,self.enable_frame_transfer_mode)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
+        self._add_settings_node("timings",self.get_timings)
+        self._add_settings_node("read_parameters/single_track",lambda:self.read_params["single_track"],lambda p: self.setup_single_track_mode(*p))
+        self._add_settings_node("read_parameters/multi_track",lambda:self.read_params["multi_track"],lambda p: self.setup_multi_track_mode(*p))
+        self._add_settings_node("read_parameters/random_track",lambda:self.read_params["random_track"],self.setup_random_track_mode)
+        self._add_settings_node("read_parameters/image",lambda:self.read_params["image"],lambda p: self.setup_image_mode(*p))
         self._add_settings_node("read_mode",lambda:self.read_mode,self.set_read_mode)
-        self._add_settings_node("read_parameters",lambda:self.read_params[self.read_mode],self._setup_read_parameters)
         self._add_settings_node("detector_size",self.get_detector_size)
 
     def _camsel(self):
@@ -84,7 +103,7 @@ class AndorCamera(backend.IBackendWrapper):
             return
         try:
             lib.ShutDown()
-        except lib.AndorLibError as e:
+        except AndorLibError as e:
             if e.text_code!="DRV_NOT_INITIALIZED":
                 raise
         self.handle=None
@@ -109,7 +128,7 @@ class AndorCamera(backend.IBackendWrapper):
             return "temp_cycle"
         if text_status=="DRV_ACQUIRING":
             return "acquiring"
-        raise lib.AndorLibError("GetStatus",status)
+        raise AndorLibError("GetStatus",status)
     def get_capibilities(self):
         self._camsel()
         return lib.GetCapabilities()
@@ -138,7 +157,8 @@ class AndorCamera(backend.IBackendWrapper):
         rng=lib.GetTemperatureRange()
         temperature=max(temperature,rng[0])
         temperature=min(temperature,rng[1])
-        lib.SetTemperature(temperature)
+        self.temperature_setpoint=int(temperature)
+        lib.SetTemperature(self.temperature_setpoint)
         if enable_cooler:
             self.set_cooler(True)
     
@@ -166,6 +186,7 @@ class AndorCamera(backend.IBackendWrapper):
         self.vsspeed=vsspeed
     def set_EMCCD_gain(self, gain, advanced=False):
         self._camsel()
+        gain=int(gain)
         lib.set_EMCCD_gain(gain,advanced)
         self.EMCCD_gain=(gain,advanced)
 
@@ -176,7 +197,7 @@ class AndorCamera(backend.IBackendWrapper):
         return lib._oamp_kinds[self.oamp if oamp is None else oamp]
     def get_hsspeed_frequency(self, hsspeed=None):
         self._camsel()
-        return lib.GetHSSpeed(self.hsspeed if hsspeed is None else hsspeed)*1E6
+        return lib.GetHSSpeed(self.channel,self.oamp,self.hsspeed if hsspeed is None else hsspeed)*1E6
     def get_preamp_gain(self, preamp=None):
         self._camsel()
         return lib.GetPreAmpGain(self.preamp if preamp is None else preamp)
@@ -246,30 +267,49 @@ class AndorCamera(backend.IBackendWrapper):
         lib.SendSoftwareTrigger()
 
     ### Acquisition mode controls ###
+    _acq_modes={"single":1,"accum":2,"kinetics":3,"fast_kinetics":4,"cont":5}
     def set_acquisition_mode(self, mode):
-        acq_modes={"single":1,"accum":2,"kinetics":3,"fast_kinetics":4,"cont":5}
-        funcargparse.check_parameter_range(mode,"mode",acq_modes.keys())
+        funcargparse.check_parameter_range(mode,"mode",self._acq_modes.keys())
         self._camsel()
-        lib.SetAcquisitionMode(acq_modes[mode])
+        lib.SetAcquisitionMode(self._acq_modes[mode])
         self.acq_mode=mode
     def setup_accum_mode(self, num, cycle_time=0):
         self._camsel()
+        self.set_acquisition_mode("accum")
         lib.SetNumberAccumulations(num)
         lib.SetAccumulationCycleTime(cycle_time)
-    def setup_kinetic_mode(self, num, cycle_time=0., num_acc=1, cycle_time_acc=0., num_prescan=0):
+        self.acq_params["accum"]=(num,cycle_time)
+    def setup_kinetic_mode(self, num, cycle_time=0., num_acc=1, cycle_time_acc=0, num_prescan=0):
         self._camsel()
+        self.set_acquisition_mode("kinetics")
         lib.SetNumberKinetics(num)
         lib.SetNumberAccumulations(num_acc)
         lib.SetNumberPrescans(num_prescan)
         lib.SetKineticCycleTime(cycle_time)
         lib.SetAccumulationCycleTime(cycle_time_acc)
-    def setup_fast_kinetic_mode(self, num, cycle_time_acc=0):
+        self.acq_params["kinetics"]=(num,cycle_time,num_acc,cycle_time_acc,num_prescan)
+    def setup_fast_kinetic_mode(self, num, cycle_time_acc=0.):
         self._camsel()
+        self.set_acquisition_mode("fast_kinetics")
         lib.SetNumberKinetics(num)
         lib.SetAccumulationCycleTime(cycle_time_acc)
+        self.acq_params["fast_kinetics"]=(num,cycle_time_acc)
     def setup_cont_mode(self, cycle_time=0):
         self._camsel()
+        self.set_acquisition_mode("cont")
         lib.SetKineticCycleTime(cycle_time)
+        self.acq_params["cont"]=cycle_time
+    def _setup_acqusition(self, acq_mode=None, params=None):
+        acq_mode=acq_mode or self.acq_mode
+        params=params or self.acq_params[self.acq_mode]
+        if acq_mode=="accum":
+            self.setup_accum_mode(*params)
+        elif acq_mode=="kinetics":
+            self.setup_kinetic_mode(*params)
+        elif acq_mode=="fast_kinetics":
+            self.setup_fast_kinetic_mode(*params)
+        elif acq_mode=="cont":
+            self.setup_cont_mode(params)
     def set_exposure(self, exposure):
         self._camsel()
         lib.SetExposureTime(exposure)
@@ -294,12 +334,15 @@ class AndorCamera(backend.IBackendWrapper):
     def prepare_acquisition(self):
         self._camsel()
         lib.PrepareAcquisition()
-    def start_acquisition(self):
+    def start_acquisition(self, setup=True):
         self._camsel()
+        if setup:
+            self._setup_acqusition()
         lib.StartAcquisition()
     def stop_acquisition(self):
         self._camsel()
-        lib.AbortAcquisition()
+        if self.get_status()=="acquiring":
+            lib.AbortAcquisition()
     AcqProgress=collections.namedtuple("AcqProgress",["frames_done","cycles_done"])
     def get_progress(self):
         self._camsel()
@@ -317,8 +360,7 @@ class AndorCamera(backend.IBackendWrapper):
     def pausing_acquisition(self):
         acq=self.get_status()=="acquiring"
         try:
-            if acq:
-                self.stop_acquisition()
+            self.stop_acquisition()
             yield
         finally:
             if acq:
@@ -353,15 +395,6 @@ class AndorCamera(backend.IBackendWrapper):
         vend=vdet if vend is None else vend
         lib.SetImage(hbin,vbin,hstart,hend,vstart,vend)
         self.read_params["image"]=(hstart,hend,vstart,vend,hbin,vbin)
-    def _setup_read_parameters(self, params):
-        if self.read_mode=="multi_track":
-            self.setup_multi_track_mode(*params)
-        elif self.read_mode=="random_track":
-            self.setup_random_track_mode(*params)
-        elif self.read_mode=="single_track":
-            self.setup_single_track_mode(*params)
-        elif self.read_mode=="image":
-            self.setup_image_mode(*params)
 
     def get_data_dimensions(self, mode=None, params=None):
         if mode is None:
@@ -395,13 +428,20 @@ class AndorCamera(backend.IBackendWrapper):
         return lib.GetSizeOfCircularBuffer()
     def get_new_images_range(self):
         self._camsel()
-        return lib.GetNumberNewImages()
+        try:
+            return lib.GetNumberNewImages()
+        except AndorLibError as e:
+            if e.text_code=="DRV_NO_NEW_DATA":
+                return None
+            raise
     def read_multiple_images(self, rng=None, dim=None):
         self._camsel()
         if rng is None:
             rng=self.get_new_images_range()
         if dim is None:
             dim=self.get_data_dimensions()
+        if rng is None:
+            return np.zeros((-1,dim[0],dim[1]))
         data,vmin,vmax=lib.GetImages16(rng[0],rng[1],dim[0]*dim[1])
         return data.reshape((-1,dim[0],dim[1]))
 

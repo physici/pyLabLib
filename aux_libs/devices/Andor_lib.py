@@ -308,14 +308,14 @@ class AndorLibError(RuntimeError):
         msg="function '{}' raised error {}({})".format(func,code,self.text_code)
         RuntimeError.__init__(self,msg)
 def errcheck(passing=None):
-    if passing is None:
-        passing={20002}
-    def checker(result, func, arguments):
-        if result not in passing:
-            # print("function '{}' raised error {}({})".format(func.__name__,result,Andor_statuscodes.get(result,"UNKNOWN")))
-            raise AndorLibError(func.__name__,result)
-        return Andor_statuscodes[result]
-    return checker
+	passing=set(passing) if passing is not None else set()
+	passing.add(20002) # always allow success
+	def checker(result, func, arguments):
+		if result not in passing:
+			# print("function '{}' raised error {}({})".format(func.__name__,result,Andor_statuscodes.get(result,"UNKNOWN")))
+			raise AndorLibError(func.__name__,result)
+		return Andor_statuscodes[result]
+	return checker
 
 
 def setup_func(func, argtypes, passing=None):
@@ -542,9 +542,9 @@ AbortAcquisition=ctf_simple(lib.AbortAcquisition, [], [])
 GetAcquisitionProgress=ctf_rvals(lib.GetAcquisitionProgress, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
 GetStatus=ctf_rval(lib.GetStatus, ctypes.c_int32, [None], [])
 WaitForAcquisition=ctf_simple(lib.WaitForAcquisition, [], [])
-WaitForAcquisitionTimeOut=ctf_simple(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"])
+WaitForAcquisitionTimeOut=ctf_simple(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"], passing={20024}) # finish quietly on timeout
 WaitForAcquisitionByHandle=ctf_simple(lib.WaitForAcquisitionByHandle, [ctypes.c_int32], ["handle"])
-WaitForAcquisitionByHandleTimeOut=ctf_simple(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"])
+WaitForAcquisitionByHandleTimeOut=ctf_simple(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"], passing={20024}) # finish quietly on timeout
 CancelWait=ctf_simple(lib.CancelWait, [], [])
 
 SetReadMode=ctf_simple(lib.SetReadMode, [ctypes.c_uint32], ["mode"])
