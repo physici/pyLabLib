@@ -90,6 +90,15 @@ def as_dictionary(obj, case_sensitive=True, case_normalization="lower"):
     If object is already a :class:`Dictionary` (or its subclass), return unchanged, even if its parameters are different.
     """
     return Dictionary.as_dictionary(obj,case_sensitive=case_sensitive,case_normalization=case_normalization)
+def as_dict(obj, style="nested", copy=True):
+    """
+    Convert object into standard `dict` with the given parameters.
+    
+    If object is already a `dict`, return unchanged, even if the parameters are different.
+    """
+    if isinstance(obj,dict):
+        return obj
+    return Dictionary.as_dictionary(obj).as_dict(style=style,copy=copy)
      
 
 

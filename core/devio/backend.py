@@ -1009,22 +1009,25 @@ class IBackendWrapper(object):
         return self.instr.locking(timeout=timeout)
     
     
-    def _add_settings_node(self, path, getter=None, setter=None):
+    def _add_settings_node(self, path, getter=None, setter=None, ignore_error=()):
         """
         Adds a settings parameter
         
         `getter`/`setter` are methods for getting/setting this parameter.
         Can be ``None``, meaning that this parameter is ingored when executing :func:`get_settings`/:func:`apply_settings`.
         """
-        self._settings_nodes[path]=(getter,setter)
+        self._settings_nodes[path]=(getter,setter,ignore_error)
         self._settings_nodes_order.append(path)
     def get_settings(self):
         """Get dict ``{name: value}`` containing all the device settings."""
         settings={}
         for k in self._settings_nodes_order:
-            g,_=self._settings_nodes[k]
+            g,_,err=self._settings_nodes[k]
             if g:
-                settings[k]=g()
+                try:
+                    settings[k]=g()
+                except err:
+                    pass
         return settings
     def apply_settings(self, settings):
         """
@@ -1034,9 +1037,12 @@ class IBackendWrapper(object):
         Non-applicable settings are ignored.
         """
         for k in self._settings_nodes_order:
-            _,s=self._settings_nodes[k]
+            _,s,err=self._settings_nodes[k]
             if s and (k in settings):
-                s(settings[k])
+                try:
+                    s(settings[k])
+                except err:
+                    pass
     def __getitem__(self, key):
         """Get the value of a settings parameter."""
         if key in self._settings_nodes:
