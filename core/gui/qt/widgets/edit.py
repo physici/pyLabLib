@@ -102,7 +102,7 @@ class LVNumEdit(QtGui.QLineEdit):
         self.change_limiter(limiter)
     def change_formatter(self, formatter):
         self.num_format=formatter
-        self.set_value(None)
+        self.set_value(self._value)
     def set_number_format(self, kind="float", *args, **kwargs):
         if kind=="float":
             formatter=format.FloatFormatter(*args,**kwargs)
@@ -121,6 +121,19 @@ class LVNumEdit(QtGui.QLineEdit):
             new_cursor_pos=format.order_to_pos(str(self.text()),order)
             self.setCursorPosition(new_cursor_pos)
 
+    def _coerce_value(self, value):
+        while True:
+            str_value=self.num_format(value)
+            try:
+                new_value=self.num_limit(format.str_to_float(str_value))
+            except limit.LimitError:
+                return value
+            if new_value==value:
+                return new_value
+            value=new_value
+    def repr_value(self, value):
+        return self.num_format(value)
+
     value_entered=QtCore.pyqtSignal("PyQt_PyObject")
     value_changed=QtCore.pyqtSignal("PyQt_PyObject")
     def get_value(self):
@@ -128,7 +141,7 @@ class LVNumEdit(QtGui.QLineEdit):
     def set_value(self, value, notify_value_change=True, preserve_cursor_order=True):
         if value is not None:
             try:
-                value=self.num_limit(value)
+                value=self._coerce_value(value)
                 if self._value!=value:
                     self._value=value
                     if notify_value_change:

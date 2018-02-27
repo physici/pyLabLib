@@ -1,4 +1,4 @@
-from PyQt4 import QtGui,QtCore
+from PyQt4 import QtGui
 from ... import format,limit
 
 class LVNumLabel(QtGui.QLabel):
@@ -35,6 +35,9 @@ class LVNumLabel(QtGui.QLabel):
         else:
             raise ValueError("unknown format: {}".format(kind))
         self.change_formatter(formatter)
+    
+    def repr_value(self, value):
+        return self.num_format(value)
 
     def get_value(self):
         return self._value
