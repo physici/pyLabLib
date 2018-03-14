@@ -26,6 +26,7 @@ class PerformaxStage(object):
         self.open()
         self.set_absolute_mode()
         self.enable_all_outputs()
+        self.ignore_limit_errors()
 
     def open(self):
         if self.handle:
@@ -70,6 +71,10 @@ class PerformaxStage(object):
 
     def set_absolute_mode(self):
         self.query("ABS")
+    def ignore_limit_errors(self, do_ignore=True):
+        self.query("IERR={}".format("1" if do_ignore else "0"))
+    def is_ignoring_limit_errors(self):
+        return self.query("IERR")=="1"
     def enable_output(self, axis, enable=True):
         axis=self._check_axis(axis)
         axisn="XYZU".index(axis)+1

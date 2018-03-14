@@ -33,6 +33,8 @@ class AndorCamera(backend.IBackendWrapper):
         self.init_speeds()
         self.EMCCD_gain=None
         self.set_EMCCD_gain(0,False)
+        self.fan_mode=None
+        self.set_fan_mode("off")
         self.shutter_mode=None
         self.set_shutter("close")
         self.trigger_mode=None
@@ -68,6 +70,7 @@ class AndorCamera(backend.IBackendWrapper):
         self._add_settings_node("vsspeed",lambda:self.vsspeed,self.set_vsspeed)
         self._add_settings_node("EMCCD_gain",lambda:self.EMCCD_gain,lambda x: self.set_EMCCD_gain(*x))
         self._add_settings_node("shutter",lambda:self.shutter_mode,self.set_shutter)
+        self._add_settings_node("fan_mode",lambda:self.fan_mode,self.set_fan_mode)
         self._add_settings_node("trigger_mode",lambda:self.trigger_mode,self.set_trigger_mode)
         self._add_settings_node("acq_parameters/accum",lambda:self.acq_params["accum"],lambda p: self.setup_accum_mode(*p))
         self._add_settings_node("acq_parameters/kinetics",lambda:self.acq_params["kinetics"],lambda p: self.setup_kinetic_mode(*p))
@@ -238,7 +241,8 @@ class AndorCamera(backend.IBackendWrapper):
         text_modes=["full","low","off"]
         funcargparse.check_parameter_range(mode,"mode",text_modes)
         self._camsel()
-        lib.SetFanMode(mode)
+        lib.SetFanMode(text_modes.index(mode))
+        self.fan_mode=mode
 
     def read_in_aux_port(self, port):
         self._camsel()
@@ -393,6 +397,10 @@ class AndorCamera(backend.IBackendWrapper):
         hdet,vdet=self.get_detector_size()
         hend=hdet if hend is None else hend
         vend=vdet if vend is None else vend
+        hend=min(hdet,hend) # truncate the image size
+        vend=min(vdet,vend)
+        hend-=(hend-hstart+1)%hbin # make size divisible by bin
+        vend-=(vend-vstart+1)%vbin
         lib.SetImage(hbin,vbin,hstart,hend,vstart,vend)
         self.read_params["image"]=(hstart,hend,vstart,vend,hbin,vbin)
 
@@ -410,19 +418,19 @@ class AndorCamera(backend.IBackendWrapper):
             return (len(params),hdet)
         if mode=="image":
             (hstart,hend,vstart,vend,hbin,vbin)=params
-            return ((hend-hstart+1)//hbin,(vend-vstart+1)//vbin)
+            return (vend-vstart+1)//vbin,(hend-hstart+1)//hbin
     def read_newest_image(self, dim=None):
         if dim is None:
             dim=self.get_data_dimensions()
         self._camsel()
         data=lib.GetMostRecentImage16(dim[0]*dim[1])
-        return data.reshape((dim[0],dim[1]))
+        return data.reshape((dim[0],dim[1])).transpose()
     def read_oldest_image(self, dim=None):
         if dim is None:
             dim=self.get_data_dimensions()
         self._camsel()
         data=lib.GetOldestImage16(dim[0]*dim[1])
-        return data.reshape((dim[0],dim[1]))
+        return data.reshape((dim[0],dim[1])).transpose()
     def get_ring_buffer_size(self):
         self._camsel()
         return lib.GetSizeOfCircularBuffer()
@@ -441,9 +449,9 @@ class AndorCamera(backend.IBackendWrapper):
         if dim is None:
             dim=self.get_data_dimensions()
         if rng is None:
-            return np.zeros((-1,dim[0],dim[1]))
+            return np.zeros((-1,dim[1],dim[0]))
         data,vmin,vmax=lib.GetImages16(rng[0],rng[1],dim[0]*dim[1])
-        return data.reshape((-1,dim[0],dim[1]))
+        return np.transpose(data.reshape((-1,dim[0],dim[1])),axes=[0,2,1])
 
     def flush_buffer(self):
         acq_mode=self.acq_mode
