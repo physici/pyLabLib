@@ -74,6 +74,18 @@ def combine_cam_frames(path, func, init=None, start=0, step=1, max_frames=None, 
         if max_frames and n>=max_frames:
             break
     return (result,n) if return_total else result
+def save_cam(frames, path, append=True):
+    """
+    Save `frames` into a .cam datafile.
+
+    If ``append==False``, clear the file before writing the frames.
+    """
+    mode="ab" if append else "wb"
+    with open(path,mode) as f:
+        for fr in frames:
+            np.array(fr.shape).astype("<u4").tofile(f)
+            fr.astype("<u2").tofile(f)
+
 
 
 ##### _info.txt format (file info) #####
@@ -159,7 +171,7 @@ def cut_outliers(sweep, jump_size, length, padding=0, x_column=None):
         prev_jump=jl
     return wrap(sweep).t[include,:].copy()
 
-def prepare_sweep_frequency(sweep, allowed_frequency_jump="auto", ascending_frequency=True, rescale=True):
+def prepare_sweep_frequency(sweep, allowed_frequency_jump=None, ascending_frequency=True, rescale=True):
     """
     Clean up the sweep frequency data (exclude jumps and rescale in Hz).
     
