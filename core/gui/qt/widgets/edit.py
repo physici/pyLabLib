@@ -8,7 +8,7 @@ class LVTextEdit(QtGui.QLineEdit):
         self.editingFinished.connect(self._on_edit_done)
         self._value=None
         if value is not None:
-            self.set_value(None)
+            self.set_value(value)
         self.textChanged.connect(self._on_change_text)
     def _on_edit_done(self):
         self.set_value(self.text())
@@ -21,8 +21,8 @@ class LVTextEdit(QtGui.QLineEdit):
             self.set_value(text)
     def keyPressEvent(self, event):
         if event.key()==QtCore.Qt.Key_Escape:
-            self.set_value(None)
             self.clearFocus()
+            self.show_value()
         else:
             QtGui.QLineEdit.keyPressEvent(self,event)
 
@@ -30,18 +30,19 @@ class LVTextEdit(QtGui.QLineEdit):
     value_changed=QtCore.pyqtSignal("PyQt_PyObject")
     def get_value(self):
         return self._value
-    def set_value(self, value, notify_value_change=True):
-        if value is None:
+    def show_value(self, interrupt_edit=False):
+        if (not self.hasFocus()) or interrupt_edit:
             self.setText(self._value)
-        else:
-            value=str(value)
-            if self._value!=value:
-                self._value=value
-                if notify_value_change:
-                    self.value_changed.emit(self._value)
-                self.setText(value)
-                return True
-        return False
+    def set_value(self, value, notify_value_change=True, interrupt_edit=False):
+        value_changed=False
+        value=str(value)
+        if self._value!=value:
+            self._value=value
+            if notify_value_change:
+                self.value_changed.emit(self._value)
+            value_changed=True
+        self.show_value(interrupt_edit=interrupt_edit)
+        return value_changed
 
 class LVNumEdit(QtGui.QLineEdit):
     def __init__(self, parent, value=None, num_limit=None, num_format=None):
@@ -70,8 +71,8 @@ class LVNumEdit(QtGui.QLineEdit):
     def keyPressEvent(self, event):
         k=event.key()
         if k==QtCore.Qt.Key_Escape:
-            self.set_value(None)
             self.clearFocus()
+            self.show_value()
         elif k in [QtCore.Qt.Key_Up,QtCore.Qt.Key_Down]:
             try:
                 str_value=str(self.text())
@@ -80,12 +81,11 @@ class LVNumEdit(QtGui.QLineEdit):
                 if cursor_order!=None:
                     step=10**(cursor_order)
                     if k==QtCore.Qt.Key_Up:
-                        self.set_value(num_value+step,preserve_cursor_order=False)
+                        self.set_value(num_value+step,interrupt_edit=True)
                     else:
-                        self.set_value(num_value-step,preserve_cursor_order=False)
-                    self.set_cursor_order(cursor_order)
+                        self.set_value(num_value-step,interrupt_edit=True)
             except ValueError:
-                self.set_value(None)
+                self.show_value(interrupt_edit=True)
         else:
             QtGui.QLineEdit.keyPressEvent(self,event)
     def _read_input(self):
@@ -96,13 +96,17 @@ class LVNumEdit(QtGui.QLineEdit):
 
     def change_limiter(self, limiter):
         self.num_limit=limit.as_limiter(limiter)
-        self.set_value(self._value)
+        if self._value is not None:
+            new_value=self._coerce_value(self._value)
+            if new_value!=self._value:
+                self.set_value(new_value)
     def set_number_limit(self, lower_limit=None, upper_limit=None, action="ignore", value_type=None):
         limiter=limit.NumberLimit(lower_limit=lower_limit,upper_limit=upper_limit,action=action,value_type=value_type)
         self.change_limiter(limiter)
     def change_formatter(self, formatter):
         self.num_format=formatter
-        self.set_value(self._value)
+        if self._value is not None:
+            self.show_value()
     def set_number_format(self, kind="float", *args, **kwargs):
         if kind=="float":
             formatter=format.FloatFormatter(*args,**kwargs)
@@ -138,24 +142,25 @@ class LVNumEdit(QtGui.QLineEdit):
     value_changed=QtCore.pyqtSignal("PyQt_PyObject")
     def get_value(self):
         return self._value
-    def set_value(self, value, notify_value_change=True, preserve_cursor_order=True):
-        if value is not None:
-            try:
-                value=self._coerce_value(value)
-                if self._value!=value:
-                    self._value=value
-                    if notify_value_change:
-                        self.value_changed.emit(self._value)
-                    if preserve_cursor_order and self.hasFocus():
-                        cursor_order=self.get_cursor_order()
-                        self.setText(self.num_format(self._value))
-                        if cursor_order is not None:
-                            self.set_cursor_order(cursor_order)
-                    else:
-                        self.setText(self.num_format(self._value))
-                    return True
-            except limit.LimitError:
-                pass
-        if self._value is not None:
-            self.setText(self.num_format(self._value))
-        return False
+    def show_value(self, interrupt_edit=False, preserve_cursor_order=True):
+        if (not self.hasFocus()) or interrupt_edit:
+            if preserve_cursor_order and self.hasFocus():
+                cursor_order=self.get_cursor_order()
+                self.setText(self.num_format(self._value))
+                if cursor_order is not None:
+                    self.set_cursor_order(cursor_order)
+            else:
+                self.setText(self.num_format(self._value))
+    def set_value(self, value, notify_value_change=True, interrupt_edit=False, preserve_cursor_order=True):
+        value_changed=False
+        try:
+            value=self._coerce_value(value)
+            if self._value!=value:
+                self._value=value
+                if notify_value_change:
+                    self.value_changed.emit(self._value)
+                value_changed=True
+        except limit.LimitError:
+            pass
+        self.show_value(interrupt_edit=interrupt_edit,preserve_cursor_order=preserve_cursor_order)
+        return value_changed

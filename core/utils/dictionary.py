@@ -281,11 +281,16 @@ class Dictionary(object):
                 return self._make_similar_dict(value,copy=False)
         else:
             return value
-    def has_entry(self, path):
-        """Determine if the path is in the dictionary."""
+    def has_entry(self, path, kind="all"):
+        """
+        Determine if the path is in the dictionary.
+        
+        `kind` determines which kind of path to consider and can be ``'leaf'``, ``'branch'`` or ``'all'``.
+        """
+        funcargparse.check_parameter_range(kind,"kind",{"leaf","branch","all"})
         try:
-            self.get_entry(path)
-            return True
+            v=self._get_entry(path)
+            return (kind=="all") or (kind=="branch" and self._is_branch(v)) or (kind=="leaf" and not self._is_branch(v))
         except KeyError:
             return False
     def del_entry(self, path):
@@ -830,8 +835,12 @@ class DictionaryPointer(Dictionary):
         else:
             self.move(pointer)
         
-    def __repr__(self):
-        return "DictionaryPointer({})".format(str(self))
+    def __str__(self):
+        iterleafs=self.iternodes(ordered=True,to_visit="leafs",include_path=True)
+        path_length=len(self.get_path())
+        content="\n".join("'{0}': {1}".format("/".join(k[path_length:]),str(v)) for k,v in iterleafs)
+        return "{0}(location = '{1}'; {2})".format(type(self).__name__,"/".join(self.get_path()),content)
+    __repr__=__str__
     
     def get_path(self):
         """
@@ -1066,3 +1075,50 @@ class PrefixShortcutTree(object):
                 source=dest
         else:
             return self._find_shortcut(source) or source
+
+
+
+### Indexing accessor decorator ###
+
+class ItemAccessor(object):
+    def __init__(self, getter=None, setter=None, deleter=None, normalize_names=True, path_separator="/", allow_incomplete_paths=False):
+        object.__init__(self)
+        self.getter=getter
+        self.setter=setter
+        self.deleter=deleter
+        self.normalize_names=normalize_names or allow_incomplete_paths
+        self.allow_incomplete_paths=allow_incomplete_paths
+        self.path_separator=path_separator
+    def _norm_name(self, name):
+        if self.normalize_names:
+            return "/".join(normalize_path(name,sep=self.path_separator))
+        return name
+    class ItemAccessorBranch(object):
+        def __init__(self, src, branch):
+            object.__init__(self)
+            self.src=src
+            self.branch=src._norm_name(branch)+src.path_separator
+        def __getitem__(self, name): return self.src.__getitem__(self.branch+self.src._norm_name(name))
+        def __setitem__(self, name, value):  return self.src.__setitem__(self.branch+self.src._norm_name(name),value)
+        def __delitem__(self, name, value):  return self.src.__delitem__(self.branch+self.src._norm_name(name))
+    def __getitem__(self, name):
+        name=self._norm_name(name)
+        try:
+            if self.getter is not None:
+                return self.getter(name)
+        except KeyError:
+            if not self.allow_incomplete_paths:
+                raise
+        if self.allow_incomplete_paths:
+            return self.ItemAccessorBranch(self,name+self.path_separator)
+        raise NotImplementedError("getter is not specified")
+    def __setitem__(self, name, value):
+        name=self._norm_name(name)
+        if self.setter is not None:
+            return self.setter(name, value)
+        raise NotImplementedError("setter is not specified")
+    def __delitem__(self, name):
+        name=self._norm_name(name)
+        if self.deleter is not None:
+            return self.deleter(name)
+        raise NotImplementedError("deleter is not specified")

@@ -1,5 +1,5 @@
 from ...core.gui.qt.thread import controller, threadprop
-from ...core.utils import general, py3
+from ...core.utils import general, py3, dictionary
 
 from PyQt4 import QtCore
 import numpy as np
@@ -14,9 +14,10 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         self.devargs=devargs or []
         self.devkwargs=devkwargs or {}
         self.device=None
-        self._cached_var={}
-        self._cached_exp={}
-        self._cached_var_lock=threading.Lock()
+        self._params_val=dictionary.Dictionary()
+        self._params_val_lock=threading.Lock()
+        self._params_exp=dictionary.Dictionary()
+        self._params_exp_lock=threading.Lock()
         self._directed_signal.connect(self._on_directed_signal)
         self._commands={}
         self.c=self.CommandAccess(self,sync=False)
@@ -37,13 +38,13 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
             self.device.close()
 
     def update_status(self, kind, status, text=None, notify=True):
-        status_str="status."+kind if kind else "status"
-        self.set_cached(status_str,status)
+        status_str="status/"+kind if kind else "status"
+        self[status_str]=status
         if notify:
-            self.send_signal("any",status_str+"."+status)
+            self.send_signal("any",status_str+"/"+status)
         if text:
-            self.set_cached(status_str+".text",text)
-            self.send_signal("any",status_str+".text",text)
+            self.set_variable(status_str+"_text",text)
+            self.send_signal("any",status_str+"_text",text)
 
     def on_start(self):
         controller.QMultiRepeatingThreadController.on_start(self)
@@ -63,15 +64,20 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     def process_named_command(self, name, *args, **kwargs):
         if name in self._commands:
             self._commands[name](*args,**kwargs)
+        else:
+            raise KeyError("unrecognized command {}".format(name))
 
     _cached_change_tag="#sync.wait.cached"
-    def set_cached(self, name, value, notify=False, notify_tag="changed.*"):
-        self._cached_var[name]=value
-        for ctl in self._cached_exp.get(name,[]):
+    def set_variable(self, name, value, notify=False, notify_tag="changed/*"):
+        with self._params_val_lock:
+            self._params_val[name]=value
+        for ctl in self._params_exp.get(name,[]):
             ctl.send_message(self._cached_change_tag,value)
         if notify:
             notify_tag.replace("*",name)
             self.send_signal("any",notify_tag,value)
+    def __setitem__(self, name, value):
+        self.set_variable(name,value)
     def add_command(self, name, command=None):
         if name in self._commands:
             raise ValueError("command {} already exists".format(name))
@@ -90,25 +96,31 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         return self._sync_call(self.process_query,args,kwargs,sync=True,timeout=timeout)
     def interrupt(self, *args, **kwargs):
         return self.call_in_thread_sync(self.process_interrupt,args,kwargs,sync=False)
-    def get_cached(self, name):
-        return self._cached_var.get(name)
+    def get_variable(self, name, default=None, copy_branch=True):
+        with self._params_val_lock:
+            var=self._params_val.get(name,default)
+            if copy_branch and dictionary.is_dictionary(var):
+                var=var.copy()
+        return var
+    def __getitem__(self, name):
+        return self.get_variable(name)
     def wait_for_cached(self, name, pred, timeout=None):
         if not hasattr(pred,"__call__"):
             v=pred
             pred=lambda x: x==v
         ctl=threadprop.current_controller()
-        with self._cached_var_lock:
-            self._cached_exp.setdefault(name,[]).append(ctl)
+        with self._params_exp_lock:
+            self._params_exp.setdefault(name,[]).append(ctl)
         ctd=general.Countdown(timeout)
         try:
             while True:
-                value=self.get_cached(name)
+                value=self.get_variable(name)
                 if pred(value):
                     return value
                 ctl.wait_for_message(self._cached_change_tag,timeout=ctd.time_left())
         finally:
-            with self._cached_var_lock:
-                self._cached_exp[name].remove(ctl)
+            with self._params_exp_lock:
+                self._params_exp[name].remove(ctl)
 
 
     class CommandAccess(object):

@@ -1,12 +1,7 @@
-# -*- coding: utf-8 -*-
-
-# Form implementation generated from reading ui file './param_table.ui'
-#
-# Created by: PyQt4 UI code generator 4.11.4
-
 from ....core.gui.qt.widgets import edit, label as widget_label
 from ....core.gui.qt.thread import threadprop
-from ....core.utils import py3
+from ....core.gui.qt import values as values_module
+from ....core.utils import py3, dictionary
 
 from PyQt4 import QtCore, QtGui
 
@@ -27,89 +22,37 @@ except AttributeError:
         return QtGui.QApplication.translate(context, text, disambig)
 
 
-def _get_default_getter(widget):
-    if isinstance(widget,(edit.LVNumEdit,edit.LVTextEdit,widget_label.LVNumLabel)):
-        return widget.get_value
-    if isinstance(widget,(QtGui.QLineEdit,QtGui.QLabel)):
-        return lambda: str(widget.text())
-    if isinstance(widget,(QtGui.QCheckBox,QtGui.QPushButton)):
-        return widget.isChecked
-    if isinstance(widget,(QtGui.QProgressBar)):
-        return widget.value
-    if isinstance(widget,(QtGui.QComboBox)):
-        return widget.currentIndex
-    if hasattr(widget,"get_value"):
-        return widget.get_value
-    if hasattr(widget,"get_all_params"):
-        return widget.get_all_params
-    raise ValueError("can't find default getter for widget {}".format(widget))
-
-def _get_default_presenter(widget):
-    if isinstance(widget,(edit.LVNumEdit,edit.LVTextEdit,widget_label.LVNumLabel)):
-        return lambda v: widget.num_format(v)
-    if isinstance(widget,QtGui.QCheckBox):
-        return lambda v: "On" if v else "Off"
-    if isinstance(widget,QtGui.QPushButton):
-        def presenter(v):
-            if widget.isCheckable():
-                return "On" if v else "Off"
-            else:
-                return ""
-        return presenter
-    if isinstance(widget,(QtGui.QComboBox)):
-        return lambda v: str(widget.itemText(v))
-    return lambda v: str(v)
-
-def _get_default_setter(widget):
-    if isinstance(widget,(edit.LVNumEdit,edit.LVTextEdit,widget_label.LVNumLabel)):
-        return widget.set_value
-    if isinstance(widget,(QtGui.QLineEdit,QtGui.QLabel)):
-        return lambda x: widget.setText(str(x))
-    if isinstance(widget,(QtGui.QCheckBox,QtGui.QPushButton)):
-        return widget.setChecked
-    if isinstance(widget,(QtGui.QProgressBar)):
-        return lambda x: widget.setValue(int(x))
-    if isinstance(widget,(QtGui.QComboBox)):
-        return widget.setCurrentIndex
-    if hasattr(widget,"set_value"):
-        return widget.set_value
-    if hasattr(widget,"set_all_params"):
-        return widget.set_all_params
-    raise ValueError("can't find default setter for widget {}".format(widget))
-
-def _get_changed_event(widget):
-    if isinstance(widget,(edit.LVNumEdit,edit.LVTextEdit)):
-        return widget.value_changed
-    if isinstance(widget,QtGui.QLineEdit):
-        return widget.textChanged
-    if isinstance(widget,QtGui.QCheckBox):
-        return widget.stateChanged
-    if isinstance(widget,QtGui.QPushButton):
-        return widget.clicked
-    if isinstance(widget,(QtGui.QComboBox)):
-        return widget.currentIndexChanged
-    return None
-
 class ParamTable(QtGui.QWidget):
     def __init__(self, parent=None):
-        super(ParamTable, self).__init__()
+        super(ParamTable, self).__init__(parent)
         self.params={}
-        self.v=self.ValueAccessor(self)
-        self.i=self.IndicatorAccessor(self)
+        self.v=dictionary.ItemAccessor(self.get_param,self.set_param)
+        self.i=dictionary.ItemAccessor(self.get_indicator,self.set_indicator)
 
-    def setupUi(self, name, add_indicator=False, change_focused_control=False):
+    def setupUi(self, name, add_indicator=False, display_table=None, display_table_root=None):
         self.name=name
         self.setObjectName(_fromUtf8(self.name))
         self.formLayout = QtGui.QGridLayout(self)
         self.formLayout.setSizeConstraint(QtGui.QLayout.SetDefaultConstraint)
         self.formLayout.setObjectName(_fromUtf8("formLayout"))
         self.add_indicator=add_indicator
-        self.change_focused_control=change_focused_control
+        self.change_focused_control=False
+        self.display_table=display_table
+        self.display_table_root=display_table_root or self.name
 
-    changed=QtCore.pyqtSignal("PyQt_PyObject","PyQt_PyObject")
+    value_changed=QtCore.pyqtSignal("PyQt_PyObject","PyQt_PyObject")
 
-    ParamRow=collections.namedtuple("ParamRow",["widget","label","indicator","getter","setter","presenter"])
-    def add_simple_widget(self, name, widget, label=None, getter=None, setter=None, presenter=None):
+    ParamRow=collections.namedtuple("ParamRow",["widget","label","value_handler","indicator_handler"])
+    def _add_widget(self, name, params):
+        self.params[name]=params
+        if self.display_table:
+            path=(self.display_table_root,name)
+            self.display_table.add_handler(path,params.value_handler)
+            self.display_table.add_indicator_handler(path,params.indicator_handler)
+        changed_signal=params.value_handler.value_changed_signal()
+        if changed_signal:
+            changed_signal.connect(lambda value: self.value_changed.emit(name,value))
+    def add_simple_widget(self, name, widget, label=None, value_handler=None):
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
         row=self.formLayout.rowCount()
@@ -120,42 +63,35 @@ class ParamTable(QtGui.QWidget):
             wlabel.setText(_translate(self.name,label,None))
         else:
             wlabel=None
+        value_handler=value_handler or values_module.get_default_value_handler(widget)
         if self.add_indicator:
             windicator=QtGui.QLabel(self)
             windicator.setObjectName(_fromUtf8("{}__indicator".format(name)))
             self.formLayout.addWidget(windicator,row,2)
+            indicator_handler=values_module.LabelIndicatorHandler(widget,windicator,widget_handler=value_handler)
         else:
-            windicator=None
+            indicator_handler=None
         if wlabel is None:
             self.formLayout.addWidget(widget,row,0,1,2)
         else:
             self.formLayout.addWidget(widget,row,1)
-        getter=getter or _get_default_getter(widget)
-        setter=setter or _get_default_setter(widget)
-        presenter=presenter or _get_default_presenter(widget)
-        self.params[name]=self.ParamRow(widget,wlabel,windicator,getter,setter,presenter)
-        changed_event=_get_changed_event(widget)
-        if changed_event:
-            changed_event.connect(lambda value: self.changed.emit(name,value))
+        self._add_widget(name,self.ParamRow(widget,wlabel,value_handler,indicator_handler))
         return widget
 
-    # def add_custom_widget(self, name, widget, getter=None, setter=None, location=(None,0,1,None)):
-    #     if name in self.params:
-    #         raise KeyError("widget {} already exists".format(name))
-    #     row,col,rowspan,colspan=location
-    #     row=self.formLayout.rowCount() if row is None else row
-    #     rowspan=1 if rowspan is None else rowspan
-    #     col=0 if col is None else col
-    #     colspan=3 if self.add_indicator else 2
-    #     self.formLayout.addWidget(widget,row,col,rowspan,colspan)
-    #     getter=getter or _get_default_getter(widget)
-    #     setter=setter or _get_default_setter(widget)
-    #     presenter=None
-    #     self.params[name]=self.ParamRow(widget,None,None,getter,setter,presenter)
-    #     changed_event=_get_changed_event(widget)
-    #     if changed_event:
-    #         changed_event.connect(lambda value: self.changed.emit(name,value))
-    #     return widget
+    def add_custom_widget(self, name, widget, value_handler=None, indicator_handler=None, location=(None,0,1,None)):
+        if name in self.params:
+            raise KeyError("widget {} already exists".format(name))
+        row,col,rowspan,colspan=location
+        row=self.formLayout.rowCount() if row is None else row
+        rowspan=1 if rowspan is None else rowspan
+        col=0 if col is None else col
+        if colspan is None:
+            colspan=3 if self.add_indicator else 2
+        self.formLayout.addWidget(widget,row,col,rowspan,colspan)
+        value_handler=value_handler or values_module.get_default_value_handler(widget)
+        indicator_handler=indicator_handler or values_module.get_default_indicator_handler(widget)
+        self._add_widget(name,self.ParamRow(widget,None,value_handler,indicator_handler))
+        return widget
 
     def add_button(self, name, caption, checkable=False, value=False, label=None):
         widget=QtGui.QPushButton(self)
@@ -224,48 +160,33 @@ class ParamTable(QtGui.QWidget):
         self._set_enabled(names,enabled=True)
 
     def get_param(self, name):
-        return self.params[name].getter()
+        return self.params[name].value_handler.get_value()
     def set_param(self, name, value):
         par=self.params[name]
         if self.change_focused_control or not par.widget.hasFocus():
-            return par.setter(value)
-    def get_all_params(self):
+            return par.value_handler.set_value(value)
+    def get_all_values(self):
         values={}
         for n in self.params:
-            values[n]=self.params[n].getter()
+            values[n]=self.params[n].value_handler.get_value()
         return values
-    def set_all_params(self, values):
+    def set_all_values(self, values):
         for n in values:
             if n in self.params:
-                self.params[n].setter(values[n])
+                self.params[n].value_handler.set_value(values[n])
 
     def get_indicator(self, name):
-        indicator=self.params[name].indicator
-        if indicator:
-            return str(indicator.text())
+        indicator_handler=self.params[name].indicator_handler
+        if indicator_handler:
+            return indicator_handler.get_value()
     def set_indicator(self, name, value):
-        par=self.params[name]
-        indicator,presenter=par.indicator,par.presenter
-        if indicator:
-            indicator.setText(str(presenter(value)))
+        indicator_handler=self.params[name].indicator_handler
+        if indicator_handler:
+            return indicator_handler.set_value(value)
     def update_indicators(self):
         for name in self.params:
             value=self.get_param(name)
             self.set_indicator(name,value)
-    
-
-    class ValueAccessor(object):
-        def __init__(self, parent):
-            object.__init__(self)
-            self.parent=parent
-        def __getitem__(self, name): return self.parent.get_param(name)
-        def __setitem__(self, name, value): return self.parent.set_param(name,value)
-    class IndicatorAccessor(object):
-        def __init__(self, parent):
-            object.__init__(self)
-            self.parent=parent
-        def __getitem__(self, name): return self.parent.get_indicator(name)
-        def __setitem__(self, name, value): return self.parent.set_indicator(name,value)
     
     def __getitem__(self, name):
         return self.params[name].widget
