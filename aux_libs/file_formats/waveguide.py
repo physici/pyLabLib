@@ -156,19 +156,35 @@ def load_sweep(prefix, force_info=True):
 
 
 ##### Normalizing sweep (frequency and column data) #####
-def cut_outliers(sweep, jump_size, length, padding=0, x_column=None):
+def cut_outliers(sweep, jump_size, length, padding=0, x_column=None, ignore_last=0):
+    xs=waveforms.get_x_column(sweep,x_column=x_column)
+    dxs=xs[1:]-xs[:-1]
+    jumps=abs(dxs)>jump_size
+    jump_locs=np.append(jumps.nonzero()[0],[len(xs)-1])
+    prev_jump=-1
+    include=np.ones(len(xs)).astype("bool")
+    for jl in jump_locs:
+        if jl>len(include)-ignore_last:
+            break
+        if jl-prev_jump<length:
+            start=max(prev_jump+1-padding,0)
+            end=min(jl+1+padding,len(include))
+            include[start:end]=False
+        prev_jump=jl
+    return wrap(sweep).t[include,:].copy()
+
+def trim_jumps(sweep, jump_size, trim=1, x_column=None):
+    if not isinstance(trim,(list,tuple)):
+        trim=trim,trim
     xs=waveforms.get_x_column(sweep,x_column=x_column)
     dxs=xs[1:]-xs[:-1]
     jumps=abs(dxs)>jump_size
     jump_locs=jumps.nonzero()[0]
-    prev_jump=-1
     include=np.ones(len(xs)).astype("bool")
     for jl in jump_locs:
-        if jl-prev_jump<length:
-            start=max(prev_jump+1-padding,0)
-            end=min(jl+2+padding,len(include))
-            include[start:end]=False
-        prev_jump=jl
+        start=max(jl-trim[0]+1,0)
+        end=min(jl+1+trim[1],len(include))
+        include[start:end]=False
     return wrap(sweep).t[include,:].copy()
 
 def prepare_sweep_frequency(sweep, allowed_frequency_jump=None, ascending_frequency=True, rescale=True):
