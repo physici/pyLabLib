@@ -109,8 +109,14 @@ class PerformaxStage(object):
 
     def get_speed(self):
         return int(self.query("HS"))
+    def get_axis_speed(self, axis):
+        axis=self._check_axis(axis)
+        return int(self.query("HS"+axis))
     def set_speed(self, speed):
         self.query("HS={:d}".format(speed))
+    def set_axis_speed(self, axis, speed):
+        axis=self._check_axis(axis)
+        self.query("HS{}={:d}".format(axis,speed))
 
     _status_bits={  "accel":0x001,"decel":0x002,"moving":0x004,
                     "alarm":0x008,

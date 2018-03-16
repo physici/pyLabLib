@@ -284,13 +284,6 @@ class M2ICE(object):
             fact,units=1E6,"MHz/s"
         else:
             fact,units=1E3,"kHz/s"
-        # if scan_type=="medium":
-        #     fact,units=1E9,"GHz/s"
-        # elif scan_type=="fine":
-        #     fact,units=1E6,"MHz/s"
-        # elif scan_type=="line":
-        #     fact,units=1E3,"kHz/s"
-        # scan_range=max(scan_range),min(scan_range)
         params={"scan":scan_type,"start":[c/scan_range[0]*1E9],"stop":[c/scan_range[1]*1E9],"rate":[rate/fact],"units":units}
         _,reply=self.query("scan_stitch_initialise",params)
         if reply["status"][0]==1:
