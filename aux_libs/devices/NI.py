@@ -1,5 +1,5 @@
 from ...core.devio import backend  #@UnresolvedImport
-from ...core.utils import general, log  #@UnresolvedImport
+from ...core.utils import general, funcargparse  #@UnresolvedImport
 
 import time
 import numpy as np
@@ -136,97 +136,203 @@ class NIGPIBSerialBackend(backend.IDeviceBackend):
 try:
     import nidaqmx
 
-    class NIUSB6009(object):
+    class NIDAQ(object):
         """
-        National Instruments USB-6009 I/O device.
+        National Instruments DAQ device.
         """
         _default_retry_delay=5.
         _default_retry_times=5
-        def __init__(self, dev, voltage_range=10., rate=1E4):
+        def __init__(self, dev_name, rate=1E4, buffer_size=1E5):
             object.__init__(self)
-            self.dev=dev
-            self.voltage_range=voltage_range
+            self.dev_name=dev_name.strip("/")
             self.rate=rate
-            self._retry_delay=2.
-            self._retry_times=5
-            self._task=None
-            self._channels=[]
+            self.buffer_size=buffer_size
+            self.ai_channels={}
+            self.ci_tasks={}
+            self.ci_counters={}
+            self.do_channels={}
+            self.ao_channels={}
+            self.ao_values={}
+            self.open()
+            self._update_channel_names()
             
+        def open(self):
+            self.ai_task=nidaqmx.Task()
+            self.do_task=nidaqmx.Task()
+            self.ao_task=nidaqmx.Task()
         def close(self):
-            pass
-        
+            if self.ai_task is not None:
+                self.ai_task.close()
+            self.ai_task=None
+            self.ai_channels={}
+            for t in self.ci_tasks.values():
+                t[0].close()
+            self.ci_tasks={}
+            if self.do_task is not None:
+                self.do_task.close()
+            self.do_task=None
+            self.do_channels={}
+            self.ao_task=None
+            self.ao_channels={}
+            self.ao_values={}
+            self._update_channel_names()
+
         def __enter__(self):
+            self.open()
             return self
         def __exit__(self, *args, **vargs):
+            self.close()
             return False
-        
-        def set_voltage_range(self, voltage_range):
-            self.voltage_range=abs(voltage_range)
-        def get_voltage_range(self):
-            return self.voltage_range
-        
-        _terms={"default":nidaqmx.constants.TerminalConfiguration.DEFAULT,
-                "diff":nidaqmx.constants.TerminalConfiguration.DIFFERENTIAL,
-                "dseudodiff":nidaqmx.constants.TerminalConfiguration.PSEUDODIFFERENTIAL,
-                "rse":nidaqmx.constants.TerminalConfiguration.RSE,
-                "nrse":nidaqmx.constants.TerminalConfiguration.NRSE}
-        def read_channel(self, channel, terminal='diff', points=1E3):
-            if channel in self._channels:
-                return None
-            conseq_fails=0
-            for t in general.RetryOnException(self._retry_times,RuntimeError):
-                with t:
-                    task=nidaqmx.Task()
-                    task.ai_channels.add_ai_voltage_chan('{0}/ai{1:d}'.format(self.dev,channel),
-                        terminal_config=self._terms[terminal],min_val=-self.voltage_range,max_val=self.voltage_range)
-                    task.timing.cfg_samp_clk_timing(rate=self.rate,sample_mode=nidaqmx.constants.AcquisitionType.FINITE,samps_per_chan=int(points))
-                    task.start()
-                    task.wait_until_done()
-                    data=task.read(int(points))
-                    task.stop()
-                    task.close()
-                    return np.array(data)
-                conseq_fails=conseq_fails+1
-                if conseq_fails>2:
-                    error_msg="Failure to access NIUSB6009 {} times in a row; retrying...".format(conseq_fails)
-                    log.default_log.info(error_msg,origin="devices/NIUSB6009",level="warning")
-                time.sleep(self._retry_delay)
-        def start_continuous(self, channels, terminal='diff'):
-            channels=tuple(channels) if isinstance(channels,list) else (channels,)
-            self.stop_continuous()
+
+        def _build_channel_name(self, channel):
+            channel=channel.lower().strip("/")
+            if channel.startswith("dev") or self.dev_name is None:
+                return "/"+channel
+            return "/"+self.dev_name+"/"+channel
+        def _update_channel_names(self):
+            self.ai_names=self.ai_channels.keys()
+            self.ai_names.sort(key=lambda n: self.ai_channels[n][1])
+            self.ci_names=self.ci_tasks.keys()
+            self.ci_names.sort(key=lambda n: self.ci_tasks[n][1])
+            self.do_names=self.do_channels.keys()
+            self.do_names.sort(key=lambda n: self.do_channels[n][1])
+            self.ao_names=self.ao_channels.keys()
+            self.ao_names.sort(key=lambda n: self.ao_channels[n][1])
+
+        def set_sampling_rate(self, rate):
+            self.rate=rate
+            if self.ai_task.ai_channels:
+                self.ai_task.timing.samp_clk_rate=self.rate
+
+        _voltage_input_terms={  "default":nidaqmx.constants.TerminalConfiguration.DEFAULT,
+                                "rse":nidaqmx.constants.TerminalConfiguration.RSE,
+                                "nrse":nidaqmx.constants.TerminalConfiguration.NRSE,
+                                "diff":nidaqmx.constants.TerminalConfiguration.DIFFERENTIAL,
+                                "pseudodiff":nidaqmx.constants.TerminalConfiguration.PSEUDODIFFERENTIAL}
+        def add_voltage_input(self, name, channel, rng=(-10,10), term_config="default"):
+            channel=self._build_channel_name(channel)
+            term_config=self._voltage_input_terms[term_config]
+            self.ai_task.ai_channels.add_ai_voltage_chan(channel,name,terminal_config=term_config,min_val=rng[0],max_val=rng[1])
+            self.ai_task.timing.cfg_samp_clk_timing(self.rate,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
+            self.ai_channels[name]=(channel,len(self.ai_task.ai_channels))
+            self._update_channel_names()
+        def add_counter_input(self, name, counter, terminal, clk_src="ai/SampleClock", max_rate=1E7, diff=True):
+            if name in self.ci_tasks:
+                self.ci_tasks[name][0].close()
             task=nidaqmx.Task()
-            for ch in channels:
-                task.ai_channels.add_ai_voltage_chan('{0}/ai{1:d}'.format(self.dev,ch),
-                    terminal_config=self._terms[terminal],min_val=-self.voltage_range,max_val=self.voltage_range)
-            task.timing.cfg_samp_clk_timing(rate=self.rate,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS)
-            task.stop()
-            task.start()
-            self._task=task
-            self._channels=channels
-        def read_continuous(self, points=0):
-            if self._task is not None:
-                points=int(points)
-                if points<=0:
-                    points=nidaqmx.constants.READ_ALL_AVAILABLE
-                data=np.array(self._task.read(points))
-                if len(self._channels)==1:
-                    data=np.column_stack((data))
-                return data
-            return None
-        def stop_continuous(self):
-            if self._task is not None:
-                self._task.stop()
-                self._task.close()
-                self._task=None
-                self._channels=[]
+            counter=self._build_channel_name(counter)
+            terminal=self._build_channel_name(terminal)
+            task.ci_channels.add_ci_count_edges_chan(counter)
+            task.ci_channels[0].ci_count_edges_term=terminal
+            task.timing.cfg_samp_clk_timing(max_rate,self._build_channel_name(clk_src),sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS)
+            self.ci_tasks[name]=(task,len(self.ci_tasks),diff)
+            self._update_channel_names()
+        
+        def read(self, n=1, timeout=10.):
+            running=True
+            if self.ai_task.is_task_done():
+                running=False
+                self.start()
+            try:
+                if n==-1:
+                    n=self.available_samples()
+                ais=self.ai_task.read(n,timeout=timeout)
+                if len(self.ai_task.ai_channels)==1:
+                    ais=[ais]
+                cis=[np.array(self.ci_tasks[ci][0].read(n)) for ci in self.ci_names]
+                for i,ci in enumerate(self.ci_names):
+                    if self.ci_tasks[ci][2]:
+                        last_cnt=cis[i][-1]
+                        cis[i][1:]-=cis[i][:-1]
+                        cis[i][0]-=self.ci_counters[ci]
+                        self.ci_counters[ci]=last_cnt
+                return np.column_stack(ais+cis)
+            finally:
+                if not running:
+                    self.stop()
+        def get_input_channels(self):
+            return self.ai_names+self.ci_names
+        def start(self, flush_read=0):
+            for cit in self.ci_tasks:
+                self.ci_tasks[cit][0].start()
+                self.ci_counters[cit]=0
+            self.ai_task.start()
+            if flush_read:
+                self.read(flush_read)
+        def stop(self):
+            self.ai_task.stop()
+            for cit in self.ci_tasks:
+                self.ci_tasks[cit][0].stop()
+                self.ci_counters[cit]=0
+        def is_running(self):
+            return not self.ai_task.is_task_done()
+        def available_samples(self):
+            if self.ai_task.is_task_done():
+                return 0
+            return self.ai_task.in_stream.avail_samp_per_chan
         def wait_for_sample(self, num=1, timeout=10., wait_time=0.001):
-            if self._task is not None:
-                if self._task.in_stream.avail_samp_per_chan>=num:
-                    return self._task.in_stream.avail_samp_per_chan
-                ctd=general.Countdown(timeout)
-                while not ctd.passed():
-                    time.sleep(wait_time)
-                    if self._task.in_stream.avail_samp_per_chan>=num:
-                        return self._task.in_stream.avail_samp_per_chan
+            if self.ai_task.is_task_done():
+                return 0
+            if self.available_samples()>=num:
+                return self.available_samples()
+            ctd=general.Countdown(timeout)
+            while not ctd.passed():
+                time.sleep(wait_time)
+                if self.available_samples()>=num:
+                    return self.available_samples()
+            return 0
+
+        def add_digital_output(self, name, channel):
+            channel=self._build_channel_name(channel)
+            self.do_task.do_channels.add_do_chan(channel,name)
+            self.do_channels[name]=(channel,len(self.do_task.do_channels))
+            self._update_channel_names()
+        def set_digital_outputs(self, names, values):
+            names=funcargparse.as_sequence(names,allowed_type="array")
+            values=funcargparse.as_sequence(values,allowed_type="array")
+            values_dict=dict(zip(names,values))
+            curr_vals=self.do_task.read(1)
+            for i,ch in enumerate(self.do_task.do_channels):
+                if ch.name in values_dict:
+                    curr_vals[i]=bool(values_dict[ch.name])
+            self.do_task.write(curr_vals)
+        def get_digital_outputs(self, names=None):
+            if names is None:
+                names=self.do_names
+            else:
+                names=funcargparse.as_sequence(names,allowed_type="array")
+            values_dict=dict(zip(names,[None]*len(names)))
+            curr_vals=self.do_task.read()
+            for i,ch in enumerate(self.do_task.do_channels):
+                if ch.name in values_dict:
+                    values_dict[ch.name]=curr_vals[i]
+            return [values_dict[n] for n in names]
+        def get_digital_output_channels(self):
+            return self.do_names
+
+        def add_voltage_output(self, name, channel, rng=(-10,10), initial_value=0.):
+            channel=self._build_channel_name(channel)
+            self.ao_task.ao_channels.add_ao_voltage_chan(channel,name,min_val=rng[0],max_val=rng[1])
+            self.ao_channels[name]=(channel,len(self.ao_task.ao_channels))
+            self.ao_values[name]=initial_value
+            self._update_channel_names()
+            self.set_voltage_outputs([],[])
+        def set_voltage_outputs(self, names, values):
+            names=funcargparse.as_sequence(names,allowed_type="array")
+            values=funcargparse.as_sequence(values,allowed_type="array")
+            for n,v in zip(names,values):
+                self.ao_values[n]=v
+            self.ao_task.write([self.ao_values[ch.name] for ch in self.ao_task.ao_channels])
+        def get_voltage_outputs(self, names=None):
+            if names is None:
+                names=self.ao_names
+            else:
+                names=funcargparse.as_sequence(names,allowed_type="array")
+            return [self.ao_values[n] for n in names]
+        def get_voltage_output_channels(self):
+            return self.ao_names
+
+
+    
 except ImportError:
     pass
