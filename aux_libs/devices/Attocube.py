@@ -105,7 +105,7 @@ class ANCDevice(backend_mod.IBackendWrapper):
         return self.get_output(axis)!=0.
     def stop(self, axis="all"):
         if axis=="all":
-            for ax in self.axis:
+            for ax in self.axes:
                 self.stop(ax)
             return
         self.query("stop {}".format(axis))

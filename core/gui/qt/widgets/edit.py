@@ -71,8 +71,8 @@ class LVNumEdit(QtGui.QLineEdit):
     def keyPressEvent(self, event):
         k=event.key()
         if k==QtCore.Qt.Key_Escape:
+            self.show_value(interrupt_edit=True)
             self.clearFocus()
-            self.show_value()
         elif k in [QtCore.Qt.Key_Up,QtCore.Qt.Key_Down]:
             try:
                 str_value=str(self.text())

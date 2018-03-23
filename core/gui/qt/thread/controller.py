@@ -305,11 +305,15 @@ class QMultiRepeatingThreadController(QThreadController):
     def add_job(self, name, job, period, initial_call=True):
         if name in self.jobs:
             raise ValueError("job {} already exists".format(name))
-        self.jobs[name]=(job,period)
+        self.jobs[name]=job
         self.timers[name]=general.Timer(period)
         self._jobs_list.append(name)
         if initial_call:
             job()
+    def change_job_period(self, name, period):
+        if name not in self.jobs:
+            raise ValueError("job {} doesn't exists".format(name))
+        self.timers[name].change_period(period)
     def remove_job(self, name):
         if name not in self.jobs:
             raise ValueError("job {} doesn't exists".format(name))
@@ -331,7 +335,9 @@ class QMultiRepeatingThreadController(QThreadController):
         gen=job(*args,**kwargs)
         def do_step():
             try:
-                gen.next()
+                p=gen.next()
+                if p is not None:
+                    self.change_job_period(name,p)
             except StopIteration:
                 self.stop_batch_job(name)
         self.add_job(name,do_step,period)
@@ -391,7 +397,7 @@ class QMultiRepeatingThreadController(QThreadController):
                         self.check_messages()
                 elif to:
                     time.sleep(to)
-                job=self.jobs[name][0]
+                job=self.jobs[name]
                 self.timers[name].acknowledge(nmin=1)
                 job(*self.args,**self.kwargs)
             self.check_commands()
@@ -431,7 +437,9 @@ def unregister_controller(controller):
             raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
         del _running_threads[name]
     _running_threads_notifier.notify()
-def get_controller(name, wait=True, timeout=None):
+def get_controller(name=None, wait=True, timeout=None):
+    if name is None:
+        return threadprop.current_controller()
     ctd=general.Countdown(timeout)
     cnt=0
     while True:

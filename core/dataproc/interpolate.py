@@ -82,7 +82,7 @@ def regular_grid_from_scatter(data, x_points, y_points, x_range=None, y_range=No
     return interp_data,(x_grid,y_grid)
 
 
-def interpolate2D(data, x, y, method="linear"):
+def interpolate2D(data, x, y, method="linear", fill_value=np.nan):
     """
     Interpolate data in 2D.
     
@@ -93,7 +93,7 @@ def interpolate2D(data, x, y, method="linear"):
         x/y: Arrays of x and y coordinates for the points at which to find the values.
         method: Interpolation method.
     """
-    interp_data=scipy.interpolate.griddata((data[:,0],data[:,1]),data[:,2],(x,y),method=method)
+    interp_data=scipy.interpolate.griddata((data[:,0],data[:,1]),data[:,2],(x,y),method=method,fill_value=fill_value)
     return interp_data
 
 def interpolateND(data, xs, method="linear"):

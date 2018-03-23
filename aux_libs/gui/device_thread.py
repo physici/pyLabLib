@@ -67,12 +67,12 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         else:
             raise KeyError("unrecognized command {}".format(name))
 
-    _cached_change_tag="#sync.wait.cached"
+    _variable_change_tag="#sync.wait.variable"
     def set_variable(self, name, value, notify=False, notify_tag="changed/*"):
         with self._params_val_lock:
             self._params_val[name]=value
         for ctl in self._params_exp.get(name,[]):
-            ctl.send_message(self._cached_change_tag,value)
+            ctl.send_message(self._variable_change_tag,value)
         if notify:
             notify_tag.replace("*",name)
             self.send_signal("any",notify_tag,value)
@@ -104,7 +104,7 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         return var
     def __getitem__(self, name):
         return self.get_variable(name)
-    def wait_for_cached(self, name, pred, timeout=None):
+    def wait_for_variable(self, name, pred, timeout=None):
         if not hasattr(pred,"__call__"):
             v=pred
             pred=lambda x: x==v
@@ -117,7 +117,7 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
                 value=self.get_variable(name)
                 if pred(value):
                     return value
-                ctl.wait_for_message(self._cached_change_tag,timeout=ctd.time_left())
+                ctl.wait_for_message(self._variable_change_tag,timeout=ctd.time_left())
         finally:
             with self._params_exp_lock:
                 self._params_exp[name].remove(ctl)

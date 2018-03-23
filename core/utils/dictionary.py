@@ -214,12 +214,13 @@ class Dictionary(object):
         """
         try:
             value=Dictionary._get_root(value)
-            if value is not {}: # adding empty dictionary doesn't change anything
+            if value: # adding empty dictionary doesn't change anything
                 if branch_option=="attach":
                     dest[key]=value
                 else:
-                    dest[key]={}
-                    self._insert_branch(value,dest[key],overwrite=True,normalize_paths=(branch_option=="normalize"))
+                    branch={}
+                    self._insert_branch(value,branch,overwrite=True,normalize_paths=(branch_option=="normalize"))
+                    dest[key]=branch
         except ValueError:
             dest[key]=value
         

@@ -70,7 +70,5 @@ class SignalPool(object):
 
     def signal(self, src, dst, tag, value):
         to_call=self._pool.find_observers(Signal(src,dst,tag),value)
-        # if len(to_call)>1:
-        #     print(src,dst,tag,to_call)
         for _,obs in to_call:
             obs.callback(src,tag,value)
