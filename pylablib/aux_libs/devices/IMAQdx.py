@@ -204,7 +204,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
             hend=det_size[0]
         if vend is None:
             vend=det_size[1]
-        with pausing_acuisition():
+        with self.pausing_acuisition():
             self["CameraAttributes/ImageFormatControl/Width"]=self.attributes["CameraAttributes/ImageFormatControl/Width"].min
             self["CameraAttributes/ImageFormatControl/Height"]=self.attributes["CameraAttributes/ImageFormatControl/Height"].min
             self["CameraAttributes/ImageFormatControl/OffsetX"]=hstart-1

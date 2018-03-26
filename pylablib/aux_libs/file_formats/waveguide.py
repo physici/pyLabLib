@@ -238,13 +238,16 @@ def load_prepared_sweeps(prefix, reps, min_sweep_length=1, **add_info):
     `min_sweep_length` specifies the minimal sweep length (after frequecy normalization) to be included in the list.
     """
     sweeps=[]
-    for rep in reps:
-        sweep_name=prefix+rep_suffix_patt.format(rep)
+    if reps:
+        for rep in reps:
+            sweep_name=prefix+rep_suffix_patt.format(rep)
+            sweeps+=load_prepared_sweeps(sweep_name,[],min_sweep_length=min_sweep_length,rep=rep,**add_info)
+    else:
         try:
-            sweep,info=load_sweep(sweep_name,force_info=True)
+            sweep,info=load_sweep(prefix,force_info=True)
             sweep=prepare_sweep_frequency(sweep)
             if len(sweep)>=min_sweep_length:
-                info["rep"]=rep
+                info["rep"]=0
                 info.update(add_info)
                 sweeps.append((sweep,info))
         except IOError:
