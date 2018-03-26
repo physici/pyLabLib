@@ -785,10 +785,7 @@ class NetworkDeviceBackend(IDeviceBackend):
     Connection is automatically opened on creation.
     
     Args:
-        conn: Connection parameters. Can be either a string (for a port),
-            or a list/tuple ``(port, baudrate, bytesize, parity, stopbits, xonxoff, rtscts, dsrdtr)`` supplied to the serial connection
-            (default is ``('COM1',19200,8,'N',1,0,0,0)``),
-            or a dict with the same paramters. 
+        conn: Connection parameters. Can be either a string ``"IP:port"`` (e.g., ``"127.0.0.1:80"``), or a tuple ``(IP,port)``, where `IP` is a string and `port` is a number.
         timeout (float): Default timeout (in seconds).
         term_write (str): Line terminator for writing operations; appended to the data
         term_read (str): List of possible single-char terminator for reading operations (specifies when :func:`readline` stops).
@@ -816,6 +813,8 @@ class NetworkDeviceBackend(IDeviceBackend):
             term_read="\r\n"
         if isinstance(term_read,anystring):
             term_read=[term_read]
+        if not isinstance(conn,tuple):
+            conn=self._get_addr_port(conn)
         IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
         try:
             self.open()
@@ -834,7 +833,7 @@ class NetworkDeviceBackend(IDeviceBackend):
     def open(self):
         """Open the connection."""
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen")
-        self.socket.connect(self._get_addr_port(self.conn))
+        self.socket.connect(*self.conn)
     def close(self):
         """Close the connection."""
         self.socket.close()
@@ -887,16 +886,7 @@ class NetworkDeviceBackend(IDeviceBackend):
         If `size` is not None, read `size` bytes (usual timeout applies); otherwise, read all available data (return immediately).
         """
         if size is None:
-            try:
-                data=b""
-                with self.using_timeout(0):
-                    while True:
-                        new_data=self.socket.recv_fixedlen(1024)
-                        if not new_data:
-                            break
-                        data=data+new_data
-            except net.SocketTimeout:
-                pass
+            return self.socket.recv_all()
         else:
             try:
                 data=self.socket.recv_fixedlen(size)
@@ -929,7 +919,6 @@ class NetworkDeviceBackend(IDeviceBackend):
         `flush` parameter is ignored.
         """
         self.socket.send_delimiter(data,self.term_write)
-        self.instr.write(data)
         self.cooldown()
         if read_echo_delay>0.:
             time.sleep(read_echo_delay)
@@ -939,7 +928,7 @@ class NetworkDeviceBackend(IDeviceBackend):
                 self.cooldown()
 
     def __repr__(self):
-        return "NetworkDeviceBackend("+self.instr.__repr__()+")"
+        return "NetworkDeviceBackend("+self.socket.__repr__()+")"
     
     
 _backends["network"]=NetworkDeviceBackend
@@ -1009,22 +998,25 @@ class IBackendWrapper(object):
         return self.instr.locking(timeout=timeout)
     
     
-    def _add_settings_node(self, path, getter=None, setter=None):
+    def _add_settings_node(self, path, getter=None, setter=None, ignore_error=()):
         """
         Adds a settings parameter
         
         `getter`/`setter` are methods for getting/setting this parameter.
         Can be ``None``, meaning that this parameter is ingored when executing :func:`get_settings`/:func:`apply_settings`.
         """
-        self._settings_nodes[path]=(getter,setter)
+        self._settings_nodes[path]=(getter,setter,ignore_error)
         self._settings_nodes_order.append(path)
     def get_settings(self):
         """Get dict ``{name: value}`` containing all the device settings."""
         settings={}
         for k in self._settings_nodes_order:
-            g,_=self._settings_nodes[k]
+            g,_,err=self._settings_nodes[k]
             if g:
-                settings[k]=g()
+                try:
+                    settings[k]=g()
+                except err:
+                    pass
         return settings
     def apply_settings(self, settings):
         """
@@ -1034,9 +1026,12 @@ class IBackendWrapper(object):
         Non-applicable settings are ignored.
         """
         for k in self._settings_nodes_order:
-            _,s=self._settings_nodes[k]
+            _,s,err=self._settings_nodes[k]
             if s and (k in settings):
-                s(settings[k])
+                try:
+                    s(settings[k])
+                except err:
+                    pass
     def __getitem__(self, key):
         """Get the value of a settings parameter."""
         if key in self._settings_nodes:

@@ -121,26 +121,26 @@ class ClientSocket(object):
         
     def _recv_wait(self, l):
         sock_func=lambda: self.sock.recv(l)
-        return _wait_sock_func(sock_func,self.timeout,self.wait_callback)
+        try:
+            recvd=_wait_sock_func(sock_func,self.timeout,self.wait_callback)
+        except socket.timeout:
+            raise SocketTimeout("timeout while receiving")
+        if len(recvd)==0:
+            raise SocketError("connection closed while receiving")
+        return recvd
     def _send_wait(self, msg):
         sock_func=lambda: self.sock.send(msg)
         return _wait_sock_func(sock_func,self.timeout,self.wait_callback)
-                    
+    
     def recv_fixedlen(self, l):
         """Receive fixed-length message of length `l`."""
         buf=""
         while len(buf)<l:
-            try:
-                recvd=self._recv_wait(l-len(buf))
-            except socket.timeout:
-                raise SocketTimeout("timeout while receiving")
-            if len(recvd)==0:
-                raise SocketError("connection closed while receiving")
-            buf=buf+recvd
+            buf=buf+self._recv_wait(l-len(buf))
         return buf
     def recv_delimiter(self, delim, lmax=None, chunk_l=1024, strict=False):
         """
-        Receive a single message ending with a delimiter `delim` (can be several characters).
+        Receive a single message ending with a delimiter `delim` (can be several characters, or list several possible delimiter strings).
         
         `lmax` specifies the maximal received length (`None` means no limit).
         `chunk_l` specifies the size of data chunk to be read in one try.
@@ -153,14 +153,8 @@ class ClientSocket(object):
         if strict:
             chunk_l=1
         while not any([buf.endswith(d) for d in delim]):
-            try:
-                recvd=self._recv_wait(chunk_l)
-            except socket.timeout:
-                raise SocketTimeout("timeout while receiving")
-            if len(recvd)==0:
-                raise SocketError("connection closed while receiving")
-            buf=buf+recvd
-            if len(buf)>lmax:
+            buf=buf+self._recv_wait(chunk_l)
+            if (lmax is not None) and len(buf)>lmax:
                 break
         return buf
     def recv_decllen(self):
@@ -191,9 +185,10 @@ class ClientSocket(object):
         with self.using_timeout(1E-3):
             try:
                 while True:
-                    data+=self.recv_fixedlen(chunk_l)
+                    data+=self._recv_wait(chunk_l)
             except SocketTimeout:
                 pass
+        return data
     def recv_ack(self, l=None):
         """Receive a message using the default method and send an acknowledgement (message length)."""
         msg=self.recv(l=l)

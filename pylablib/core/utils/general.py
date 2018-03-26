@@ -567,6 +567,23 @@ class Timer(object):
     def __init__(self, period, skip_first=False):
         self.period=period
         self.reset(skip_first=skip_first)
+    def change_period(self, period, method="current"):
+        """
+        Change the timer period.
+
+        `method` specifies the changing method. Could be ``"current"`` (change the period of the ongoing tick), ``"next"`` (change the period starting from the next tick),
+        ``"reset_skip"`` (reset the timer and skip the first tick) or ``"reset_noskip"`` (reset the timer and don't skip the first tick).
+        """
+        if method not in {"current","next","reset_skip","reset_noskip"}:
+            raise ValueError("unrecognized changing method: {}".format(method))
+        old_period=self.period
+        self.period=period
+        if method=="reset_noskip":
+            self.reset(skip_first=False)
+        elif method=="reset_skip":
+            self.reset(skip_first=True)
+        elif method=="current":
+            self.next+=(period-old_period)
     def reset(self, skip_first=False):
         """
         Reset the timer.

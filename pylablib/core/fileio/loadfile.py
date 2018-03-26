@@ -121,7 +121,7 @@ _dicttable_start=r"^#+\s*table\s+start"
 _dicttable_start_regexp=re.compile(_dicttable_start,re.IGNORECASE)
 _dicttable_end=r"^#+\s*table\s+end"
 _dicttable_end_regexp=re.compile(_dicttable_end,re.IGNORECASE)
-def _load_dict_and_comments(f, case_normalization="lower", inline_dtype="generic"):
+def _load_dict_and_comments(f, case_normalization=None, inline_dtype="generic"):
     case_sensitive=case_normalization is None
     data=dictionary.Dictionary(case_sensitive=case_sensitive, case_normalization=case_normalization or "lower")
     comment_lines=[]
@@ -290,7 +290,7 @@ class DictionaryInputFileFormat(ITextInputFileFormat):
     def __init__(self):
         ITextInputFileFormat.__init__(self)
     @staticmethod
-    def read_file(location_file, case_normalization="lower", inline_dtype="generic", entry_format="value", skip_lines=0, **kwargs):
+    def read_file(location_file, case_normalization=None, inline_dtype="generic", entry_format="value", skip_lines=0, **kwargs):
         """
         Read Dictionary file.
         
