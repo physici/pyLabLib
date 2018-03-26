@@ -10,6 +10,7 @@ Welcome to pyLabLib's documentation!
     :maxdepth: 2
     :caption: Contents:
 
+    install
     dataproc
     utils
 

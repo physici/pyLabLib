@@ -1,15 +1,15 @@
 .. _dataproc:
 
-########################
-Data processing utlities
-########################
+=========================
+Data processing utilities
+=========================
 
 
 -------
 Fitting
 -------
 
-Class :class:`Fitter` is a user-frendly wrapper around :func:`scipy.optimize.least_squares` routine. Dealing with fitting is made more convenient in a couple of ways:
+Class :class:`Fitter` is a user-friendly wrapper around :func:`scipy.optimize.least_squares` routine. Dealing with fitting is made more convenient in a couple of ways:
 
 - it is easy to specify the x-parameter name (in the case it is not the first parameter), or specify multiple x-parameters;
 - all of the fit and fixed parameters are specified by name; it is easy to switch between any parameter being fit or fixed;
@@ -61,7 +61,7 @@ Fitting 2D Gaussian and getting the parameter estimation errors::
     # fit_parameters dictionary specifies the initial guess
     fit_par = {"pos":(100,100), "width":10., "height":5.}
     fitter = pll.Fitter(gaussian, xarg_name=["x","y"], fit_parameters=fit_par)
-    xs, ys = np.meshgrid(np.arange(img.shape[0]), np.arange(img.shape[1])) # building x and y coordinates for the image
+    xs, ys = np.meshgrid(np.arange(img.shape[0]), np.arange(img.shape[1]), indexing="ij") # building x and y coordinates for the image
     # fit_stderr is a dictionary containing the fit error for the corresponding parameters
     fit_par, fit_func, fit_stderr = fitter.fit([xs,ys], img, return_stderr=True)
     imshow(fit_func(xs, ys))  # plot fit result

@@ -2,6 +2,8 @@ import os
 import os.path
 from .core.utils import module as module_utils  #@UnresolvedImport
 
+from .__use__ import *
+
 _load_path=os.path.abspath(os.curdir)
 
 def reload_all(from_load_path=True):

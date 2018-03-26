@@ -16,7 +16,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='pylablib',
-    version='0.2.0',
+    version='0.2.1',
     description='Collection of Python code for using in lab environment (data acquisition, device communication, data analysis)',
     long_description=long_description,
     url='https://github.com/AlexShkarin/pyLabLib',
