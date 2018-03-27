@@ -28,11 +28,13 @@ Some data processing functionality is written in C. The package is distributed w
 
 The package has been tested with Python 2.7 and Python 3.6 (not extensively).
 
+.. _install-github:
+
 -----------------------
 Installing from  GitHub
 -----------------------
 
-The most recent and extensive, but less documented, version of this library is available on GitHub at https://github.com/AlexShkarin/pyLabLib. To simply get the most recent version, you can download it as a zip-file (make sure to select `dev` branch in the dropdown branch menu, so the file is called `pyLabLib-dev.zip`) and unpack it into any appropriate place (can be folder of the project you're working on, Python site-packages folder, or any folder added to Python path variable). In order to easily get updates, you can instead clone the repository to your computer. For that, you need to install Git (https://git-scm.com/), and use the following commands in the command line (in the folder where you want to store the library)::
+The most recent and extensive, but less documented, version of this library is available in the `dev` branch on GitHub at https://github.com/AlexShkarin/pyLabLib/tree/dev. To simply get the most recent version, you can download it as a zip-file (make sure `dev` branch is selected in the dropdown branch menu, so the file is called `pyLabLib-dev.zip`) and unpack it into any appropriate place (can be folder of the project you're working on, Python site-packages folder, or any folder added to Python path variable). In order to easily get updates, you can instead clone the repository to your computer. For that, you need to install Git (https://git-scm.com/), and use the following commands in the command line (in the folder where you want to store the library)::
 
     git clone https://github.com/AlexShkarin/pyLabLib
     cd ./pyLabLib
@@ -42,4 +44,4 @@ Whenever you want to update to the most recent version, simply type ::
     
     git pull
 
-in the command line. Keep in mind that any changes that you've made might conflict with the new changes that you pull from GitHub, so you should not modify any code in this folder.
+in the library folder. Keep in mind that any changes that you make to the library code might conflict with the new version that you pull from GitHub, so you should not modify anything in this folder if possible.

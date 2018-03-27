@@ -24,7 +24,7 @@ class AndorCamera(backend.IBackendWrapper):
         self.handle=None
         self.open()
         self.temperature_setpoint=None
-        self.set_temperature(0)
+        self.set_temperature(-100)
         self.channel=None
         self.oamp=None
         self.hsspeed=None

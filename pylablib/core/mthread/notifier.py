@@ -9,7 +9,7 @@ class ISkippableNotifier(object):
 
     Args:
         skippable (bool): if ``True``, allows for skippable wait events
-            (if :method:`notify` is called before :method:`wait`, neither methods are actually called).
+            (if :meth:`notify` is called before :meth:`wait`, neither methods are actually called).
     """
     def __init__(self, skippable=False):
         object.__init__(self)
@@ -45,7 +45,7 @@ class ISkippableNotifier(object):
         Wait for the notification.
 
         Can only be called once per notifier lifetime.
-        If the notifier allows skipping, and this method is called after :method:`notify`, return immediately.
+        If the notifier allows skipping, and this method is called after :meth:`notify`, return immediately.
         """
         with self._lock:
             if self._waiting!="init":
@@ -87,7 +87,7 @@ class ISkippableNotifier(object):
         Notify the waiting process.
 
         Can only be called once per notifier lifetime.
-        If the notifier allows skipping, and this method is called before :method:`wait`, return immediately.
+        If the notifier allows skipping, and this method is called before :meth:`wait`, return immediately.
         """
         with self._lock:
             if self._notifying!="init":

@@ -8,13 +8,13 @@ _depends_local=["..utils.general"]
 
 class CallNotifier(notifier.ISkippableNotifier):
     """
-    Wrapper for :class:`notifier.ISkippableNotifier`, with external functions provided for :method:`_do_wait` and :method:`_do_notify` methods.
+    Wrapper for :class:`notifier.ISkippableNotifier`, with external functions provided for :meth:`_do_wait` and :meth:`_do_notify` methods.
 
     Args:
         wait (Callable): function to be called for waiting; if ``None``, nothing is called.
         notify (Callable): function to be called for notifying; if ``None``, nothing is called.
         skippable (bool): if ``True``, allows for skippable wait events
-            (if :method:`notify` is called before :method:`wait`, neither methods are actually called).
+            (if :meth:`notify` is called before :meth:`wait`, neither methods are actually called).
     """
     def __init__(self, wait=None, notify=None, skippable=False):
         notifier.ISkippableNotifier.__init__(self,skippable=skippable)
@@ -48,6 +48,7 @@ def build_notifier(note_tag, note_value, sync, notification_controller):
             - ``"message"``: send notifying message, but don't do any waiting (asynchronous)
 
             `note_tag` and `note_value` arguments are used for ``"wait"`` and ``"message"`` synchronizers
+            
     `notification_controller` is a thread controller for the thread to be waiting/notified using this primitive.
     If it's a `no_thread_controller`, `sync` types are coerced: ``"wait"`` is interpreted as ``"wait_even"``, and ``"message"`` is interpreted as ``"none"``.
     """

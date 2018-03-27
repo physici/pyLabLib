@@ -13,6 +13,7 @@ Welcome to pyLabLib's documentation!
     install
     dataproc
     utils
+    devices
 
 Indices and tables
 ==================
