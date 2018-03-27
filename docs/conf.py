@@ -36,7 +36,7 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.imgmath',
     'sphinx.ext.viewcode']
 
-autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232']
+autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt4', 'websocket', 'zhinst', 'matplotlib']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
