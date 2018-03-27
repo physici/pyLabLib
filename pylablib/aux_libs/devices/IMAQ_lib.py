@@ -3,11 +3,15 @@ from ...core.utils import functions, py3
 import numpy as np
 import ctypes
 import collections
+import platform
 
 
 try:
 
-    lib=ctypes.windll.imaq
+    if platform.system()=="Windows":
+        lib=ctypes.windll.imaq
+    else:
+        raise OSError
 
 
     IMAQError=ctypes.c_uint32

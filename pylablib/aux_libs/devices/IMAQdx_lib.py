@@ -3,6 +3,7 @@ from ...core.utils import functions, py3
 import numpy as np
 import ctypes
 import collections
+import platform
 
 
 class IMAQdxGenericError(RuntimeError):
@@ -11,7 +12,10 @@ class IMAQdxGenericError(RuntimeError):
 
 try:
 
-    lib=ctypes.windll.niimaqdx
+    if platform.system()=="Windows":
+        lib=ctypes.windll.niimaqdx
+    else:
+        raise OSError
 
     IMAQdxError=ctypes.c_uint32
 
