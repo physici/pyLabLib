@@ -5,11 +5,8 @@ import numpy as np
 import contextlib
 import time
 
-try:
-    from . import IMAQdx_lib as lib
-    IMAQdxError=lib.IMAQdxGenericError
-except (ImportError,WindowsError):
-    IMAQdxError=RuntimeError
+from . import IMAQdx_lib as lib
+IMAQdxError=lib.IMAQdxGenericError
 
 class IMAQdxAttribute(object):
     def __init__(self, sid, name):
