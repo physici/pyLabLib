@@ -10,6 +10,8 @@ Subpackages
     pylablib.core.datatable
     pylablib.core.devio
     pylablib.core.fileio
+    pylablib.core.gui
+    pylablib.core.mthread
     pylablib.core.utils
 
 Submodules

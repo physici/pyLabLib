@@ -6,6 +6,7 @@ Subpackages
 
 .. toctree::
 
+    pylablib.aux_libs
     pylablib.core
 
 Submodules

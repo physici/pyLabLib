@@ -12,6 +12,6 @@ Some major parts include:
     - Multi-level dictionaries which are convenient for storing heterogeneous data and settings in human-readable format.
     - A bunch more utilities dealing with file system (creating, moving and removing folders, zipping/unzipping, path normalization), network (simplified interface for client and server sockets), strings (serializing and de-serializing values), function introspection, and more. 
 
-The library is available on GitHub (https://github.com/AlexShkarin/pyLabLib), and the documentation can be found at http://pylablib.readthedocs.io/ .
+The most recent version library is available on GitHub (https://github.com/AlexShkarin/pyLabLib), and the documentation can be found at http://pylablib.readthedocs.io/ .
 
-For a more comprehensive, specialized (classes for certain equipment, GUI building, multithreading, specific computational tasks) and up-to-date version of the library, check out pLL project (https://github.com/AlexShkarin/pLL).
+For a more comprehensive, specialized (classes for certain equipment, GUI building, multithreading, specific computational tasks), and recent version of the library, check out dev branch of the GitHub repository
