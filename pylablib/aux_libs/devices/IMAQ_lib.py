@@ -1,8 +1,6 @@
-from ...core.utils import functions, py3
+from ...core.utils import functions
 
-import numpy as np
 import ctypes
-import collections
 import platform
 
 
