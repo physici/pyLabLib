@@ -1,16 +1,12 @@
 from ...core.utils import functions
+from .misc import load_lib
 
 import ctypes
-import platform
 
 
 try:
 
-    if platform.system()=="Windows":
-        lib=ctypes.windll.imaq
-    else:
-        raise OSError
-
+    lib=load_lib("imaq.dll")
 
     IMAQError=ctypes.c_uint32
 

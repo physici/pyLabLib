@@ -2,7 +2,6 @@ from ...core.fileio import loadfile  #@UnresolvedImport
 
 import importlib
 import re
-import os.path
 
 class DeviceManager(object):
     def __init__(self, path=None):
@@ -42,13 +41,3 @@ class DeviceManager(object):
     __getattr__=get_device
     def __dir__(self):
         return list(self.devices.keys())
-    
-    
-def default_device_manager(name="devices.txt"):
-    desktop_path=os.path.expanduser("~/Desktop")
-    return DeviceManager(os.path.join(desktop_path,name))
-
-try:
-    mgr=default_device_manager()
-except IOError:
-    pass

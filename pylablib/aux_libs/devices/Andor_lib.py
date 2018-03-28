@@ -4,7 +4,6 @@ from .misc import default_lib_folder, load_lib
 import ctypes
 import collections
 import os.path
-import platform
 
 import numpy as np
 
@@ -448,10 +447,7 @@ def AndorCapabilities_conv(val, *args):
 try:
 
 	lib_path=os.path.join(default_lib_folder,"atmcd.dll")
-	if platform.system()=="Windows":
-		lib=load_lib(lib_path)
-	else:
-		raise OSError
+	lib=load_lib(lib_path)
 	##### Functions definitions #####
 
 	Initialize=ctf_simple(lib.Initialize, [ctypes.c_char_p], ["dir"])

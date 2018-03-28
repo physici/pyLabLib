@@ -1,9 +1,9 @@
 from ...core.utils import functions, py3
+from .misc import load_lib
 
 import numpy as np
 import ctypes
 import collections
-import platform
 
 
 class IMAQdxGenericError(RuntimeError):
@@ -12,10 +12,7 @@ class IMAQdxGenericError(RuntimeError):
 
 try:
 
-    if platform.system()=="Windows":
-        lib=ctypes.windll.niimaqdx
-    else:
-        raise OSError
+    lib=load_lib("niimaqdx.dll")
 
     IMAQdxError=ctypes.c_uint32
 

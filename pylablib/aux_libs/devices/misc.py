@@ -19,6 +19,8 @@ def get_default_lib_folder():
 default_lib_folder=get_default_lib_folder()
 
 def load_lib(path, locally=False):
+    if platform.system()!="Windows":
+        raise OSError("DLLs are not available on non-Windows platform")
     if not locally:
         return ctypes.cdll.LoadLibrary(path)
     folder,name=os.path.split(path)
