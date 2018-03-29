@@ -27,7 +27,7 @@ class ThorlabsInterface(SCPI.SCPIDevice):
     Generic Thorlabs device interface.
     """
     def __init__(self, conn):
-        conn=backend.SerialDeviceBackend.combine_serial_conn(conn,("COM1",115200))
+        conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",115200))
         SCPI.SCPIDevice.__init__(self,conn,backend="serial",term_read=["\r","\n"],term_write="\r")
     
     def _instr_write(self, msg):
@@ -129,7 +129,7 @@ class KinesisDevice(backend.IBackendWrapper):
     Implements FTDI chip connectivity via pyft232 (virtual serial interface).
     """
     def __init__(self, conn, timeout=3.):
-        conn=backend.FT232DeviceBackend.combine_serial_conn(conn,(None,115200))
+        conn=backend.FT232DeviceBackend.combine_conn(conn,(None,115200))
         instr=backend.FT232DeviceBackend(conn,term_write="",term_read="",timeout=timeout)
         backend.IBackendWrapper.__init__(self,instr)
 

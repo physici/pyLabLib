@@ -16,7 +16,7 @@ class TMCM1100(backend.IBackendWrapper):
     Trinamic stepper motor controller.
     """
     def __init__(self, conn, timeout=3.):
-        conn=backend.SerialDeviceBackend.combine_serial_conn(conn,(None,9600))
+        conn=backend.SerialDeviceBackend.combine_conn(conn,(None,9600))
         instr=backend.SerialDeviceBackend(conn,term_write="",term_read="",timeout=timeout)
         backend.IBackendWrapper.__init__(self,instr)
     

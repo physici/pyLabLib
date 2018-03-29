@@ -12,7 +12,11 @@ class ANCDevice(backend_mod.IBackendWrapper):
     """
     Generic Attocube ANC controller.
     """
-    def __init__(self, conn, backend="network", pwd="123456"):
+    def __init__(self, conn, backend="auto", pwd="123456"):
+        if backend=="auto":
+            backend=backend_mod.autodetect_backend(conn)
+        if backend=="network":
+            conn=backend_mod.NetworkDeviceBackend.combine_conn(conn,{"port":7230})
         instr=backend_mod.new_backend(conn,backend=backend,timeout=3.,term_write="\r\n")
         self.pwd=pwd
         backend_mod.IBackendWrapper.__init__(self,instr)

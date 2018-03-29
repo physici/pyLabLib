@@ -1,5 +1,5 @@
 from . import backend
-from .backend import new_backend, IBackendWrapper
+from .backend import autodetect_backend, new_backend, IBackendWrapper
 
 from . import SCPI
 from .SCPI import SCPIDevice

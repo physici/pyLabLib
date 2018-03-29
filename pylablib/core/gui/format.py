@@ -29,9 +29,10 @@ _SI_prefix_re_str="({0})".format( "|".join(SI_prefixes.keys()) )
 _SI_float_re=re.compile(r'^\s*([+-]?)(\d*)(\.?)(\d*)((?:[Ee][+-]?\d+)?){0}\s*$'.format(_SI_prefix_re_str))
 def parse_float(s):
     """
-    Parse string as a float, while recognizing SI metric prefixes.
-    Return tuple (sign, integer, dot, fractional, exponent, prefix), where each entry has structure (begin, end, text)
-    Return None if string is unrecognizable.
+    Parse string as a float, with metrix prefixes recognition.
+
+    Return tuple ``(sign, integer, dot, fractional, exponent, prefix)``, where each entry has structure ``(begin, end, text)``.
+    Return ``None`` if string is unrecognizable.
     """
     m=re.match(_SI_float_re,s)
     if m==None:
@@ -42,8 +43,9 @@ def parse_float(s):
     return tuple([(b,e,t) for (b,e),t in zip(m.regs[1:],g)])
 def pos_to_order(s,pos):
     """
-    For a given string representation of float and position in the string, get decimal order for this position.
-    Return None if string is un-parsable or position is out of range (not in mantissa section of the number). 
+    For a given string representation of a float and position in the string, get the decimal order for this position.
+
+    Return ``None`` if string is un-parsable or position is out of range (not in mantissa section of the number). 
     """
     parsed_value=parse_float(s)
     if parsed_value==None:
@@ -67,9 +69,10 @@ def pos_to_order(s,pos):
     return order+affected_digit
 def order_to_pos(s,order):
     """
-    For a given string representation of float and decimal order, get position in the string corresponding to this order.
+    For a given string representation of float and decimal order, get the position in the string corresponding to this order.
+
     If order is out of range for a given representation, truncates to most/least significant digit position.
-    Return None if string is un-parsable. 
+    Return ``None`` if string is un-parsable. 
     """
     parsed_value=parse_float(s)
     if parsed_value==None:
@@ -96,8 +99,9 @@ def order_to_pos(s,order):
 
 def str_to_float(s):
     """
-    Return float value of a string, while recognizing SI metric prefixes.
-    Raise error if string is unrecognizable. 
+    Return float value of a string, with metrix prefixes recognition.
+
+    Raise ``ValueError`` if string is unrecognizable. 
     """
     if len(s)==0:
         raise ValueError()
@@ -111,12 +115,16 @@ def str_to_float(s):
         prefix=1.
     return float(s)*prefix
 def is_integer(n, tolerance=0.):
+    """
+    Check if `n` is less than `tolerance` away from the nearest integer.
+    """
     return abs(n-round(n))<=tolerance
-def float_to_str(n, digits=9, trailing_zeros=False):
+def float_to_str_SI(n, digits=9, trailing_zeros=False):
     """
     Represent float using SI metric prefixes.
-    For orders >=27 and <-24 use usual scientific notation with order being multiple of 3.
-    If trailing_zeros==True, then digits define precision, rather than number significant digits
+
+    For orders ``>=27`` and ``<-24`` use usual scientific notation with order being multiple of 3.
+    If ``trailing_zeros==True``, then digits define precision, rather than number significant digits
     """
     if n==0:
         if trailing_zeros:
@@ -138,6 +146,18 @@ def float_to_str(n, digits=9, trailing_zeros=False):
 
 
 class FloatFormatter(object):
+    """
+    Floating point number formatter.
+
+    Callable object with takes a number as an argument and returns is string representation.
+
+    Args:
+        output_format(str): can be ``"auto"`` (use standard Python conversion), ``"SI"`` (use SI prefixes if possible), or ``"sci"`` (scientific "E" notation).
+        digits (int): if ``trailing_zeros==False``, determines the number of significant digits; otherwise, determines precision (number of digits after decimal point).
+        add_trailing_zeros (bool): if ``True``, always show fixed number of digits after the decimal point, with zero padding if necessary.
+        leading_zeros (bool): determines the minimal size of the integer part (before the deicmal point) of the number; pads with zeros if necessary.
+        explicit_sign (bool): if ``True``, always add explicit plus sign.
+    """
     def __init__(self, output_format="auto", digits=9, add_trailing_zeros=False, leading_zeros=0, explicit_sign=False):
         "If trailing_zeros==True, then digits define precision, rather than number significant digits"
         object.__init__(self)
@@ -163,7 +183,7 @@ class FloatFormatter(object):
             else:
                 dig="{{:.{:d}E}}".format(self.digits).format(abs(value))
         else:
-            dig=float_to_str(abs(value),self.digits,self.add_trailing_zeros)
+            dig=float_to_str_SI(abs(value),self.digits,self.add_trailing_zeros)
         int_part_len=dig.find(".")
         if int_part_len<0:
             int_part_len=len(dig)
@@ -176,12 +196,25 @@ class FloatFormatter(object):
         return dig
         
 class IntegerFormatter(object):
+    """
+    Simple integer number formatter.
+
+    Callable object with takes a number as an argument and returns is string representation.
+
+    For more flexibility (e.g., adding leading zeros) it is possible to use :class:`FloatFormatter` with ``digits=0`` and ``add_trailing_zeros=True``.
+    """
     def __init__(self):
         object.__init__(self)
     def __call__(self, value):
         return "{:d}".format(int(value))
 
 def as_formatter(formatter):
+    """
+    Turn an object into a formatter.
+
+    Can be a callable object (returned as is), a string (``"float"`` or ``"int"``),
+    or a tuple starting with ``"float"`` which containes arguments to the :class:`FloatFormatter`.
+    """
     if hasattr(formatter,"__call__"):
         return formatter
     if formatter=="float":

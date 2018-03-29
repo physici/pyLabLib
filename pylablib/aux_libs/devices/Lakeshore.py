@@ -9,7 +9,7 @@ class Lakeshore218(SCPI.SCPIDevice):
     Lakeshore 218 temperature controller.
     """
     def __init__(self, conn, timeout=1.):
-        conn=backend.SerialDeviceBackend.combine_serial_conn(conn,("COM1",9600,7,'E',1))
+        conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",9600,7,'E',1))
         SCPI.SCPIDevice.__init__(self,conn,backend="serial",timeout=timeout,term_write="\r\n",term_read="\r\n")
     
     def is_enabled(self, channel):

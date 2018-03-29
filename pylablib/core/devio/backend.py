@@ -6,6 +6,7 @@ from ..utils.py3 import anystring
 from builtins import range, zip
 
 import time
+import re
 from ..utils import funcargparse, general, log, net
 import contextlib
 
@@ -32,6 +33,21 @@ class IDeviceBackend(object):
         self.conn=conn
         self.term_write=term_write
         self.term_read=term_read
+
+    _conn_params=["addr"]
+    _default_conn=[None]
+    @classmethod
+    def _conn_to_dict(cls, conn):
+        if isinstance(conn, dict):
+            return conn
+        if isinstance(conn, (tuple,list)):
+            return dict(zip(cls._conn_params,conn))
+        return {cls._conn_params[0]:conn}
+    @classmethod
+    def combine_conn(cls, conn1, conn2):
+        conn=cls._conn_to_dict(conn2).copy()
+        conn.update(cls._conn_to_dict(conn1))
+        return conn
     
     def open(self):
         """Open the connection."""
@@ -363,22 +379,9 @@ try:
         
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts","dsrdtr"]
         _default_conn=["COM1",19200,8,"N",1,0,0,0]
-    
-        @classmethod
-        def _conn_to_dict(cls, conn):
-            if isinstance(conn, dict):
-                return conn
-            if isinstance(conn, (tuple,list)):
-                return dict(zip(cls._conn_params,conn))
-            return {"port":conn}
-        @classmethod
-        def combine_serial_conn(cls, conn1, conn2):
-            conn=cls._conn_to_dict(conn2).copy()
-            conn.update(cls._conn_to_dict(conn1))
-            return conn
 
         def __init__(self, conn, timeout=10., term_write=None, term_read=None, connect_on_operation=False, open_retry_times=3, no_dtr=False):
-            conn_dict=self.combine_serial_conn(conn,self._default_conn)
+            conn_dict=self.combine_conn(conn,self._default_conn)
             if term_write is None:
                 term_write="\r\n"
             if term_read is None:
@@ -599,22 +602,9 @@ try:
         
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts"]
         _default_conn=[None,9600,8,"N",1,0,0]
-    
-        @classmethod
-        def _conn_to_dict(cls, conn):
-            if isinstance(conn, dict):
-                return conn
-            if isinstance(conn, (tuple,list)):
-                return dict(zip(cls._conn_params,conn))
-            return {"port":conn}
-        @classmethod
-        def combine_serial_conn(cls, conn1, conn2):
-            conn=cls._conn_to_dict(conn2).copy()
-            conn.update(cls._conn_to_dict(conn1))
-            return conn
 
         def __init__(self, conn, timeout=10., term_write=None, term_read=None, open_retry_times=3):
-            conn_dict=self.combine_serial_conn(conn,self._default_conn)
+            conn_dict=self.combine_conn(conn,self._default_conn)
             if term_write is None:
                 term_write="\r\n"
             if term_read is None:
@@ -813,8 +803,8 @@ class NetworkDeviceBackend(IDeviceBackend):
             term_read="\r\n"
         if isinstance(term_read,anystring):
             term_read=[term_read]
-        if not isinstance(conn,tuple):
-            conn=self._get_addr_port(conn)
+        conn=self._conn_to_dict(conn)
+        self._split_addr(conn)
         IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
         try:
             self.open()
@@ -824,16 +814,20 @@ class NetworkDeviceBackend(IDeviceBackend):
         except self.Error as e:
             raise self.BackendOpenError(e)
     
-    @staticmethod
-    def _get_addr_port(conn):
-        conn=conn.split(":")
-        if len(conn)!=2:
+    _conn_params=["addr","port"]
+    _default_conn=["127.0.0.1",80]
+    @classmethod
+    def _split_addr(conn):
+        addr=conn["addr"]
+        addr_split=addr.split(":")
+        if len(addr_split)==2:
+            conn["addr"],conn["port"]=addr_split[0],int(addr_split[1])
+        elif len(addr_split)>2:
             raise ValueError("invalid device address: {}".format(conn))
-        return conn[0],int(conn[1])
     def open(self):
         """Open the connection."""
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen")
-        self.socket.connect(*self.conn)
+        self.socket.connect(self.conn["addr"],self.conn["port"])
     def close(self):
         """Close the connection."""
         self.socket.close()
@@ -936,20 +930,45 @@ _backends["network"]=NetworkDeviceBackend
     
     
     
+_serial_re=re.compile(r"^com\d+",re.IGNORECASE)
+def _is_serial_addr(addr):
+    return isinstance(addr,anystring) and bool(_serial_re.match(addr))
+_network_re=re.compile(r"(\d+\.){3}\d+(:\d+)?",re.IGNORECASE)
+def _is_network_addr(addr):
+    return isinstance(addr,anystring) and bool(_network_re.match(addr))
+def autodetect_backend(conn):
+    """
+    Try to determine the backend by the connection.
 
-
-    
-def new_backend(conn, timeout=None, backend="visa", **kwargs):
+    The assummed default backend is ``'visa'``.
+    """
+    if isinstance(conn, (tuple,list)):
+        conn=conn[0]
+    elif isinstance(conn, dict):
+        if "addr" in conn and _is_network_addr(conn["addr"]):
+            return "network"
+        if "port" in conn and _is_serial_addr(conn["port"]):
+            return "serial"
+        return "visa"
+    if _is_network_addr(conn):
+        return "network"
+    if _is_serial_addr(conn):
+        return "serial"
+    return "visa"
+def new_backend(conn, timeout=None, backend="auto", **kwargs):
     """
     Build new backend with the supplied parameters.
     
     Args:
         conn: Connection parameters (depend on the backend).
         timeout (float): Default timeout (in seconds).
-        backend (str): Backend type. Available backends are ``'visa'`` and ``'serial'``. 
+        backend (str): Backend type. Available backends are ``'auto'`` (try to autodetect), ``'visa'``, ``'serial'``, ``'ft232'``, and ``'network'``.
+        **kwargs: parameters sent to the backend.
     """
     if isinstance(conn,IDeviceBackend):
         return conn
+    if backend=="auto":
+        backend=autodetect_backend(conn)
     funcargparse.check_parameter_range(backend,"backend",_backends)
     return _backends[backend](conn,timeout=timeout,**kwargs)
 

@@ -1,4 +1,5 @@
 class LimitError(ArithmeticError):
+    """Error raised when the value is out of limits and can't be coerced."""
     def __init__(self, value, lower_limit=None, upper_limit=None):
         self.value=value
         self.lower_limit=lower_limit
@@ -13,9 +14,17 @@ class LimitError(ArithmeticError):
         return "value {0} is out of limits ({1}, {2})".format(self.value, lb,hb)
 class NumberLimit(object):
     """
-    Class that given a number casts it to appropriate datatype and checks if it's inside given limits.
-    If lower_limit or upper_limit are None, they are assumed to be infinite.
-    The number is truncated to an appropriate bound if action=='truncate' or raises LimitError if action=='ignore'.
+    Number limiter, which checks validity of user inputs.
+
+    Callable object with takes a number as an argument and either returns its coerced version (or the number itself, if it is within limits),
+    or raises :exc:`LimitError` if it should be ignored.
+
+    Args:
+        lower_limit: lower limit (inclusive), or ``None`` if there is no limit.
+        upper_limit: upper limit (inclusive), or ``None`` if there is no limit.
+        action (str): action taken if the number is out of limits; either ``"coerce"`` (return the closest valid value),
+            or ``"ignore"`` (raise :exc:`LimitError`).
+        value_type (str): determines value type coersion; can be ``None`` (do nothing, only check limits), ``"float"`` (cast to float), or ``"int"`` (cast to integer).
     """
     def __init__(self, lower_limit=None, upper_limit=None, action="ignore", value_type=None):
         object.__init__(self)
@@ -58,6 +67,11 @@ class NumberLimit(object):
             return value
 
 def filter_limiter(pred):
+    """
+    Turn a perdicator into a limiter.
+
+    Returns a function that raises :exc:`LimitError` if the predicate is false.
+    """
     def wrapped(v):
         if not pred(v):
             raise LimitError(v)
@@ -65,6 +79,11 @@ def filter_limiter(pred):
     return wrapped
 
 def as_limiter(limiter):
+    """
+    Turn an object into a limiter.
+
+    Can be a callable object (returned as is) or a tuple which is used as a list of arguments to the :class:`NumberLimit` object.
+    """
     if hasattr(limiter,"__call__"):
         return limiter
     if isinstance(limiter,tuple):

@@ -14,7 +14,7 @@ class TPG261(backend.IBackendWrapper):
     TPG 261 series pressure gauge.
     """
     def __init__(self, conn, timeout=3.):
-        conn=backend.SerialDeviceBackend.combine_serial_conn(conn,("COM1",9600))
+        conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",9600))
         instr=backend.SerialDeviceBackend(conn,timeout=timeout,term_write="",term_read="\r\n")
         backend.IBackendWrapper.__init__(self,instr)
     
