@@ -22,6 +22,9 @@ class ANCDevice(backend_mod.IBackendWrapper):
         backend_mod.IBackendWrapper.__init__(self,instr)
         self.open()
         self._correction={}
+        self._add_settings_node("voltages",self.get_all_voltages,self.set_all_voltages)
+        self._add_settings_node("offsets",self.get_all_offsets,self.set_all_offsets)
+        self._add_settings_node("frequencies",self.get_all_frequencies,self.set_all_frequencies)
 
     def open(self):
         """Open the backend."""
@@ -91,6 +94,30 @@ class ANCDevice(backend_mod.IBackendWrapper):
     def set_frequency(self, axis, freq):
         self.query("setf {} {}".format(axis,freq))
         return self.get_frequency(axis)
+
+    def _get_all_axes_data(self, getter):
+        return dict([(a,getter(a)) for a in self.axes])
+    def get_all_voltages(self):
+        return self._get_all_axes_data(self.get_voltage)
+    def get_all_offsets(self):
+        return self._get_all_axes_data(self.get_offset)
+    def get_all_frequencies(self):
+        return self._get_all_axes_data(self.get_frequency)
+    
+    def _set_all_axes_data(self, setter, values):
+        if isinstance(values,(tuple,list)):
+            values=dict(zip([self.axes,values]))
+        for a,v in values.items():
+            setter(a,v)
+    def set_all_voltages(self, voltages):
+        self._set_all_axes_data(self.set_voltage,voltages)
+        return self.get_all_voltages()
+    def set_all_offsets(self, offsets):
+        self._set_all_axes_data(self.set_offset,offsets)
+        return self.get_all_offsets()
+    def set_all_frequencies(self, frequencies):
+        self._set_all_axes_data(self.set_frequency,frequencies)
+        return self.get_all_frequencies()
 
     def set_axis_correction(self, axis, factor=1.):
         self._correction[axis]=factor

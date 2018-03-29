@@ -817,7 +817,7 @@ class NetworkDeviceBackend(IDeviceBackend):
     _conn_params=["addr","port"]
     _default_conn=["127.0.0.1",80]
     @classmethod
-    def _split_addr(conn):
+    def _split_addr(cls, conn):
         addr=conn["addr"]
         addr_split=addr.split(":")
         if len(addr_split)==2:
