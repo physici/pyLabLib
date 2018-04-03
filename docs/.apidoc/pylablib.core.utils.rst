@@ -4,6 +4,14 @@ pylablib\.core\.utils package
 Submodules
 ----------
 
+pylablib\.core\.utils\.ctypes\_wrap module
+------------------------------------------
+
+.. automodule:: pylablib.core.utils.ctypes_wrap
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib\.core\.utils\.dictionary module
 ----------------------------------------
 
