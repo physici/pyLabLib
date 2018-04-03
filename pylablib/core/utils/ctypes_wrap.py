@@ -1,5 +1,8 @@
 from . import functions
+from ..devio import data_format
 from .funcargparse import getdefault
+
+import numpy as np
 
 import ctypes
 import collections
@@ -156,6 +159,19 @@ def strprep(l):
         return ctypes.create_string_buffer(l)
     return prep
 
+def buffprep(size_arg_pos, dtype):
+    el_size=data_format.DataFormat.from_desc(dtype).size
+    def prep(*args, **kwargs):
+        n=args[size_arg_pos]
+        return ctypes.create_string_buffer(n*el_size)
+    return prep
+def buffconv(size_arg_pos, dtype):
+    dformat=data_format.DataFormat.from_desc(dtype)
+    def conv(buff, *args, **kwargs):
+        n=args[size_arg_pos]
+        data=ctypes.string_at(buff,n*dformat.size)
+        return np.fromstring(data,dtype=dformat.to_desc("numpy"))
+    return conv
 
 class CTypesEnum(object):
     def __init__(self):

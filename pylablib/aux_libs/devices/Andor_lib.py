@@ -546,9 +546,9 @@ try:
 	GetAcquisitionProgress=ctf_rvals(lib.GetAcquisitionProgress, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
 	GetStatus=ctf_rval(lib.GetStatus, ctypes.c_int32, [None], [])
 	WaitForAcquisition=ctf_simple(lib.WaitForAcquisition, [], [])
-	WaitForAcquisitionTimeOut=ctf_simple(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"], passing={20024}) # finish quietly on timeout
+	WaitForAcquisitionTimeOut=ctf_simple(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"])
 	WaitForAcquisitionByHandle=ctf_simple(lib.WaitForAcquisitionByHandle, [ctypes.c_int32], ["handle"])
-	WaitForAcquisitionByHandleTimeOut=ctf_simple(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"], passing={20024}) # finish quietly on timeout
+	WaitForAcquisitionByHandleTimeOut=ctf_simple(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"])
 	CancelWait=ctf_simple(lib.CancelWait, [], [])
 
 	SetReadMode=ctf_simple(lib.SetReadMode, [ctypes.c_uint32], ["mode"])

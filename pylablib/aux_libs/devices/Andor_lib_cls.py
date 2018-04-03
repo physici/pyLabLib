@@ -377,7 +377,7 @@ class AndroLib(object):
 		self.GetCurrentCamera=wrapper(lib.GetCurrentCamera, [ctypes.c_int32], [None])
 		self.SetCurrentCamera=wrapper(lib.SetCurrentCamera, [ctypes.c_int32], ["handle"])
 
-		self.GetCapabilities=wrapper(lib.GetCapabilities, [AndorCapabilities], [None], rvprep=[AndorCapabilities_prep], rvocnv=[AndorCapabilities_conv])
+		self.GetCapabilities=wrapper(lib.GetCapabilities, [AndorCapabilities], [None], rvprep=[AndorCapabilities_prep], rconv=[AndorCapabilities_conv])
 		self.GetControllerCardModel=wrapper(lib.GetControllerCardModel, [ctypes.c_char_p], [None], rvprep=strprep)
 		self.GetHeadModel=wrapper(lib.GetHeadModel, [ctypes.c_char_p], [None], rvprep=strprep)
 		self.GetCameraSerialNumber=wrapper(lib.GetCameraSerialNumber, [ctypes.c_int32], [None])
@@ -459,9 +459,9 @@ class AndroLib(object):
 		self.GetAcquisitionProgress=wrapper(lib.GetAcquisitionProgress, [ctypes.c_int32,ctypes.c_int32], [None,None])
 		self.GetStatus=wrapper(lib.GetStatus, [ctypes.c_int32], [None])
 		self.WaitForAcquisition=wrapper(lib.WaitForAcquisition, [], [])
-		self.WaitForAcquisitionTimeOut=wrapper(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"], errcheck=errcheck(passing={20024})) # finish quietly on timeout
+		self.WaitForAcquisitionTimeOut=wrapper(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"]))
 		self.WaitForAcquisitionByHandle=wrapper(lib.WaitForAcquisitionByHandle, [ctypes.c_int32], ["handle"])
-		self.WaitForAcquisitionByHandleTimeOut=wrapper(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"], errcheck=errcheck(passing={20024})) # finish quietly on timeout
+		self.WaitForAcquisitionByHandleTimeOut=wrapper(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"]))
 		self.CancelWait=wrapper(lib.CancelWait, [], [])
 
 		self.SetReadMode=wrapper(lib.SetReadMode, [ctypes.c_uint32], ["mode"])
@@ -469,7 +469,7 @@ class AndroLib(object):
 		self.GetMinimumImageLength=ctypes.c_int32(lib.GetMinimumImageLength, [ctypes.c_int32], [None])
 		self.SetSingleTrack=wrapper(lib.SetSingleTrack, [ctypes.c_int32,ctypes.c_int32], ["center","height"])
 		self.SetMultiTrack=wrapper(lib.SetMultiTrack, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["number","height","offset",None,None])
-		ctypes_wrap.setup_func(lib.SetRandomTracks ,[ctypes.c_int32,ctypes.POINTER(ctypes.c_int32)])
+		ctypes_wrap.setup_func(lib.SetRandomTracks ,[ctypes.c_int32,ctypes.POINTER(ctypes.c_int32)], errcheck=errcheck)
 		def SetRandomTracks(tracks):
 			ntracks=len(tracks)
 			areas=(ctypes.c_int32*(ntracks*2))(*[b for t in tracks for b in t])
@@ -478,38 +478,31 @@ class AndroLib(object):
 		self.SetImage=wrapper(lib.SetImage, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["hbin","vbin","hstart","hend","vstart","vend"])
 		self.GetDetector=wrapper(lib.GetDetector, [ctypes.c_int32,ctypes.c_int32], [None,None])
 		self.GetSizeOfCircularBuffer=wrapper(lib.GetSizeOfCircularBuffer, [ctypes.c_int32], [None])
-
-		def buffer32_prep(size):
-			return ctypes.create_string_buffer(size*4)
-		def buffer16_prep(size):
-			return ctypes.create_string_buffer(size*2)
-		def buffer32_conv(buff, size):
-			return np.fromstring(ctypes.string_at(buff,size*4),dtype="<u4")
-		def buffer16_conv(buff, size):
-			return np.fromstring(ctypes.string_at(buff,size*2),dtype="<u2")
+		buffer16_prep=ctypes_wrap.buffprep(0,"<u2")
+		buffer32_prep=ctypes_wrap.buffprep(0,"<u4")
+		buffer16_conv=ctypes_wrap.buffconv(0,"<u2")
+		buffer32_conv=ctypes_wrap.buffconv(0,"<u4")
 		self.GetOldestImage  =wrapper(lib.GetOldestImage  , [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer32_prep], rvconv=[buffer32_conv])
 		self.GetOldestImage16=wrapper(lib.GetOldestImage16, [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer16_prep], rvconv=[buffer16_conv])
 		self.GetMostRecentImage  =wrapper(lib.GetMostRecentImage  , [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer32_prep], rvconv=[buffer32_conv])
 		self.GetMostRecentImage16=wrapper(lib.GetMostRecentImage16, [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer16_prep], rvconv=[buffer16_conv])
 		self.GetNumberNewImages=wrapper(lib.GetNumberNewImages, [ctypes.c_int32,ctypes.c_int32], [None,None])
-		ctypes_wrap.setup_func(lib.GetImages  ,[ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.POINTER(ctypes.c_int32),ctypes.POINTER(ctypes.c_int32)])
-		ctypes_wrap.setup_func(lib.GetImages16,[ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.POINTER(ctypes.c_int32),ctypes.POINTER(ctypes.c_int32)])
-		def GetImages(first, last, size):
+		def images_buffer16_prep(first, last, size):
 			buffsize=max(last-first+1,1)*size
-			buff=buffer32_prep(buffsize)
-			vfirst=ctypes.c_int32()
-			vlast=ctypes.c_int32()
-			lib.GetImages(first,last,buff,size,ctypes.byref(vfirst),ctypes.byref(vlast))
-			return buffer32_conv(buff,buffsize),vfirst.value,vlast.value
-		def GetImages16(first, last, size):
+			return buffer16_prep(buffsize)
+		def images_buffer32_prep(first, last, size):
 			buffsize=max(last-first+1,1)*size
-			buff=buffer16_prep(buffsize)
-			vfirst=ctypes.c_int32()
-			vlast=ctypes.c_int32()
-			lib.GetImages16(first,last,buff,buffsize,ctypes.byref(vfirst),ctypes.byref(vlast))
-			return buffer16_conv(buff,buffsize),vfirst.value,vlast.value
-		self.GetImages=GetImages
-		self.GetImages16=GetImages16
+			return buffer32_prep(buffsize)
+		def images_buffer16_conv(buff, first, last, size):
+			buffsize=max(last-first+1,1)*size
+			return buffer16_conv(buff,buffsize)
+		def images_buffer32_conv(buff, first, last, size):
+			buffsize=max(last-first+1,1)*size
+			return buffer32_conv(buff,buffsize)
+		self.GetImages=wrapper(lib.GetImages, [ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["first","last","size",None,None,None],
+			rvprep=[images_buffer32_prep,None,None], rvconv=[images_buffer32_conv,None,None])
+		self.GetImages16=wrapper(lib.GetImages16, [ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["first","last","size",None,None,None],
+			rvprep=[images_buffer16_prep,None,None], rvconv=[images_buffer16_conv,None,None])
 
 	AmpModeSimple=collections.namedtuple("AmpModeSimple",["channel","oamp","hsspeed","preamp"])
 	AmpModeFull=collections.namedtuple("AmpModeFull",["channel","channel_bitdepth","oamp","oamp_kind","hsspeed","hsspeed_MHz","preamp","preamp_gain"])
@@ -529,7 +522,7 @@ class AndroLib(object):
 						preamp_gain=self.GetPreAmpGain(pa)
 						try:
 							self.IsPreAmpGainAvailable(ch,oamp,hssp,pa)
-							modes.append(self.AmpModeFull(ch,bit_depth,oamp,_oamp_kinds[oamp],hssp,hsspeed_hz,pa,preamp_gain))
+							modes.append(self.AmpModeFull(ch,bit_depth,oamp,self._oamp_kinds[oamp],hssp,hsspeed_hz,pa,preamp_gain))
 						except AndorLibError:
 							pass
 		return modes

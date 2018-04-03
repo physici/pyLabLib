@@ -11,7 +11,8 @@ import contextlib
 
 class AndorError(RuntimeError):
     "Generic Andor camera error."
-
+class AndorTimeoutError(AndorError):
+    "Timeout while waiting."
 
 def get_cameras_number():
     return lib.GetAvailableCameras()
@@ -351,12 +352,32 @@ class AndorCamera(backend.IBackendWrapper):
     def get_progress(self):
         self._camsel()
         return self.AcqProgress(*lib.GetAcquisitionProgress())
-    def wait_for_frame(self, timeout=None):
-        self._camsel()
-        if timeout is None:
-            lib.WaitForAcquisitionByHandle(self.handle)
+    def wait_for_frame(self, since="lastwait", timeout=20.):
+        funcargparse.check_parameter_range(since,"since",{"lastread","lastwait","now"})
+        if since=="lastwait":
+            self._camsel()
+            if timeout is None:
+                lib.WaitForAcquisitionByHandle(self.handle)
+            else:
+                try:
+                    lib.WaitForAcquisitionByHandleTimeOut(self.handle,int(timeout*1E3))
+                except AndorLibError as e:
+                    if e.text_code=="DRV_NO_NEW_DATA":
+                        raise AndorTimeoutError
+                    else:
+                        raise
+        elif since=="lastread":
+            self._camsel()
+            while not self.get_new_images_range():
+                self.wait_for_frame(since="lastwait",timeout=timeout)
         else:
-            lib.WaitForAcquisitionByHandleTimeOut(self.handle,int(timeout*1E3))
+            rng=self.get_new_images_range()
+            last_img=rng[1] if rng else None
+            while True:
+                self.wait_for_frame(since="lastwait",timeout=timeout)
+                rng=self.get_new_images_range()
+                if rng and (last_img is None or rng[1]>last_img):
+                    return
     def cancel_wait(self):
         self._camsel()
         lib.CancelWait()
@@ -419,12 +440,18 @@ class AndorCamera(backend.IBackendWrapper):
         if mode=="image":
             (hstart,hend,vstart,vend,hbin,vbin)=params
             return (vend-vstart+1)//vbin,(hend-hstart+1)//hbin
-    def read_newest_image(self, dim=None):
+    def read_newest_image(self, dim=None, peek=False):
         if dim is None:
             dim=self.get_data_dimensions()
         self._camsel()
-        data=lib.GetMostRecentImage16(dim[0]*dim[1])
-        return data.reshape((dim[0],dim[1])).transpose()
+        if peek:
+            data=lib.GetMostRecentImage16(dim[0]*dim[1])
+            return data.reshape((dim[0],dim[1])).transpose()
+        else:
+            rng=self.get_new_images_range()
+            if rng:
+                return self.read_multiple_images([rng[1],rng[1]],dim=dim)[0,:,:]
+            raise
     def read_oldest_image(self, dim=None):
         if dim is None:
             dim=self.get_data_dimensions()
@@ -449,7 +476,7 @@ class AndorCamera(backend.IBackendWrapper):
         if dim is None:
             dim=self.get_data_dimensions()
         if rng is None:
-            return np.zeros((-1,dim[1],dim[0]))
+            return np.zeros((0,dim[1],dim[0]))
         data,vmin,vmax=lib.GetImages16(rng[0],rng[1],dim[0]*dim[1])
         return np.transpose(data.reshape((-1,dim[0],dim[1])),axes=[0,2,1])
 
