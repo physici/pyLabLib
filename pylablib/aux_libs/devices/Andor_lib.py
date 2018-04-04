@@ -1,13 +1,9 @@
-from ...core.utils import functions
+from ...core.utils import ctypes_wrap
 from .misc import default_lib_folder, load_lib
 
 import ctypes
 import collections
 import os.path
-
-import numpy as np
-
-
 
 ##### Constants #####
 
@@ -314,92 +310,6 @@ def errcheck(passing=None):
 		return Andor_statuscodes[result]
 	return checker
 
-
-def setup_func(func, argtypes, passing=None):
-	func.argtypes=argtypes
-	func.restype=ctypes.c_uint32
-	func.errcheck=errcheck(passing=passing)
-
-def ctf_simple(func, argtypes, argnames, passing=None):
-	sign=functions.FunctionSignature(argnames,name=func.__name__)
-	setup_func(func,argtypes,passing=passing)
-	def wrapped_func(*args):
-		func(*args)
-	return sign.wrap_function(wrapped_func)
-
-def _get_value(rval):
-	try:
-		return rval.value
-	except AttributeError:
-		return rval
-def ctf_rval(func, rtype, argtypes, argnames, prep_rval=None, conv_rval=None, passing=None):
-	rval_idx=argtypes.index(None)
-	argtypes=list(argtypes)
-	argtypes[rval_idx]=ctypes.POINTER(rtype)
-	sign=functions.FunctionSignature(argnames,name=func.__name__)
-	setup_func(func,argtypes,passing=passing)
-	def wrapped_func(*args):
-		rval=rtype()
-		if prep_rval:
-			rval=prep_rval(rval,*args)
-		nargs=args[:rval_idx]+(ctypes.byref(rval),)+args[rval_idx:]
-		func(*nargs)
-		if conv_rval:
-			return conv_rval(rval,*args)
-		else:
-			return _get_value(rval)
-	return sign.wrap_function(wrapped_func)
-def ctf_rval_str(func, maxlen, argtypes, argnames, passing=None):
-	rval_idx=argtypes.index(None)
-	argtypes=list(argtypes)
-	argtypes[rval_idx]=ctypes.c_char_p
-	sign=functions.FunctionSignature(argnames,name=func.__name__)
-	setup_func(func,argtypes,passing=passing)
-	def wrapped_func(*args):
-		rval=ctypes.create_string_buffer(maxlen)
-		nargs=args[:rval_idx]+(rval,)+args[rval_idx:]
-		func(*nargs)
-		return rval.value
-	return sign.wrap_function(wrapped_func)
-def ctf_rvals(func, rtypes, argtypes, argnames, passing=None):
-	template=list(argtypes)
-	argtypes=list(argtypes)
-	ridx=0
-	for i,t in enumerate(argtypes):
-		if t is None:
-			argtypes[i]=ctypes.POINTER(rtypes[ridx])
-			ridx+=1
-	sign=functions.FunctionSignature(argnames,name=func.__name__)
-	setup_func(func,argtypes,passing=passing)
-	def wrapped_func(*args):
-		rvals=[rt() for rt in rtypes]
-		nargs=[]
-		ridx=0
-		aidx=0
-		for i,t in enumerate(template):
-			if t is None:
-				nargs.append(rvals[ridx])
-				ridx+=1
-			else:
-				nargs.append(args[aidx])
-				aidx+=1
-		func(*nargs)
-		return tuple([_get_value(rv) for rv in rvals])
-	return sign.wrap_function(wrapped_func)
-
-def ctf_buff(func, argtypes, argnames, build_buff=None, conv_buff=None, passing=None):
-	buff_idx=argtypes.index(None)
-	argtypes=list(argtypes)
-	argtypes[buff_idx]=ctypes.c_char_p
-	sign=functions.FunctionSignature(argnames,name=func.__name__)
-	setup_func(func,argtypes,passing=passing)
-	def wrapped_func(*args):
-		buff=build_buff(*args)
-		nargs=args[:buff_idx]+(buff,)+args[buff_idx:]
-		func(*nargs)
-		return conv_buff(buff,*args)
-	return sign.wrap_function(wrapped_func)
-
 def _int_to_enumlst(num, enums):
 	lst=[]
 	for k,v in enums.items():
@@ -421,227 +331,221 @@ class AndorCapabilities(ctypes.Structure):
 				("EMGainCapability",ctypes.c_int32),
 				("FTReadModes",ctypes.c_int32) ]
 AndorCapabilities_p=ctypes.POINTER(AndorCapabilities)
-def AndorCapabilities_prep(val, *args):
-	val.Size=ctypes.sizeof(val)
-	return val
-TAndorCapabilities=collections.namedtuple("TAndorCapabilities",
-		["AcqModes", "ReadModes", "TriggerModes", "CameraType", "PixelMode", "SetFunctions", "GetFunctions", "Features", "PCICard", "EMGainCapability", "FTReadModes"])
-def AndorCapabilities_conv(val, *args):
-	AcqModes=_int_to_enumlst(val.AcqModes,Andor_AcqMode)
-	ReadModes=_int_to_enumlst(val.ReadModes,Andor_ReadMode)
-	TriggerModes=_int_to_enumlst(val.AcqModes,Andor_TriggerMode)
-	CameraType=Andor_CameraType.get(val.CameraType&0x1F,"UNKNOWN")
-	PixelMode=_int_to_enumlst(val.PixelMode&0xFFFF,Andor_PixelMode)+[Andor_PixelMode.get(val.PixelMode&0xFFFF0000,"UNKNOWN")]
-	SetFunctions=_int_to_enumlst(val.SetFunctions,Andor_SetFunction)
-	GetFunctions=_int_to_enumlst(val.GetFunctions,Andor_GetFunction)
-	Features=_int_to_enumlst(val.Features,Andor_Features)
-	EMGainCapability=_int_to_enumlst(val.EMGainCapability,Andor_EMGain)
-	FTReadModes=_int_to_enumlst(val.FTReadModes,Andor_ReadMode)
-	return TAndorCapabilities(AcqModes,ReadModes,TriggerModes,CameraType,PixelMode,SetFunctions,GetFunctions,Features,val.PCICard,EMGainCapability,FTReadModes)
+class CAndorCapabilities(ctypes_wrap.StructWrap):
+	_struct=AndorCapabilities
+	_tup={
+		"AcqModes": (lambda x: _int_to_enumlst(x,Andor_AcqMode)),
+		"ReadModes": (lambda x: _int_to_enumlst(x,Andor_ReadMode)),
+		"TriggerModes": (lambda x: _int_to_enumlst(x,Andor_TriggerMode)),
+		"CameraType": (lambda x: Andor_CameraType.get(x&0x1F,"UNKNOWN")),
+		"PixelMode": (lambda x: _int_to_enumlst(x&0xFFFF,Andor_PixelMode)+[Andor_PixelMode.get(x&0xFFFF0000,"UNKNOWN")]),
+		"SetFunctions": (lambda x: _int_to_enumlst(x,Andor_SetFunction)),
+		"GetFunctions": (lambda x: _int_to_enumlst(x,Andor_GetFunction)),
+		"Features": (lambda x: _int_to_enumlst(x,Andor_Features)),
+		"EMGainCapability": (lambda x: _int_to_enumlst(x,Andor_EMGain)),
+		"FTReadModes": (lambda x: _int_to_enumlst(x,Andor_ReadMode))
+	}
+	def prep(self, struct):
+		struct.Size=ctypes.sizeof(struct)
+		return struct
 
 
 
 
-
-
-try:
+class AndorLib(object):
+	def __init__(self):
+		object.__init__(self)
+		self._initialized=False
 
 	lib_path=os.path.join(default_lib_folder,"atmcd.dll")
-	lib=load_lib(lib_path)
-	##### Functions definitions #####
+	def initlib(self):
+		if self._initialized:
+			return
 
-	Initialize=ctf_simple(lib.Initialize, [ctypes.c_char_p], ["dir"])
-	ShutDown=ctf_simple(lib.ShutDown, [], [])
-	GetAvailableCameras=ctf_rval(lib.GetAvailableCameras, ctypes.c_int32, [None], [])
-	GetCameraHandle=ctf_rval(lib.GetCameraHandle, ctypes.c_int32, [ctypes.c_uint32,None], ["idx"])
-	GetCurrentCamera=ctf_rval(lib.GetCurrentCamera, ctypes.c_int32, [None], [])
-	SetCurrentCamera=ctf_simple(lib.SetCurrentCamera, [ctypes.c_int32], ["handle"])
+		self.lib=load_lib(self.lib_path)
+		lib=self.lib
 
-	GetCapabilities=ctf_rval(lib.GetCapabilities, AndorCapabilities, [None], [], prep_rval=AndorCapabilities_prep, conv_rval=AndorCapabilities_conv)
-	GetControllerCardModel=ctf_rval_str(lib.GetControllerCardModel, 256, [None], [])
-	GetHeadModel=ctf_rval_str(lib.GetHeadModel, 256, [None], [])
-	GetCameraSerialNumber=ctf_rval(lib.GetCameraSerialNumber, ctypes.c_int32, [None], [])
-	SetFanMode=ctf_simple(lib.SetFanMode, [ctypes.c_int32], ["mode"])
+		self.Andor_statuscodes=Andor_statuscodes
 
-	InAuxPort=ctf_rval(lib.InAuxPort, ctypes.c_int32, [ctypes.c_int32,None], ["port"])
-	OutAuxPort=ctf_simple(lib.OutAuxPort, [ctypes.c_int32,ctypes.c_int32], ["port","state"])
+		wrapper=ctypes_wrap.CTypesWrapper(restype=ctypes.c_uint32,errcheck=errcheck())
+		strprep=ctypes_wrap.strprep(256)
 
-	SetTriggerMode=ctf_simple(lib.SetTriggerMode, [ctypes.c_int32], ["mode"])
-	GetExternalTriggerTermination=ctf_rval(lib.GetExternalTriggerTermination, ctypes.c_int32, [None], [])
-	SetExternalTriggerTermination=ctf_simple(lib.SetExternalTriggerTermination, [ctypes.c_int32], ["termination"])
-	GetTriggerLevelRange=ctf_rvals(lib.GetTriggerLevelRange, [ctypes.c_float,ctypes.c_float], [None,None], [])
-	SetTriggerLevel=ctf_simple(lib.SetTriggerLevel, [ctypes.c_float], ["mode"])
-	SetTriggerInvert=ctf_simple(lib.SetTriggerInvert, [ctypes.c_int32], ["mode"])
-	IsTriggerModeAvailable=ctf_simple(lib.IsTriggerModeAvailable, [ctypes.c_int32], ["mode"])
-	SendSoftwareTrigger=ctf_simple(lib.SendSoftwareTrigger, [], [])
+		self.Initialize=wrapper(lib.Initialize, [ctypes.c_char_p], ["dir"])
+		self.ShutDown=wrapper(lib.ShutDown)
+		self.GetAvailableCameras=wrapper(lib.GetAvailableCameras, [ctypes.c_int32], [None])
+		self.GetCameraHandle=wrapper(lib.GetCameraHandle, [ctypes.c_uint32,ctypes.c_int32], ["idx",None])
+		self.GetCurrentCamera=wrapper(lib.GetCurrentCamera, [ctypes.c_int32], [None])
+		self.SetCurrentCamera=wrapper(lib.SetCurrentCamera, [ctypes.c_int32], ["handle"])
 
-	setup_func(lib.GetTemperature ,[ctypes.POINTER(ctypes.c_int32)], passing={20034,20035,20036,20037,20040})
-	def GetTemperature():
-		temp=ctypes.c_int32()
-		stat=lib.GetTemperature(ctypes.byref(temp))
-		return temp.value,stat
-	setup_func(lib.GetTemperatureF ,[ctypes.POINTER(ctypes.c_float)], passing={20034,20035,20036,20037,20040})
-	def GetTemperatureF():
-		temp=ctypes.c_float()
-		stat=lib.GetTemperatureF(ctypes.byref(temp))
-		return temp.value,stat
-	SetTemperature=ctf_simple(lib.SetTemperature, [ctypes.c_int32], ["temperature"])
-	GetTemperatureRange=ctf_rvals(lib.GetTemperatureRange, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
-	CoolerON=ctf_simple(lib.CoolerON, [], [])
-	CoolerOFF=ctf_simple(lib.CoolerOFF, [], [])
-	IsCoolerOn=ctf_rval(lib.IsCoolerOn, ctypes.c_int32, [None], [])
+		self.GetCapabilities=wrapper(lib.GetCapabilities, [AndorCapabilities], [None], rvprep=[CAndorCapabilities.prep_struct], rvconv=[CAndorCapabilities.tup_struct])
+		self.GetControllerCardModel=wrapper(lib.GetControllerCardModel, [ctypes.c_char_p], [None], rvprep=[strprep], rvref=[False])
+		self.GetHeadModel=wrapper(lib.GetHeadModel, [ctypes.c_char_p], [None], rvprep=[strprep], rvref=[False])
+		self.GetCameraSerialNumber=wrapper(lib.GetCameraSerialNumber, [ctypes.c_int32], [None])
+		self.SetFanMode=wrapper(lib.SetFanMode, [ctypes.c_int32], ["mode"])
 
-	GetNumberADChannels=ctf_rval(lib.GetNumberADChannels, ctypes.c_int32, [None], [])
-	SetADChannel=ctf_simple(lib.SetADChannel, [ctypes.c_int32], ["channel"])
-	GetBitDepth=ctf_rval(lib.GetBitDepth, ctypes.c_int32, [ctypes.c_int32,None], ["channel"])
-	GetNumberAmp=ctf_rval(lib.GetNumberAmp, ctypes.c_int32, [None], [])
-	SetOutputAmplifier=ctf_simple(lib.SetOutputAmplifier, [ctypes.c_int32], ["typ"])
-	IsAmplifierAvailable=ctf_simple(lib.IsAmplifierAvailable, [ctypes.c_int32], ["amp"])
-	GetNumberPreAmpGains=ctf_rval(lib.GetNumberPreAmpGains, ctypes.c_int32, [None], [])
-	GetPreAmpGain=ctf_rval(lib.GetPreAmpGain, ctypes.c_float, [ctypes.c_int32,None], ["index"])
-	SetPreAmpGain=ctf_simple(lib.SetPreAmpGain, [ctypes.c_int32], ["index"])
-	IsPreAmpGainAvailable=ctf_rval(lib.IsPreAmpGainAvailable, ctypes.c_int32, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,None], ["channel","amplifier","index","preamp"])
+		self.InAuxPort=wrapper(lib.InAuxPort, [ctypes.c_int32,ctypes.c_int32], ["port",None])
+		self.OutAuxPort=wrapper(lib.OutAuxPort, [ctypes.c_int32,ctypes.c_int32], ["port","state"])
 
-	GetNumberHSSpeeds=ctf_rval(lib.GetNumberHSSpeeds, ctypes.c_int32, [ctypes.c_int32,ctypes.c_int32,None], ["channel","typ"])
-	GetHSSpeed=ctf_rval(lib.GetHSSpeed, ctypes.c_float, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,None], ["channel","typ","index"])
-	SetHSSpeed=ctf_simple(lib.SetHSSpeed, [ctypes.c_int32,ctypes.c_int32], ["typ","index"])
-	GetNumberVSSpeeds=ctf_rval(lib.GetNumberVSSpeeds, ctypes.c_int32, [None], [])
-	GetVSSpeed=ctf_rval(lib.GetVSSpeed, ctypes.c_float, [ctypes.c_int32,None], ["index"])
-	SetVSSpeed=ctf_simple(lib.SetVSSpeed, [ctypes.c_int32], ["index"])
-	GetFastestRecommendedVSSpeed=ctf_rvals(lib.GetFastestRecommendedVSSpeed, [ctypes.c_int32,ctypes.c_float], [None,None], [])
-	GetVSAmplitudeValue=ctf_rval(lib.GetVSAmplitudeValue, ctypes.c_int32, [ctypes.c_int32,None], ["index"])
-	SetVSAmplitude=ctf_simple(lib.SetVSAmplitude, [ctypes.c_int32], ["state"])
+		self.SetTriggerMode=wrapper(lib.SetTriggerMode, [ctypes.c_int32], ["mode"])
+		self.GetExternalTriggerTermination=wrapper(lib.GetExternalTriggerTermination, [ctypes.c_int32], [None])
+		self.SetExternalTriggerTermination=wrapper(lib.SetExternalTriggerTermination, [ctypes.c_int32], ["termination"])
+		self.GetTriggerLevelRange=wrapper(lib.GetTriggerLevelRange, [ctypes.c_float,ctypes.c_float], [None,None])
+		self.SetTriggerLevel=wrapper(lib.SetTriggerLevel, [ctypes.c_float], ["mode"])
+		self.SetTriggerInvert=wrapper(lib.SetTriggerInvert, [ctypes.c_int32], ["mode"])
+		self.IsTriggerModeAvailable=wrapper(lib.IsTriggerModeAvailable, [ctypes.c_int32], ["mode"])
+		self.SendSoftwareTrigger=wrapper(lib.SendSoftwareTrigger)
+		
+		errcheck_temp=errcheck(passing={20034,20035,20036,20037,20040})
+		self.GetTemperature=wrapper(lib.GetTemperature, [ctypes.c_int32], [None], return_res=(True,1), errcheck=errcheck_temp)
+		self.GetTemperatureF=wrapper(lib.GetTemperatureF, [ctypes.c_float], [None], return_res=(True,1), errcheck=errcheck_temp)
+		self.SetTemperature=wrapper(lib.SetTemperature, [ctypes.c_int32], ["temperature"])
+		self.GetTemperatureRange=wrapper(lib.GetTemperatureRange, [ctypes.c_int32,ctypes.c_int32], [None,None])
+		self.CoolerON=wrapper(lib.CoolerON)
+		self.CoolerOFF=wrapper(lib.CoolerOFF)
+		self.IsCoolerOn=wrapper(lib.IsCoolerOn, [ctypes.c_int32], [None])
 
-	GetGateMode=ctf_rval(lib.GetGateMode, ctypes.c_int32, [None], [])
-	SetGateMode=ctf_simple(lib.SetGateMode, [ctypes.c_int32], ["mode"])
-	SetEMGainMode=ctf_simple(lib.SetEMGainMode, [ctypes.c_int32], ["mode"])
-	GetEMGainRange=ctf_rvals(lib.GetEMGainRange, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
-	GetEMCCDGain=ctf_rval(lib.GetEMCCDGain, ctypes.c_int32, [None], [])
-	SetEMCCDGain=ctf_simple(lib.SetEMCCDGain, [ctypes.c_int32], ["gain"])
-	GetEMAdvanced=ctf_rval(lib.GetEMAdvanced, ctypes.c_int32, [None], [])
-	SetEMAdvanced=ctf_simple(lib.SetEMAdvanced, [ctypes.c_int32], ["state"])
-	# SetMCPGating=ctf_simple(lib.SetMCPGating, [ctypes.c_int32], ["mode"])
-	# GetMCPGainRange=ctf_rvals(lib.GetMCPGainRange, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
-	# SetMCPGain=ctf_simple(lib.SetMCPGain, [ctypes.c_int32], ["gain"])
+		self.GetNumberADChannels=wrapper(lib.GetNumberADChannels, [ctypes.c_int32], [None])
+		self.SetADChannel=wrapper(lib.SetADChannel, [ctypes.c_int32], ["channel"])
+		self.GetBitDepth=wrapper(lib.GetBitDepth, [ctypes.c_int32,ctypes.c_int32], ["channel",None])
+		self.GetNumberAmp=wrapper(lib.GetNumberAmp, [ctypes.c_int32], [None])
+		self.SetOutputAmplifier=wrapper(lib.SetOutputAmplifier, [ctypes.c_int32], ["typ"])
+		self.IsAmplifierAvailable=wrapper(lib.IsAmplifierAvailable, [ctypes.c_int32], ["amp"])
+		self.GetNumberPreAmpGains=wrapper(lib.GetNumberPreAmpGains, [ctypes.c_int32], [None])
+		self.GetPreAmpGain=wrapper(lib.GetPreAmpGain, [ctypes.c_int32,ctypes.c_float], ["index",None])
+		self.SetPreAmpGain=wrapper(lib.SetPreAmpGain, [ctypes.c_int32], ["index"])
+		self.IsPreAmpGainAvailable=wrapper(lib.IsPreAmpGainAvailable, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["channel","amplifier","index","preamp",None])
 
-	GetShutterMinTimes=ctf_rvals(lib.GetShutterMinTimes, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
-	SetShutter=ctf_simple(lib.SetShutter, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["typ","mode","closing_time","opening_time"])
-	SetShutterEx=ctf_simple(lib.SetShutterEx, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["typ","mode","closing_time","opening_time","extmode"])
+		self.GetNumberHSSpeeds=wrapper(lib.GetNumberHSSpeeds, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["channel","typ",None])
+		self.GetHSSpeed=wrapper(lib.GetHSSpeed, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_float], ["channel","typ","index",None])
+		self.SetHSSpeed=wrapper(lib.SetHSSpeed, [ctypes.c_int32,ctypes.c_int32], ["typ","index"])
+		self.GetNumberVSSpeeds=wrapper(lib.GetNumberVSSpeeds, [ctypes.c_int32], [None])
+		self.GetVSSpeed=wrapper(lib.GetVSSpeed, [ctypes.c_int32,ctypes.c_float], ["index",None])
+		self.SetVSSpeed=wrapper(lib.SetVSSpeed, [ctypes.c_int32], ["index"])
+		self.GetFastestRecommendedVSSpeed=wrapper(lib.GetFastestRecommendedVSSpeed, [ctypes.c_int32,ctypes.c_float], [None,None])
+		self.GetVSAmplitudeValue=wrapper(lib.GetVSAmplitudeValue, [ctypes.c_int32,ctypes.c_int32], ["index",None])
+		self.SetVSAmplitude=wrapper(lib.SetVSAmplitude, [ctypes.c_int32], ["state"])
 
-	SetAcquisitionMode=ctf_simple(lib.SetAcquisitionMode, [ctypes.c_uint32], ["mode"])
-	GetAcquisitionTimings=ctf_rvals(lib.GetAcquisitionTimings, [ctypes.c_float,ctypes.c_float,ctypes.c_float], [None,None,None], [])
-	SetExposureTime=ctf_simple(lib.SetExposureTime, [ctypes.c_float], ["time"])
-	SetNumberAccumulations=ctf_simple(lib.SetNumberAccumulations, [ctypes.c_int32], ["number"])
-	SetNumberKinetics=ctf_simple(lib.SetNumberKinetics, [ctypes.c_int32], ["number"])
-	SetNumberPrescans=ctf_simple(lib.SetNumberPrescans, [ctypes.c_int32], ["number"])
-	SetKineticCycleTime=ctf_simple(lib.SetKineticCycleTime, [ctypes.c_float], ["time"])
-	SetAccumulationCycleTime=ctf_simple(lib.SetAccumulationCycleTime, [ctypes.c_float], ["time"])
-	SetFrameTransferMode=ctf_simple(lib.SetFrameTransferMode, [ctypes.c_uint32], ["mode"])
-	GetReadOutTime=ctf_rval(lib.GetReadOutTime, ctypes.c_float, [None], [])
-	GetKeepCleanTime=ctf_rval(lib.GetKeepCleanTime, ctypes.c_float, [None], [])
+		self.GetGateMode=wrapper(lib.GetGateMode, [ctypes.c_int32], [None])
+		self.SetGateMode=wrapper(lib.SetGateMode, [ctypes.c_int32], ["mode"])
+		self.SetEMGainMode=wrapper(lib.SetEMGainMode, [ctypes.c_int32], ["mode"])
+		self.GetEMGainRange=wrapper(lib.GetEMGainRange, [ctypes.c_int32,ctypes.c_int32], [None,None])
+		self.GetEMCCDGain=wrapper(lib.GetEMCCDGain, [ctypes.c_int32], [None])
+		self.SetEMCCDGain=wrapper(lib.SetEMCCDGain, [ctypes.c_int32], ["gain"])
+		self.GetEMAdvanced=wrapper(lib.GetEMAdvanced, [ctypes.c_int32], [None])
+		self.SetEMAdvanced=wrapper(lib.SetEMAdvanced, [ctypes.c_int32], ["state"])
+		# self.SetMCPGating=wrapper(lib.SetMCPGating, [ctypes.c_int32], ["mode"])
+		# self.GetMCPGainRange=wrapper(lib.GetMCPGainRange, [ctypes.c_int32,ctypes.c_int32], [None,None])
+		# self.SetMCPGain=wrapper(lib.SetMCPGain, [ctypes.c_int32], ["gain"])
 
-	PrepareAcquisition=ctf_simple(lib.PrepareAcquisition, [], [])
-	StartAcquisition=ctf_simple(lib.StartAcquisition, [], [])
-	AbortAcquisition=ctf_simple(lib.AbortAcquisition, [], [])
-	GetAcquisitionProgress=ctf_rvals(lib.GetAcquisitionProgress, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
-	GetStatus=ctf_rval(lib.GetStatus, ctypes.c_int32, [None], [])
-	WaitForAcquisition=ctf_simple(lib.WaitForAcquisition, [], [])
-	WaitForAcquisitionTimeOut=ctf_simple(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"])
-	WaitForAcquisitionByHandle=ctf_simple(lib.WaitForAcquisitionByHandle, [ctypes.c_int32], ["handle"])
-	WaitForAcquisitionByHandleTimeOut=ctf_simple(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"])
-	CancelWait=ctf_simple(lib.CancelWait, [], [])
+		self.GetShutterMinTimes=wrapper(lib.GetShutterMinTimes, [ctypes.c_int32,ctypes.c_int32], [None,None])
+		self.SetShutter=wrapper(lib.SetShutter, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["typ","mode","closing_time","opening_time"])
+		self.SetShutterEx=wrapper(lib.SetShutterEx, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["typ","mode","closing_time","opening_time","extmode"])
 
-	SetReadMode=ctf_simple(lib.SetReadMode, [ctypes.c_uint32], ["mode"])
-	GetMaximumBinning=ctf_rval(lib.GetMaximumBinning, ctypes.c_int32, [ctypes.c_int32,ctypes.c_int32,None], ["read_mode","horiz_vert"])
-	GetMinimumImageLength=ctf_rval(lib.GetMinimumImageLength, ctypes.c_int32, [None], [])
-	SetSingleTrack=ctf_simple(lib.SetSingleTrack, [ctypes.c_int32,ctypes.c_int32], ["center","height"])
-	SetMultiTrack=ctf_rvals(lib.SetMultiTrack, [ctypes.c_int32,ctypes.c_int32], [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,None,None], ["number","height","offset"])
-	setup_func(lib.SetRandomTracks ,[ctypes.c_int32,ctypes.POINTER(ctypes.c_int32)])
-	def SetRandomTracks(tracks):
-		ntracks=len(tracks)
-		areas=(ctypes.c_int32*(ntracks*2))(*[b for t in tracks for b in t])
-		lib.SetRandomTracks(ntracks,areas)
-	SetImage=ctf_simple(lib.SetImage, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["hbin","vbin","hstart","hend","vstart","vend"])
-	GetDetector=ctf_rvals(lib.GetDetector, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
-	GetSizeOfCircularBuffer=ctf_rval(lib.GetSizeOfCircularBuffer, ctypes.c_int32, [None], [])
+		self.SetAcquisitionMode=wrapper(lib.SetAcquisitionMode, [ctypes.c_uint32], ["mode"])
+		self.GetAcquisitionTimings=wrapper(lib.GetAcquisitionTimings, [ctypes.c_float,ctypes.c_float,ctypes.c_float], [None,None,None])
+		self.SetExposureTime=wrapper(lib.SetExposureTime, [ctypes.c_float], ["time"])
+		self.SetNumberAccumulations=wrapper(lib.SetNumberAccumulations, [ctypes.c_int32], ["number"])
+		self.SetNumberKinetics=wrapper(lib.SetNumberKinetics, [ctypes.c_int32], ["number"])
+		self.SetNumberPrescans=wrapper(lib.SetNumberPrescans, [ctypes.c_int32], ["number"])
+		self.SetKineticCycleTime=wrapper(lib.SetKineticCycleTime, [ctypes.c_float], ["time"])
+		self.SetAccumulationCycleTime=wrapper(lib.SetAccumulationCycleTime, [ctypes.c_float], ["time"])
+		self.SetFrameTransferMode=wrapper(lib.SetFrameTransferMode, [ctypes.c_uint32], ["mode"])
+		self.GetReadOutTime=wrapper(lib.GetReadOutTime, [ctypes.c_float], [None])
+		self.GetKeepCleanTime=wrapper(lib.GetKeepCleanTime, [ctypes.c_float], [None])
 
-	def buffer32_prep(size):
-		return ctypes.create_string_buffer(size*4)
-	def buffer16_prep(size):
-		return ctypes.create_string_buffer(size*2)
-	def buffer32_conv(buff, size):
-		return np.fromstring(ctypes.string_at(buff,size*4),dtype="<u4")
-	def buffer16_conv(buff, size):
-		return np.fromstring(ctypes.string_at(buff,size*2),dtype="<u2")
-	GetOldestImage  =ctf_buff(lib.GetOldestImage  , [None,ctypes.c_uint32], ["size"], build_buff=buffer32_prep, conv_buff=buffer32_conv)
-	GetOldestImage16=ctf_buff(lib.GetOldestImage16, [None,ctypes.c_uint32], ["size"], build_buff=buffer16_prep, conv_buff=buffer16_conv)
-	GetMostRecentImage  =ctf_buff(lib.GetMostRecentImage  , [None,ctypes.c_uint32], ["size"], build_buff=buffer32_prep, conv_buff=buffer32_conv)
-	GetMostRecentImage16=ctf_buff(lib.GetMostRecentImage16, [None,ctypes.c_uint32], ["size"], build_buff=buffer16_prep, conv_buff=buffer16_conv)
-	GetNumberNewImages=ctf_rvals(lib.GetNumberNewImages, [ctypes.c_int32,ctypes.c_int32], [None,None], [])
-	setup_func(lib.GetImages  ,[ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.POINTER(ctypes.c_int32),ctypes.POINTER(ctypes.c_int32)])
-	setup_func(lib.GetImages16,[ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.POINTER(ctypes.c_int32),ctypes.POINTER(ctypes.c_int32)])
-	def GetImages(first, last, size):
-		buffsize=max(last-first+1,1)*size
-		buff=buffer32_prep(buffsize)
-		vfirst=ctypes.c_int32()
-		vlast=ctypes.c_int32()
-		lib.GetImages(first,last,buff,size,ctypes.byref(vfirst),ctypes.byref(vlast))
-		return buffer32_conv(buff,buffsize),vfirst.value,vlast.value
-	def GetImages16(first, last, size):
-		buffsize=max(last-first+1,1)*size
-		buff=buffer16_prep(buffsize)
-		vfirst=ctypes.c_int32()
-		vlast=ctypes.c_int32()
-		lib.GetImages16(first,last,buff,buffsize,ctypes.byref(vfirst),ctypes.byref(vlast))
-		return buffer16_conv(buff,buffsize),vfirst.value,vlast.value
+		self.PrepareAcquisition=wrapper(lib.PrepareAcquisition)
+		self.StartAcquisition=wrapper(lib.StartAcquisition)
+		self.AbortAcquisition=wrapper(lib.AbortAcquisition)
+		self.GetAcquisitionProgress=wrapper(lib.GetAcquisitionProgress, [ctypes.c_int32,ctypes.c_int32], [None,None])
+		self.GetStatus=wrapper(lib.GetStatus, [ctypes.c_int32], [None])
+		self.WaitForAcquisition=wrapper(lib.WaitForAcquisition)
+		self.WaitForAcquisitionTimeOut=wrapper(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"])
+		self.WaitForAcquisitionByHandle=wrapper(lib.WaitForAcquisitionByHandle, [ctypes.c_int32], ["handle"])
+		self.WaitForAcquisitionByHandleTimeOut=wrapper(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"])
+		self.CancelWait=wrapper(lib.CancelWait)
 
+		self.SetReadMode=wrapper(lib.SetReadMode, [ctypes.c_uint32], ["mode"])
+		self.GetMaximumBinning=wrapper(lib.GetMaximumBinning, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["read_mode","horiz_vert",None])
+		self.GetMinimumImageLength=wrapper(lib.GetMinimumImageLength, [ctypes.c_int32], [None])
+		self.SetSingleTrack=wrapper(lib.SetSingleTrack, [ctypes.c_int32,ctypes.c_int32], ["center","height"])
+		self.SetMultiTrack=wrapper(lib.SetMultiTrack, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["number","height","offset",None,None])
+		ctypes_wrap.setup_func(lib.SetRandomTracks ,[ctypes.c_int32,ctypes.POINTER(ctypes.c_int32)], errcheck=errcheck())
+		def SetRandomTracks(tracks):
+			ntracks=len(tracks)
+			areas=(ctypes.c_int32*(ntracks*2))(*[b for t in tracks for b in t])
+			lib.SetRandomTracks(ntracks,areas)
+		self.SetRandomTracks=SetRandomTracks
+		self.SetImage=wrapper(lib.SetImage, [ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["hbin","vbin","hstart","hend","vstart","vend"])
+		self.GetDetector=wrapper(lib.GetDetector, [ctypes.c_int32,ctypes.c_int32], [None,None])
+		self.GetSizeOfCircularBuffer=wrapper(lib.GetSizeOfCircularBuffer, [ctypes.c_int32], [None])
+		buffer16_prep=ctypes_wrap.buffprep(0,"<u2")
+		buffer32_prep=ctypes_wrap.buffprep(0,"<u4")
+		buffer16_conv=ctypes_wrap.buffconv(0,"<u2")
+		buffer32_conv=ctypes_wrap.buffconv(0,"<u4")
+		self.GetOldestImage  =wrapper(lib.GetOldestImage  , [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer32_prep], rvconv=[buffer32_conv], rvref=[False])
+		self.GetOldestImage16=wrapper(lib.GetOldestImage16, [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer16_prep], rvconv=[buffer16_conv], rvref=[False])
+		self.GetMostRecentImage  =wrapper(lib.GetMostRecentImage  , [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer32_prep], rvconv=[buffer32_conv], rvref=[False])
+		self.GetMostRecentImage16=wrapper(lib.GetMostRecentImage16, [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer16_prep], rvconv=[buffer16_conv], rvref=[False])
+		self.GetNumberNewImages=wrapper(lib.GetNumberNewImages, [ctypes.c_int32,ctypes.c_int32], [None,None])
+		def images_buffer16_prep(first, last, size):
+			buffsize=max(last-first+1,1)*size
+			return buffer16_prep(buffsize)
+		def images_buffer32_prep(first, last, size):
+			buffsize=max(last-first+1,1)*size
+			return buffer32_prep(buffsize)
+		def images_buffer16_conv(buff, first, last, size):
+			buffsize=max(last-first+1,1)*size
+			return buffer16_conv(buff,buffsize)
+		def images_buffer32_conv(buff, first, last, size):
+			buffsize=max(last-first+1,1)*size
+			return buffer32_conv(buff,buffsize)
+		self.GetImages=wrapper(lib.GetImages, [ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["first","last",None,"size",None,None],
+			rvprep=[images_buffer32_prep,None,None], rvconv=[images_buffer32_conv,None,None], rvref=[False,True,True])
+		self.GetImages16=wrapper(lib.GetImages16, [ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["first","last",None,"size",None,None],
+			rvprep=[images_buffer16_prep,None,None], rvconv=[images_buffer16_conv,None,None], rvref=[False,True,True])
 
-
-
-
+		self._initialized=True
 
 	AmpModeSimple=collections.namedtuple("AmpModeSimple",["channel","oamp","hsspeed","preamp"])
 	AmpModeFull=collections.namedtuple("AmpModeFull",["channel","channel_bitdepth","oamp","oamp_kind","hsspeed","hsspeed_MHz","preamp","preamp_gain"])
 	_oamp_kinds=["EMCCD/Conventional","CCD/ExtendedNIR"]
-	def get_all_amp_modes():
-		channels=GetNumberADChannels()
-		oamps=GetNumberAmp()
-		preamps=GetNumberPreAmpGains()
+	def get_all_amp_modes(self):
+		channels=self.GetNumberADChannels()
+		oamps=self.GetNumberAmp()
+		preamps=self.GetNumberPreAmpGains()
 		modes=[]
 		for ch in range(channels):
-			bit_depth=GetBitDepth(ch)
+			bit_depth=self.GetBitDepth(ch)
 			for oamp in range(oamps):
-				hsspeeds=GetNumberHSSpeeds(ch,oamp)
+				hsspeeds=self.GetNumberHSSpeeds(ch,oamp)
 				for hssp in range(hsspeeds):
-					hsspeed_hz=GetHSSpeed(ch,oamp,hssp)
+					hsspeed_hz=self.GetHSSpeed(ch,oamp,hssp)
 					for pa in range(preamps):
-						preamp_gain=GetPreAmpGain(pa)
+						preamp_gain=self.GetPreAmpGain(pa)
 						try:
-							IsPreAmpGainAvailable(ch,oamp,hssp,pa)
-							modes.append(AmpModeFull(ch,bit_depth,oamp,_oamp_kinds[oamp],hssp,hsspeed_hz,pa,preamp_gain))
+							self.IsPreAmpGainAvailable(ch,oamp,hssp,pa)
+							modes.append(self.AmpModeFull(ch,bit_depth,oamp,self._oamp_kinds[oamp],hssp,hsspeed_hz,pa,preamp_gain))
 						except AndorLibError:
 							pass
 		return modes
 
-	def set_amp_mode(amp_mode):
+	def set_amp_mode(self, amp_mode):
 		if len(amp_mode)==4:
-			amp_mode=AmpModeSimple(*amp_mode)
+			amp_mode=self.AmpModeSimple(*amp_mode)
 		else:
-			amp_mode=AmpModeFull(*amp_mode)
-		SetADChannel(amp_mode.channel)
-		SetOutputAmplifier(amp_mode.oamp)
-		SetHSSpeed(amp_mode.oamp,amp_mode.hsspeed)
-		SetPreAmpGain(amp_mode.preamp)
+			amp_mode=self.AmpModeFull(*amp_mode)
+		self.SetADChannel(amp_mode.channel)
+		self.SetOutputAmplifier(amp_mode.oamp)
+		self.SetHSSpeed(amp_mode.oamp,amp_mode.hsspeed)
+		self.SetPreAmpGain(amp_mode.preamp)
 
-	def get_EMCCD_gain():
-		advanced=GetEMAdvanced()
-		gain=GetEMCCDGain()
+	def get_EMCCD_gain(self):
+		advanced=self.GetEMAdvanced()
+		gain=self.GetEMCCDGain()
 		return advanced, gain
-	def set_EMCCD_gain(gain, advanced=False):
-		SetEMAdvanced(advanced)
-		SetEMCCDGain(gain)
+	def set_EMCCD_gain(self, gain, advanced=False):
+		self.SetEMAdvanced(advanced)
+		self.SetEMCCDGain(gain)
 
 
-
-except OSError:
-	pass
+lib=AndorLib()
