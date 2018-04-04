@@ -87,9 +87,9 @@ class CTypesWrapper(object):
         else:
             res_pos=0
         if return_res:
-            rvals[res_pos:res_pos]=res
+            rvals[res_pos:res_pos]=[res]
             if rvnames is not None:
-                rvnames[res_pos:res_pos]="return_value"
+                rvnames[res_pos:res_pos]=["return_value"]
         if rvnames is None:
             return tuple(rvals)
         else:

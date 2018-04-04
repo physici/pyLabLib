@@ -1,6 +1,4 @@
-from . import Andor_lib as lib
-
-from .Andor_lib import AndorLibError
+from .Andor_lib_cls import lib, AndorLibError
 
 from ...core.devio import backend
 from ...core.utils import funcargparse
@@ -15,11 +13,13 @@ class AndorTimeoutError(AndorError):
     "Timeout while waiting."
 
 def get_cameras_number():
+    lib.initlib()
     return lib.GetAvailableCameras()
 
 class AndorCamera(backend.IBackendWrapper):
     def __init__(self, idx=0, ini_path=""):
         backend.IBackendWrapper.__init__(self,idx)
+        lib.initlib()
         self.idx=idx
         self.ini_path=ini_path
         self.handle=None
