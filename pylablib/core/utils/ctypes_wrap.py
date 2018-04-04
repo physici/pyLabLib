@@ -173,26 +173,67 @@ def buffconv(size_arg_pos, dtype):
         return np.fromstring(data,dtype=dformat.to_desc("numpy"))
     return conv
 
-class CTypesEnum(object):
-    def __init__(self):
-        object.__init__(self)
 
 
-def struct2tuple(struct, name, prep=None, conv=None):
-    fields=[f[0] for f in struct._fields_]
-    tuple_cls=collections.namedtuple(name,fields)
-    prep=prep or {}
-    conv=conv or {}
-    class CTypesStructTuple(tuple_cls):
-        @classmethod
-        def fromstruct(cls, obj):
-            values=[getattr(obj,f) for f in fields]
-            values=[(conv[f](v) if f in conv else _get_value(v)) for (f,v) in zip(fields,values)]
-            return cls(*values)
-        def tostruct(self):
-            values=[getattr(self,f) for f in fields]
-            values=[(prep[f](v,self) if f in prep else _get_value(v)) for (f,v) in zip(fields,values)]
-            kwargs=dict(zip(fields,values))
-            return struct(**kwargs)
-    CTypesStructTuple.__name__=name
-    return CTypesStructTuple
+class StructWrap(object):
+    class _struct(ctypes.Structure):
+        _fields_=[]
+    _prep={}
+    _conv={}
+    _tup={}
+    _default={}
+    def __init__(self, struct=None):
+        struct=struct or self._struct()
+        if not isinstance(struct,self._struct):
+            raise ValueError("source should be of type {}".format(self._struct.__name__))
+        fnames,ftypes=zip(*self._struct._fields_)
+        for f in fnames:
+            if f in self._default:
+                v=self._default[f]
+            else:
+                cv=getattr(struct,f)
+                v=self._conv[f](cv) if f in self._conv else _get_value(cv)
+            setattr(self,f,v)
+        self.conv()
+    def to_struct(self):
+        params=self.prepdict()
+        fnames,ftypes=zip(*self._struct._fields_)
+        for f in fnames:
+            if f not in params:
+                params[f]=getattr(self,f)
+        ordparams=[params[f] for f in fnames]
+        cparams={}
+        for f,t in self._struct._fields_:
+            if f in self._prep:
+                cv=self._prep[f](*ordparams)
+            else:
+                cv=t(params[f])
+            cparams[f]=cv
+        return self.prep(self._struct(**cparams))
+
+    def prep(self, struct):
+        return struct
+    def prepdict(self):
+        return {}
+    def conv(self):
+        pass
+    def tupdict(self):
+        return {}
+    def tup(self):
+        params=self.tupdict()
+        fnames,ftypes=zip(*self._struct._fields_)
+        for f in fnames:
+            if f not in params:
+                params[f]=getattr(self,f)
+            if f in self._tup:
+                params[f]=self._tup[f](params[f])
+        vals=[params[f] for f in fnames]
+        tcls=collections.namedtuple(self.__class__.__name__,fnames)
+        return tcls(*vals)
+
+    @classmethod
+    def prep_struct(cls, *args):
+        return cls().to_struct()
+    @classmethod
+    def tup_struct(cls, struct, *args):
+        return cls(struct).tup()

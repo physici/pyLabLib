@@ -5,10 +5,6 @@ import ctypes
 import collections
 import os.path
 
-import numpy as np
-
-
-
 ##### Constants #####
 
 Andor_statuscodes = {
@@ -335,24 +331,23 @@ class AndorCapabilities(ctypes.Structure):
 				("EMGainCapability",ctypes.c_int32),
 				("FTReadModes",ctypes.c_int32) ]
 AndorCapabilities_p=ctypes.POINTER(AndorCapabilities)
-def AndorCapabilities_prep(val, *args):
-	val.Size=ctypes.sizeof(val)
-	return val
-TAndorCapabilities=collections.namedtuple("TAndorCapabilities",
-		["AcqModes", "ReadModes", "TriggerModes", "CameraType", "PixelMode", "SetFunctions", "GetFunctions", "Features", "PCICard", "EMGainCapability", "FTReadModes"])
-def AndorCapabilities_conv(val, *args):
-	AcqModes=_int_to_enumlst(val.AcqModes,Andor_AcqMode)
-	ReadModes=_int_to_enumlst(val.ReadModes,Andor_ReadMode)
-	TriggerModes=_int_to_enumlst(val.AcqModes,Andor_TriggerMode)
-	CameraType=Andor_CameraType.get(val.CameraType&0x1F,"UNKNOWN")
-	PixelMode=_int_to_enumlst(val.PixelMode&0xFFFF,Andor_PixelMode)+[Andor_PixelMode.get(val.PixelMode&0xFFFF0000,"UNKNOWN")]
-	SetFunctions=_int_to_enumlst(val.SetFunctions,Andor_SetFunction)
-	GetFunctions=_int_to_enumlst(val.GetFunctions,Andor_GetFunction)
-	Features=_int_to_enumlst(val.Features,Andor_Features)
-	EMGainCapability=_int_to_enumlst(val.EMGainCapability,Andor_EMGain)
-	FTReadModes=_int_to_enumlst(val.FTReadModes,Andor_ReadMode)
-	return TAndorCapabilities(AcqModes,ReadModes,TriggerModes,CameraType,PixelMode,SetFunctions,GetFunctions,Features,val.PCICard,EMGainCapability,FTReadModes)
-
+class CAndorCapabilities(ctypes_wrap.StructWrap):
+	_struct=AndorCapabilities
+	_tup={
+		"AcqModes": (lambda x: _int_to_enumlst(x,Andor_AcqMode)),
+		"ReadModes": (lambda x: _int_to_enumlst(x,Andor_ReadMode)),
+		"TriggerModes": (lambda x: _int_to_enumlst(x,Andor_TriggerMode)),
+		"CameraType": (lambda x: Andor_CameraType.get(x&0x1F,"UNKNOWN")),
+		"PixelMode": (lambda x: _int_to_enumlst(x&0xFFFF,Andor_PixelMode)+[Andor_PixelMode.get(x&0xFFFF0000,"UNKNOWN")]),
+		"SetFunctions": (lambda x: _int_to_enumlst(x,Andor_SetFunction)),
+		"GetFunctions": (lambda x: _int_to_enumlst(x,Andor_GetFunction)),
+		"Features": (lambda x: _int_to_enumlst(x,Andor_Features)),
+		"EMGainCapability": (lambda x: _int_to_enumlst(x,Andor_EMGain)),
+		"FTReadModes": (lambda x: _int_to_enumlst(x,Andor_ReadMode))
+	}
+	def prep(self, struct):
+		struct.Size=ctypes.sizeof(struct)
+		return struct
 
 
 
@@ -377,7 +372,7 @@ class AndroLib(object):
 		self.GetCurrentCamera=wrapper(lib.GetCurrentCamera, [ctypes.c_int32], [None])
 		self.SetCurrentCamera=wrapper(lib.SetCurrentCamera, [ctypes.c_int32], ["handle"])
 
-		self.GetCapabilities=wrapper(lib.GetCapabilities, [AndorCapabilities], [None], rvprep=[AndorCapabilities_prep], rconv=[AndorCapabilities_conv])
+		self.GetCapabilities=wrapper(lib.GetCapabilities, [AndorCapabilities], [None], rvprep=[CAndorCapabilities.prep_struct], rconv=[CAndorCapabilities.tup_struct])
 		self.GetControllerCardModel=wrapper(lib.GetControllerCardModel, [ctypes.c_char_p], [None], rvprep=strprep)
 		self.GetHeadModel=wrapper(lib.GetHeadModel, [ctypes.c_char_p], [None], rvprep=strprep)
 		self.GetCameraSerialNumber=wrapper(lib.GetCameraSerialNumber, [ctypes.c_int32], [None])
@@ -459,9 +454,9 @@ class AndroLib(object):
 		self.GetAcquisitionProgress=wrapper(lib.GetAcquisitionProgress, [ctypes.c_int32,ctypes.c_int32], [None,None])
 		self.GetStatus=wrapper(lib.GetStatus, [ctypes.c_int32], [None])
 		self.WaitForAcquisition=wrapper(lib.WaitForAcquisition, [], [])
-		self.WaitForAcquisitionTimeOut=wrapper(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"]))
+		self.WaitForAcquisitionTimeOut=wrapper(lib.WaitForAcquisitionTimeOut, [ctypes.c_int32], ["timeout_ms"])
 		self.WaitForAcquisitionByHandle=wrapper(lib.WaitForAcquisitionByHandle, [ctypes.c_int32], ["handle"])
-		self.WaitForAcquisitionByHandleTimeOut=wrapper(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"]))
+		self.WaitForAcquisitionByHandleTimeOut=wrapper(lib.WaitForAcquisitionByHandleTimeOut, [ctypes.c_int32,ctypes.c_int32], ["handle","timeout_ms"])
 		self.CancelWait=wrapper(lib.CancelWait, [], [])
 
 		self.SetReadMode=wrapper(lib.SetReadMode, [ctypes.c_uint32], ["mode"])
