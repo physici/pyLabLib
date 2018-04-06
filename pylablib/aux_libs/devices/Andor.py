@@ -476,7 +476,7 @@ class AndorCamera(backend.IBackendWrapper):
             dim=self.get_data_dimensions()
         if rng is None:
             return np.zeros((0,dim[1],dim[0]))
-        data,vmin,vmax=lib.GetImages16(rng[0],rng[1],dim[0]*dim[1])
+        data,vmin,vmax=lib.GetImages16(rng[0],rng[1],dim[0]*dim[1]*(rng[1]-rng[0]+1))
         return np.transpose(data.reshape((-1,dim[0],dim[1])),axes=[0,2,1])
 
     def flush_buffer(self):
