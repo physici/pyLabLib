@@ -100,7 +100,7 @@ class FunctionSignature(object):
             include_positional (bool): If ``True`` and function accepts ``*vargs``, return ``None`` (unlimited number of arguments).
             include_keywords (bool): If ``True`` and function accepts ``**kwargs``, return ``None`` (unlimited number of arguments).
         """
-        if (include_positional and self.varg_name is not None) or (include_keywords and self.varg_name is not None):
+        if (include_positional and self.varg_name is not None) or (include_keywords and self.kwarg_name is not None):
             return None
         if self.obj is not None:
             return len(self.arg_names)-1
@@ -200,10 +200,13 @@ def call_cut_args(func, *args, **kwargs):
     Call `func` with the given arguments, omitting the ones that don't fit its signature.
     """
     sig=FunctionSignature.from_function(func)
-    cut_kwargs={}
-    for n,v in viewitems(kwargs):
-        if n in sig.arg_names:
-            cut_kwargs[n]=v
+    if sig.kwarg_name is not None:
+        cut_kwargs=kwargs
+    else:
+        cut_kwargs={}
+        for n,v in viewitems(kwargs):
+            if n in sig.arg_names:
+                cut_kwargs[n]=v
     max_args_num=sig.max_args_num()
     if max_args_num is None:
         return func(*args,**cut_kwargs)

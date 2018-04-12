@@ -113,6 +113,7 @@ class QThreadController(QtCore.QObject):
             self._running=True
             self.on_start()
             self.started.emit()
+            self.notify_exec("run")
             if self.kind=="run":
                 self._do_run()
                 self.thread.stop_request.emit()

@@ -172,6 +172,8 @@ class Dictionary(object):
     
         If object is already a :class:`Dictionary` (or its subclass), return unchanged, even if its parameters are different.
         """
+        if isinstance(obj,DictionaryPointer):
+            return Dictionary(obj,copy=False)
         if isinstance(obj, Dictionary):
             return obj
         else:
@@ -294,6 +296,30 @@ class Dictionary(object):
             return (kind=="all") or (kind=="branch" and self._is_branch(v)) or (kind=="leaf" and not self._is_branch(v))
         except KeyError:
             return False
+    def get_max_prefix(self, path, kind="all"):
+        """
+        Find the longest prefix of `path` contained in the dictionary.
+
+        Return tuple ``(prefix, rest)``, where both path entries are normalized according to the dictionary rules.
+        `kind` determines which kind of path to consider and can be ``'leaf'``, ``'branch'`` or ``'all'``. If the longest prefix is of a different kind, return ``(None,None)``.
+        """
+        funcargparse.check_parameter_range(kind,"kind",{"leaf","branch","all"})
+        s_path=self._normalize_path(path)
+        if s_path==[]:
+            if not self._data and kind!="branch":
+                return ([],[])
+            if self._data and kind!="leaf":
+                return ([],[])
+            return (None,None)
+        branch=self._data
+        for i,p in enumerate(s_path):
+            if p in branch:
+                branch=branch[p]
+                if not self._is_branch(branch):
+                    return (None,None) if kind=="branch" else (s_path[:i+1],s_path[i+1:])
+            else:
+                return (None,None) if kind=="leaf" else (s_path[:i],s_path[i:])
+        return (None,None) if kind=="leaf" else (s_path,[])
     def del_entry(self, path):
         """ Delete entry from the dictionary. Return ``True`` if the path was present."""
         path=self._normalize_path(path)

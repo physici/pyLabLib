@@ -68,7 +68,7 @@ class ParamTable(QtGui.QWidget):
             windicator=QtGui.QLabel(self)
             windicator.setObjectName(_fromUtf8("{}__indicator".format(name)))
             self.formLayout.addWidget(windicator,row,2)
-            indicator_handler=values_module.LabelIndicatorHandler(widget,windicator,widget_handler=value_handler)
+            indicator_handler=values_module.WidgetLabelIndicatorHandler(windicator,widget=value_handler)
         else:
             indicator_handler=None
         if wlabel is None:
@@ -193,7 +193,9 @@ class ParamTable(QtGui.QWidget):
     def __contains__(self, name):
         return name in self.params
 
-
+TFixedParamTable=collections.namedtuple("FixedParamTable",["v","i"])
+def FixedParamTable(v=None,i=None):
+    return TFixedParamTable(v=v or {}, i=i or {})
 
 
 class StatusTable(ParamTable):
