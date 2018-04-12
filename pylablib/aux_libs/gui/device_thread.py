@@ -144,7 +144,7 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
 
 
 class DataAccumulatorThread(controller.QThreadController):
-    def __init__(self, name=None, signal_pool=None):
+    def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
         controller.QThreadController.__init__(self,name=name,kind="loop",signal_pool=signal_pool)
         self.channels={}
         self.table={}
@@ -154,6 +154,8 @@ class DataAccumulatorThread(controller.QThreadController):
         self.block_period=1
         self.new_block_done.connect(self.on_new_block)
         self.new_row_done.connect(self._add_new_row)
+        self.setupargs=setupargs or []
+        self.setupkwargs=setupkwargs or {}
 
     def setup(self):
         pass
@@ -167,17 +169,18 @@ class DataAccumulatorThread(controller.QThreadController):
         pass
 
     def on_start(self):
-        self.setup()
+        controller.QThreadController.on_start(self)
+        self.setup(*self.setupargs,**self.setupkwargs)
     def on_finish(self):
         self.cleanup()
 
     Channel=collections.namedtuple("Channel",["data","func","required","max_len"])
-    def add_channel(self, name, func=None, required=True, max_len=1):
+    def add_channel(self, name, func=None, max_len=1):
         if name in self.channels:
             raise KeyError("channel {} already exists".format(name))
-        self.channels[name]=self.Channel(collections.deque(),func,required and (func is None),max_len)
+        self.channels[name]=self.Channel(collections.deque(),func,func is None,max_len)
         self.table[name]=[]
-    def subscribe_channel(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
+    def subscribe_source(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
         def on_signal(src, tag, value):
             with self._channel_lock:
                 self._add_data(name,src,tag,value,parse=parse)
@@ -220,7 +223,7 @@ class DataAccumulatorThread(controller.QThreadController):
             for n,t in viewitems(self.table):
                 t.append(row[n])
             self._row_cnt+=1
-            if self.block_period and self._row_cnt>self.block_period:
+            if self.block_period and self._row_cnt>=self.block_period:
                 self._row_cnt=0
                 self.new_block_done.emit()
 
