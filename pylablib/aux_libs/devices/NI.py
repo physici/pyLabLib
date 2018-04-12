@@ -157,6 +157,7 @@ class NIDAQ(object):
         self.ao_values={}
         self.open()
         self._update_channel_names()
+        self._running=False
         
     def open(self):
         self.ai_task=nidaqmx.Task()
@@ -218,7 +219,8 @@ class NIDAQ(object):
         self.ai_task.timing.cfg_samp_clk_timing(self.rate,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
         self.ai_channels[name]=(channel,len(self.ai_task.ai_channels))
         self._update_channel_names()
-    def add_counter_input(self, name, counter, terminal, clk_src="ai/SampleClock", max_rate=1E7, diff=True):
+    def add_counter_input(self, name, counter, terminal, clk_src="ai/SampleClock", max_rate=1E7, output_format="rate"):
+        funcargparse.check_parameter_range(output_format,"output_format",{"acc","diff","rate"})
         if name in self.ci_tasks:
             self.ci_tasks[name][0].close()
         task=nidaqmx.Task()
@@ -227,12 +229,12 @@ class NIDAQ(object):
         task.ci_channels.add_ci_count_edges_chan(counter)
         task.ci_channels[0].ci_count_edges_term=terminal
         task.timing.cfg_samp_clk_timing(max_rate,self._build_channel_name(clk_src),sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS)
-        self.ci_tasks[name]=(task,len(self.ci_tasks),diff)
+        self.ci_tasks[name]=(task,len(self.ci_tasks),output_format)
         self._update_channel_names()
     
     def read(self, n=1, timeout=10.):
         running=True
-        if self.ai_task.is_task_done():
+        if not self._running:
             running=False
             self.start()
         try:
@@ -243,11 +245,13 @@ class NIDAQ(object):
                 ais=[ais]
             cis=[np.array(self.ci_tasks[ci][0].read(n)) for ci in self.ci_names]
             for i,ci in enumerate(self.ci_names):
-                if self.ci_tasks[ci][2]:
+                if self.ci_tasks[ci][2]!="acc":
                     last_cnt=cis[i][-1]
                     cis[i][1:]-=cis[i][:-1]
                     cis[i][0]-=self.ci_counters[ci]
                     self.ci_counters[ci]=last_cnt
+                    if self.ci_tasks[ci][2]=="rate":
+                        cis[i]=cis[i]*self.rate
             return np.column_stack(ais+cis)
         finally:
             if not running:
@@ -259,6 +263,7 @@ class NIDAQ(object):
             self.ci_tasks[cit][0].start()
             self.ci_counters[cit]=0
         self.ai_task.start()
+        self._running=True
         if flush_read:
             self.read(flush_read)
     def stop(self):
@@ -266,6 +271,7 @@ class NIDAQ(object):
         for cit in self.ci_tasks:
             self.ci_tasks[cit][0].stop()
             self.ci_counters[cit]=0
+        self._running=False
     def is_running(self):
         return not self.ai_task.is_task_done()
     def available_samples(self):
@@ -293,7 +299,9 @@ class NIDAQ(object):
         names=funcargparse.as_sequence(names,allowed_type="array")
         values=funcargparse.as_sequence(values,allowed_type="array")
         values_dict=dict(zip(names,values))
-        curr_vals=self.do_task.read(1)
+        curr_vals=self.do_task.read()
+        if len(self.do_task.do_channels)==1:
+            curr_vals=[curr_vals]
         for i,ch in enumerate(self.do_task.do_channels):
             if ch.name in values_dict:
                 curr_vals[i]=bool(values_dict[ch.name])
@@ -305,6 +313,8 @@ class NIDAQ(object):
             names=funcargparse.as_sequence(names,allowed_type="array")
         values_dict=dict(zip(names,[None]*len(names)))
         curr_vals=self.do_task.read()
+        if len(self.do_task.do_channels)==1:
+            curr_vals=[curr_vals]
         for i,ch in enumerate(self.do_task.do_channels):
             if ch.name in values_dict:
                 values_dict[ch.name]=curr_vals[i]
