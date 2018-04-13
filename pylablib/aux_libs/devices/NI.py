@@ -273,13 +273,15 @@ class NIDAQ(object):
             self.ci_counters[cit]=0
         self._running=False
     def is_running(self):
-        return not self.ai_task.is_task_done()
+        return not self._running
     def available_samples(self):
-        if self.ai_task.is_task_done():
+        if not self._running:
             return 0
         return self.ai_task.in_stream.avail_samp_per_chan
+    def get_buffer_size(self):
+        return self.ai_task.in_stream.input_buf_size if len(self.ai_task.ai_channels) else 0
     def wait_for_sample(self, num=1, timeout=10., wait_time=0.001):
-        if self.ai_task.is_task_done():
+        if not self._running:
             return 0
         if self.available_samples()>=num:
             return self.available_samples()

@@ -127,23 +127,45 @@ class M2ICE(object):
     def _send_websocket_request(self, msg):
         if self.use_websocket:
             ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
-            time.sleep(1.)
-            ws.send(msg)
-            ws.close()
+            try:
+                self._wait_for_websocket_status(ws,present_key="wlm_fitted")
+                self._wait_for_websocket_status(ws,present_key="wlm_fitted")
+                ws.send(msg)
+            finally:
+                ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
-    def _read_websocket_status(self):
+    def _wait_for_websocket_status(self, ws, present_key=None, nmax=20):
+        for _ in range(nmax):
+            data=ws.recv()
+            data=json.loads(data)
+            if present_key is None or present_key in data:
+                return data
+    def _read_websocket_status(self, present_key=None, nmax=20):
         if self.use_websocket:
             ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
-            data=ws.recv()
-            ws.close()
-            return json.loads(data)
+            try:
+                return self._wait_for_websocket_status(ws,present_key=present_key,nmax=nmax)
+            finally:
+                ws.close()
+        else:
+            raise RuntimeError("'websocket' library is requried to communicate this request")
+    def _read_muli_websocket_status(self, n):
+        if self.use_websocket:
+            ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+            try:
+                data=[ws.recv() for _ in range(n)]
+                return [json.loads(d) for d in data]
+            finally:
+                ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def connect_wavemeter(self):
         self._send_websocket_request('{"message_type":"task_request","task":["start_wavemeter_link"]}')
     def disconnect_wavemeter(self):
         self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
+    def is_wavelemeter_connected(self):
+        return self._read_websocket_status(present_key="wlm_fitted")["wlm_fitted"]
 
     def get_system_status(self):
         _,reply=self.query("get_status",{})

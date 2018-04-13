@@ -70,7 +70,7 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
     _variable_change_tag="#sync.wait.variable"
     def set_variable(self, name, value, notify=False, notify_tag="changed/*"):
         with self._params_val_lock:
-            self._params_val[name]=value
+            self._params_val.add_entry(name,value,force=True)
         for ctl in self._params_exp.get(name,[]):
             ctl.send_message(self._variable_change_tag,value)
         if notify:
@@ -78,6 +78,10 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
             self.send_signal("any",notify_tag,value)
     def __setitem__(self, name, value):
         self.set_variable(name,value)
+    def __delitem__(self, name):
+        with self._params_val_lock:
+            if name in self._params_val:
+                del self._params_val[name]
     def add_command(self, name, command=None):
         if name in self._commands:
             raise ValueError("command {} already exists".format(name))
@@ -96,14 +100,16 @@ class DeviceThread(controller.QMultiRepeatingThreadController):
         return self._sync_call(self.process_query,args,kwargs,sync=True,timeout=timeout)
     def interrupt(self, *args, **kwargs):
         return self.call_in_thread_sync(self.process_interrupt,args,kwargs,sync=False)
-    def get_variable(self, name, default=None, copy_branch=True):
+    def get_variable(self, name, default=None, copy_branch=True, missing_error=False):
         with self._params_val_lock:
+            if missing_error and name not in self._params_val:
+                raise KeyError("no parameter {}".format(name))
             var=self._params_val.get(name,default)
             if copy_branch and dictionary.is_dictionary(var):
                 var=var.copy()
         return var
     def __getitem__(self, name):
-        return self.get_variable(name)
+        return self.get_variable(name,missing_error=True)
     def wait_for_variable(self, name, pred, timeout=None):
         if not hasattr(pred,"__call__"):
             v=pred
