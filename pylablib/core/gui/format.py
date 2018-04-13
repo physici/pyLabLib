@@ -158,7 +158,7 @@ class FloatFormatter(object):
         leading_zeros (bool): determines the minimal size of the integer part (before the deicmal point) of the number; pads with zeros if necessary.
         explicit_sign (bool): if ``True``, always add explicit plus sign.
     """
-    def __init__(self, output_format="auto", digits=9, add_trailing_zeros=False, leading_zeros=0, explicit_sign=False):
+    def __init__(self, output_format="auto", digits=9, add_trailing_zeros=True, leading_zeros=0, explicit_sign=False):
         "If trailing_zeros==True, then digits define precision, rather than number significant digits"
         object.__init__(self)
         if not output_format in ["auto", "SI", "sci"]:

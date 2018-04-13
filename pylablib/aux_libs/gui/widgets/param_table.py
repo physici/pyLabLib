@@ -34,6 +34,7 @@ class ParamTable(QtGui.QWidget):
         self.setObjectName(_fromUtf8(self.name))
         self.formLayout = QtGui.QGridLayout(self)
         self.formLayout.setSizeConstraint(QtGui.QLayout.SetDefaultConstraint)
+        self.formLayout.setContentsMargins(5,5,5,5)
         self.formLayout.setObjectName(_fromUtf8("formLayout"))
         self.add_indicator=add_indicator
         self.change_focused_control=False
@@ -143,6 +144,12 @@ class ParamTable(QtGui.QWidget):
         spacer=QtGui.QSpacerItem(1,height,QtGui.QSizePolicy.Minimum,QtGui.QSizePolicy.Expanding)
         self.formLayout.addItem(spacer)
         return spacer
+    def add_label(self, text):
+        label=QtGui.QLabel(self)
+        label.setText(str(text))
+        label.setAlignment(QtCore.Qt.AlignLeft)
+        self.formLayout.addWidget(label,self.formLayout.rowCount(),0,1,3 if self.add_indicator else 2)
+        return label
     def add_padding(self, prop=1):
         self.add_spacer(0)
         self.formLayout.setRowStretch(self.formLayout.rowCount(),prop)
@@ -174,6 +181,9 @@ class ParamTable(QtGui.QWidget):
         for n in values:
             if n in self.params:
                 self.params[n].value_handler.set_value(values[n])
+
+    def get_handler(self, name):
+        return self.params[name].value_handler
 
     def get_indicator(self, name):
         indicator_handler=self.params[name].indicator_handler

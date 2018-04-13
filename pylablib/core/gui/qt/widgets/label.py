@@ -25,7 +25,7 @@ class LVNumLabel(QtGui.QLabel):
         limiter=limit.NumberLimit(lower_limit=lower_limit,upper_limit=upper_limit,action=action,value_type=value_type)
         self.change_limiter(limiter)
     def change_formatter(self, formatter):
-        self.num_format=formatter
+        self.num_format=format.as_formatter(formatter)
         self.set_value(None)
     def set_number_format(self, kind="float", *args, **kwargs):
         if kind=="float":

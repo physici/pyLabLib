@@ -14,6 +14,7 @@ class ImageViewController(QtGui.QWidget):
         self.name=name
         self.setObjectName(self.name)
         self.layout=QtGui.QHBoxLayout(self)
+        self.layout.setContentsMargins(0,0,0,0)
         self.layout.setObjectName("layout")
         self.view=view
         self.view.attach_controller(self)
@@ -44,6 +45,7 @@ class ImageView(QtGui.QWidget):
         self.name=name
         self.setObjectName(self.name)
         self.layout=QtGui.QHBoxLayout(self)
+        self.layout.setContentsMargins(0,0,0,0)
         self.layout.setObjectName("layout")
         self.img=np.zeros(img_size)
         self.imageWindow=pyqtgraph.ImageView(self)
@@ -110,7 +112,8 @@ class ImageView(QtGui.QWidget):
             if params.v["flip_y"]:
                 draw_img=draw_img[:,::-1]
             autoscale=params.v["normalize"]
-            self.imageWindow.setImage(draw_img,autoLevels=autoscale,autoHistogramRange=autoscale)
+            if self.isVisible():
+                self.imageWindow.setImage(draw_img,autoLevels=autoscale,autoHistogramRange=autoscale)
             if update_controls:
                 self.update_image_controls()
             if not autoscale:
