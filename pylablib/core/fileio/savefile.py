@@ -24,8 +24,8 @@ import datetime
 def _is_file(value):
     return isinstance(value,datafile.DataFile)
 
-def _is_table(value):
-    return isinstance(value, datatable.DataTable) or (isinstance(value, np.ndarray) and value.ndim==2)
+def _is_table(value, allow_1D=False):
+    return isinstance(value, datatable.DataTable) or (isinstance(value, np.ndarray) and (value.ndim==2 or (allow_1D and value.ndim==1)) )
 def _table_row_iterator(value):
     if isinstance(value, datatable.DataTable):
         return value.r
@@ -353,7 +353,7 @@ def save(data, path="", output_format=None, loc="file", **kwargs):
         - ``'bin'``: Binary  file, corresponds to :class:`TableBinaryOutputFileFormat`
     """
     if output_format is None:
-        if _is_table(data) or (_is_file(data) and _is_table(data.data)):
+        if _is_table(data,allow_1D=True) or (_is_file(data) and _is_table(data.data)):
             output_format="csv"
         elif dictionary.is_dictionary(data) or (_is_file(data) and dictionary.is_dictionary(data.data)):
             output_format="dict"
