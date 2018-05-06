@@ -1,4 +1,4 @@
-from ....utils import general, funcargparse
+from ....utils import general, funcargparse, dictionary
 from . import signal_pool, threadprop, synchronizing
 
 from PyQt4 import QtCore
@@ -408,6 +408,134 @@ class QMultiRepeatingThreadController(QThreadController):
                 self.stop_batch_job(n)
         if self.cleanup:
             self.cleanup(*self.args,**self.kwargs)
+
+
+
+class QTaskThread(QMultiRepeatingThreadController):
+    def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
+        QMultiRepeatingThreadController.__init__(self,name=name,signal_pool=signal_pool)
+        self.setupargs=setupargs or []
+        self.setupkwargs=setupkwargs or {}
+        self._params_val=dictionary.Dictionary()
+        self._params_val_lock=threading.Lock()
+        self._params_exp=dictionary.Dictionary()
+        self._params_exp_lock=threading.Lock()
+        self._directed_signal.connect(self._on_directed_signal)
+        self._commands={}
+        self.c=self.CommandAccess(self,sync=False)
+        self.q=self.CommandAccess(self,sync=True)
+
+    def setup_task(self, *args, **kwargs):
+        pass
+    def process_signal(self, src, tag, value):
+        pass
+    def process_command(self, *args, **kwargs):
+        self.process_named_command(*args,**kwargs)
+    def process_query(self, *args, **kwargs):
+        self.process_named_command(*args,**kwargs)
+    def process_interrupt(self, *args, **kwargs):
+        pass
+    def finalize_task(self):
+        pass
+
+    def on_start(self):
+        QMultiRepeatingThreadController.on_start(self)
+        self.setup_task(*self.setupargs,**self.setupkwargs)
+        self.subscribe_nonsync(self._recv_directed_signal)
+    def on_finish(self):
+        QMultiRepeatingThreadController.on_finish(self)
+        self.finalize_task()
+
+    _directed_signal=QtCore.pyqtSignal("PyQt_PyObject")
+    @QtCore.pyqtSlot("PyQt_PyObject")
+    def _on_directed_signal(self, msg):
+        self.process_signal(*msg)
+    def _recv_directed_signal(self, tag, src, value):
+        self._directed_signal.emit((tag,src,value))
+
+    def process_named_command(self, name, *args, **kwargs):
+        if name in self._commands:
+            self._commands[name](*args,**kwargs)
+        else:
+            raise KeyError("unrecognized command {}".format(name))
+
+    _variable_change_tag="#sync.wait.variable"
+    def set_variable(self, name, value, notify=False, notify_tag="changed/*"):
+        with self._params_val_lock:
+            self._params_val.add_entry(name,value,force=True)
+        for ctl in self._params_exp.get(name,[]):
+            ctl.send_message(self._variable_change_tag,value)
+        if notify:
+            notify_tag.replace("*",name)
+            self.send_signal("any",notify_tag,value)
+    def __setitem__(self, name, value):
+        self.set_variable(name,value)
+    def __delitem__(self, name):
+        with self._params_val_lock:
+            if name in self._params_val:
+                del self._params_val[name]
+    def add_command(self, name, command=None):
+        if name in self._commands:
+            raise ValueError("command {} already exists".format(name))
+        if command is None:
+            command=name
+        self._commands[name]=command
+
+    def _sync_call(self, func, args, kwargs, sync, timeout=None):
+        return self.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute")
+    def command(self, *args, **kwargs):
+        self._sync_call(self.process_command,args,kwargs,sync=False)
+    def query(self, *args, **kwargs):
+        timeout=kwargs.pop("timeout",None)
+        return self._sync_call(self.process_query,args,kwargs,sync=True,timeout=timeout)
+    def interrupt(self, *args, **kwargs):
+        return self.call_in_thread_sync(self.process_interrupt,args,kwargs,sync=False)
+    def get_variable(self, name, default=None, copy_branch=True, missing_error=False):
+        with self._params_val_lock:
+            if missing_error and name not in self._params_val:
+                raise KeyError("no parameter {}".format(name))
+            var=self._params_val.get(name,default)
+            if copy_branch and dictionary.is_dictionary(var):
+                var=var.copy()
+        return var
+    def __getitem__(self, name):
+        return self.get_variable(name,missing_error=True)
+    def wait_for_variable(self, name, pred, timeout=None):
+        if not hasattr(pred,"__call__"):
+            v=pred
+            pred=lambda x: x==v
+        ctl=threadprop.current_controller()
+        with self._params_exp_lock:
+            self._params_exp.setdefault(name,[]).append(ctl)
+        ctd=general.Countdown(timeout)
+        try:
+            while True:
+                value=self.get_variable(name)
+                if pred(value):
+                    return value
+                ctl.wait_for_message(self._variable_change_tag,timeout=ctd.time_left())
+        finally:
+            with self._params_exp_lock:
+                self._params_exp[name].remove(ctl)
+
+    class CommandAccess(object):
+        def __init__(self, parent, sync, timeout=None):
+            object.__init__(self)
+            self.parent=parent
+            self.sync=sync
+            self.timeout=timeout
+            self._calls={}
+        def __getattr__(self, name):
+            if name not in self._calls:
+                parent=self.parent
+                def remcall(*args, **kwargs):
+                    if self.sync:
+                        return parent.query(name,*args,timeout=self.timeout,**kwargs)
+                    else:
+                        return parent.command(name,*args,**kwargs)
+                self._calls[name]=remcall
+            return self._calls[name]
+
 
 
 

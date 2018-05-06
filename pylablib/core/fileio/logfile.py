@@ -59,13 +59,29 @@ class LogFile(object):
         Create the file if it doesn't exist.
         
         Args:
-            data (list): Data row to be added.
+            data (list or np.ndarray): Data row to be added.
             columns (list): If not ``None``, it's a list of column names to be added as a header on creation.
             fmt (str): If not ``None``, it's a list of format strings for the line entries.
             add_timestamp (bool): If ``True``, add the UNIX timestamp in the beginning of the line.\
         """
+        self.write_multi_datalines([data],columns=columns,fmt=fmt,add_timestamp=add_timestamp)
+    def write_multi_datalines(self, data, columns=None, fmt=None, add_timestamp=True):
+        """
+        Write a multiple data lines into the file. 
+        
+        Create the file if it doesn't exist.
+        
+        Args:
+            data (list of lists): Data rows to be added.
+            columns (list): If not ``None``, it's a list of column names to be added as a header on creation.
+            fmt (str): If not ``None``, it's a list of format strings for the line entries.
+            add_timestamp (bool): If ``True``, add the UNIX timestamp in the beginning of the line.\
+        """
+        if len(data)==0:
+            return
+        datalen=len(data[0])
         if columns:
-            if len(columns)!=len(data):
+            if len(columns)!=datalen:
                 raise ValueError("columns dimensions don't agree with data dimensions")
             if add_timestamp:
                 columns=["Timestamp"]+columns
@@ -74,7 +90,8 @@ class LogFile(object):
             header=""
         fmt=fmt or self.default_fmt
         if fmt is None:
-            fmt=[None]*len(data)
-        data=[string.to_string(v,location="entry") if f is None else ("{:"+f+"}").format(v) for f,v in zip(fmt,data)]
-        line=self.sep.join(data)
-        self.write_line(line,header,add_timestamp=add_timestamp)
+            fmt=[None]*datalen
+        for row in data:
+            row=[string.to_string(v,location="entry") if f is None else ("{:"+f+"}").format(v) for f,v in zip(fmt,row)]
+            line=self.sep.join(row)
+            self.write_line(line,header,add_timestamp=add_timestamp)
