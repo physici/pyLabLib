@@ -130,7 +130,7 @@ class KinesisDevice(backend.IBackendWrapper):
     """
     def __init__(self, conn, timeout=3.):
         conn=backend.FT232DeviceBackend.combine_conn(conn,(None,115200))
-        instr=backend.FT232DeviceBackend(conn,term_write="",term_read="",timeout=timeout)
+        instr=backend.FT232DeviceBackend(conn,term_write=b"",term_read=b"",timeout=timeout)
         backend.IBackendWrapper.__init__(self,instr)
 
     def send_comm_nodata(self, messageID, param1=0x00, param2=0x00, source=0x01, dest=0x50):
@@ -165,7 +165,7 @@ class KinesisDevice(backend.IBackendWrapper):
         data=self.recv_comm_data().data
         serial_no=strpack.unpack_uint(data[:4],"<")
         model_no=data[4:12].decode()
-        while model_no[-1]=="\x00":
+        while model_no[-1]==b"\x00":
             model_no=model_no[:-1]
         fw_ver="{}.{}.{}".format(strpack.unpack_uint(data[16:17]),strpack.unpack_uint(data[15:16]),strpack.unpack_uint(data[14:15]))
         hw_type=strpack.unpack_uint(data[12:14],"<")

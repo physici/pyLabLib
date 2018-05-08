@@ -188,6 +188,8 @@ try:
             term_write (str): Line terminator for writing operations; appended to the data
             term_read (str): Line terminator for reading operations (specifies when :func:`readline` stops).
             do_lock (bool): If ``True``, employ locking operations; otherwise, locking function does nothing.
+            datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
+                or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
         """
         _default_operation_cooldown=0.03
         _backend="visa"
@@ -206,9 +208,9 @@ try:
                 return self.instr.timeout
             def _open_resource(self, conn):
                 if self.term_read is None:
-                    term_read='\n'
+                    term_read=b'\n'
                 if self.term_write is None:
-                    term_write='\n'
+                    term_write=b'\n'
                 if not term_write.endswith(term_read):
                     raise NotImplementedError("PyVisa version <1.6 doesn't support different terminators for reading and writing")
                 instr=visa.instrument(conn)
@@ -242,8 +244,8 @@ try:
                 return self.instr.lock_context(timeout=timeout*1000. if timeout is not None else None)
             
         
-        def __init__(self, conn, timeout=10., term_write=None, term_read=None, do_lock=None):
-            IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
+        def __init__(self, conn, timeout=10., term_write=None, term_read=None, do_lock=None, datatype="auto"):
+            IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read,datatype=datatype)
             try:
                 self.instr=self._open_resource(self.conn)
                 self._operation_cooldown=self._default_operation_cooldown
@@ -306,15 +308,14 @@ try:
                 skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
             """
             with self.using_timeout(timeout):
-                if remove_term:
-                    while True:
-                        result=self.instr.read()
-                        if (not skip_empty) or result:
-                            break
-                else:
+                while True:
                     result=self.instr.read_raw()
+                    if remove_term:
+                        result=result[:-len(self.instr.term_chars)]
+                    if (not skip_empty) or result:
+                        break
             self.cooldown()
-            return result
+            return self._to_datatype(result)
         def read(self, size=None):
             """
             Read data from the device.
@@ -326,7 +327,7 @@ try:
                     return self.instr.read_raw(size=size)
             result=self.instr.read_raw(size=size)
             self.cooldown()
-            return result
+            return self._to_datatype(result)
         
         def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
             """
@@ -335,9 +336,10 @@ try:
             If ``flush==True``, flush the write buffer.
             If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
             """
+            data=py3.as_builtin_bytes(data)
             if self.term_write:
-                data=data+self.term_write
-            self.instr.write(data)
+                data=data+py3.as_builtin_bytes(self.term_write)
+            self.instr.write_raw(data)
             self.cooldown()
             if read_echo_delay>0.:
                 time.sleep(read_echo_delay)

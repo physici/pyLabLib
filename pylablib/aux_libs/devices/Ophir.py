@@ -1,4 +1,5 @@
 from ...core.devio import backend,units  #@UnresolvedImport
+from ...core.utils import py3
 import collections
 
 _depends_local=["...core.devio.backend"]
@@ -13,10 +14,10 @@ class OphirDevice(backend.IBackendWrapper):
     
     def _parse_response(self, comm, resp):
         resp=resp.strip()
-        if resp.startswith("?"):
+        if resp.startswith(b"?"):
             raise RuntimeError("Command {} returned error: {}".format(comm,resp[1:].strip()))
-        if resp.startswith("*"):
-            return resp[1:].strip()
+        if resp.startswith(b"*"):
+            return py3.as_str(resp[1:].strip())
         raise RuntimeError("Command {} returned unrecognized response: {}".format(comm,resp))
     def query(self, comm, timeout=None):
         comm=comm.strip()
