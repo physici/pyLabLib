@@ -1,4 +1,5 @@
 from ...core.utils import net
+from ...core.devio.interface import IDevice
 
 try:
     import websocket
@@ -17,9 +18,9 @@ class M2Error(RuntimeError):
     M2 communication error.
     """
     pass
-class M2ICE(object):
+class M2ICE(IDevice):
     def __init__(self, addr, port, timeout=3., start_link=True, use_websocket=True):
-        object.__init__(self)
+        IDevice.__init__(self)
         self.tx_id=1
         self.conn=(addr,port)
         self.timeout=timeout
@@ -35,12 +36,6 @@ class M2ICE(object):
         self._last_status={}
     def close(self):
         self.socket.close()
-
-    def __enter__(self):
-        return self
-    def __exit__(self, *args, **vargs):
-        self.close()
-        return False
 
     def _build_message(self, op, params, tx_id=None):
         if tx_id is None:

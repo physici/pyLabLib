@@ -1,6 +1,8 @@
 from . import backend
 from .backend import autodetect_backend, new_backend, IBackendWrapper
 
+from .interface import IDevice
+
 from . import SCPI
 from .SCPI import SCPIDevice
 

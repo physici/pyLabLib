@@ -1,4 +1,5 @@
 from .misc import default_lib_folder, load_lib
+from ...core.devio.interface import IDevice
 
 import os.path
 import ctypes
@@ -7,12 +8,12 @@ import ctypes
 class HFError(RuntimeError):
     """Generic HighFinesse wavemeter error."""
 
-class WS(object):
+class WS(IDevice):
     """
     WS precision wavemeter.
     """
     def __init__(self, lib_path=None, idx=0):
-        object.__init__(self)
+        IDevice.__init__(self)
         if lib_path==6:
             lib_path=os.path.join(default_lib_folder,"wlmData6.dll")
         if lib_path in [None,7]:
@@ -35,13 +36,6 @@ class WS(object):
 
     def open(self):
         self.dll.Instantiate(-1,0,0,0)
-    def close(self):
-        pass
-
-    def __enter__(self):
-        return self
-    def __exit__(self, *args, **vargs):
-        return False
     
     _GetFunc_err={  0:"ErrNoValue: No value",
                             -1:"ErrNoSignal: No signal detected",

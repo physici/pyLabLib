@@ -1,5 +1,6 @@
 from .misc import default_lib_folder, load_lib
 from ...core.utils import py3
+from ...core.devio.interface import IDevice
 
 import os.path
 import ctypes
@@ -8,12 +9,12 @@ import time
 class ArcusError(RuntimeError):
     """Generic Arcus error."""
 
-class PerformaxStage(object):
+class PerformaxStage(IDevice):
     """
     Performax translational stage.
     """
     def __init__(self, lib_path=None, idx=0):
-        object.__init__(self)
+        IDevice.__init__(self)
         if lib_path is None:
             lib_path=os.path.join(default_lib_folder,"PerformaxCom.dll")
         self.dll=load_lib(lib_path,locally=True)

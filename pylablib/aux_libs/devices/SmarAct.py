@@ -1,4 +1,5 @@
 from ...core.utils import general
+from ...core.devio.interface import IDevice
 
 from .misc import default_lib_folder, load_lib
 
@@ -9,12 +10,12 @@ import time
 class SmarActError(RuntimeError):
     """Generic SmarAct error."""
 
-class SCU3D(object):
+class SCU3D(IDevice):
     """
     SCU3D translational stage.
     """
     def __init__(self, lib_path=None, idx=0, channel_mapping="xyz", channel_dir="+++"):
-        object.__init__(self)
+        IDevice.__init__(self)
         if lib_path is None:
             lib_path=os.path.join(default_lib_folder,"SCU3DControl.dll")
         self.dll=load_lib(lib_path)

@@ -1,6 +1,6 @@
 from .Andor_lib import lib, AndorLibError
 
-from ...core.devio import backend
+from ...core.devio.interface import IDevice
 from ...core.utils import funcargparse, py3
 
 import numpy as np
@@ -16,9 +16,9 @@ def get_cameras_number():
     lib.initlib()
     return lib.GetAvailableCameras()
 
-class AndorCamera(backend.IBackendWrapper):
+class AndorCamera(IDevice):
     def __init__(self, idx=0, ini_path=""):
-        backend.IBackendWrapper.__init__(self,idx)
+        IDevice.__init__(self)
         lib.initlib()
         self.idx=idx
         self.ini_path=ini_path

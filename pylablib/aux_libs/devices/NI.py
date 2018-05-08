@@ -1,5 +1,6 @@
 from ...core.devio import backend  #@UnresolvedImport
 from ...core.utils import general, funcargparse  #@UnresolvedImport
+from ...core.devio.interface import IDevice
 
 import time
 import numpy as np
@@ -138,14 +139,14 @@ try:
 except ImportError:
     pass
 
-class NIDAQ(object):
+class NIDAQ(IDevice):
     """
     National Instruments DAQ device.
     """
     _default_retry_delay=5.
     _default_retry_times=5
     def __init__(self, dev_name, rate=1E4, buffer_size=1E5):
-        object.__init__(self)
+        IDevice.__init__(self)
         self.dev_name=dev_name.strip("/")
         self.rate=rate
         self.buffer_size=buffer_size
@@ -181,13 +182,6 @@ class NIDAQ(object):
         self.ao_channels={}
         self.ao_values={}
         self._update_channel_names()
-
-    def __enter__(self):
-        self.open()
-        return self
-    def __exit__(self, *args, **vargs):
-        self.close()
-        return False
 
     def _build_channel_name(self, channel):
         channel=channel.lower().strip("/")
