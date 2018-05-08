@@ -28,6 +28,18 @@ def setup_func(func, argtypes, restype=None, errcheck=None):
     if errcheck is not None:
         func.errcheck=errcheck
 
+def _default_argprep(arg, argtype):
+    if argtype in [ctypes.c_int8,ctypes.c_int16,ctypes.c_int32,ctypes.c_int64,
+                    ctypes.c_uint8,ctypes.c_uint16,ctypes.c_uint32,ctypes.c_uint64]:
+        return int(arg)
+    if argtype in [ctypes.c_float,ctypes.c_double]:
+        return float(arg)
+    if argtype==ctypes.c_char_p:
+        return py3.as_builtin_bytes(arg)
+    return arg
+
+
+
 class CTypesWrapper(object):
     """
     Wrapper object for ctypes function.
@@ -35,11 +47,12 @@ class CTypesWrapper(object):
     Cosntructor argumetns coincide with the call arguments, and determine their default values.
     For their meaning, see :meth:`wrap`.
     """
-    def __init__(self, argtypes=None, argnames=None, restype=None, return_res="auto", rvprep=None, rvconv=None, rvref=None, rvnames=None, tuple_single_retval=False, errcheck=None):
+    def __init__(self, argtypes=None, argnames=None, addargs=None, restype=None, return_res="auto", rvprep=None, rvconv=None, rvref=None, rvnames=None, tuple_single_retval=False, errcheck=None):
         object.__init__(self)
         self.argtypes=getdefault(argtypes,[])
         self.argnames=argnames
         self.restype=restype
+        self.addargs=getdefault(addargs,[])
         self.errcheck=errcheck
         self.rvconv=rvconv
         self.rvnames=rvnames
@@ -62,6 +75,9 @@ class CTypesWrapper(object):
         if rvprep is None:
             rvprep=[None]*len(argtypes)
         return [t() if p is None else p(*args) for (t,p) in zip(argtypes,rvprep)]
+    @staticmethod
+    def _prep_args(argtypes, args):
+        return [_default_argprep(a,t) for (t,a) in zip(argtypes,args)]
     @staticmethod
     def _conv_rval(rvals, rvconv, args):
         if rvconv is None:
@@ -95,7 +111,18 @@ class CTypesWrapper(object):
         else:
             return collections.namedtuple("Result",rvnames)(*rvals)
 
-    def wrap(self, func, argtypes=None, argnames=None, restype=None, return_res=None, rvprep=None, rvconv=None, rvref=None, rvnames=None, tuple_single_retval=None, errcheck=None):
+    def setup(self, func, argtypes=None, restype=None, errcheck=None):
+        """
+        Setup a ctypes function.
+
+        Analogous to :func:`setup_func`, but uses wrapper's default argumetns.
+        """
+        argtypes=getdefault(argtypes,self.argtypes)
+        restype=getdefault(restype,self.restype)
+        errcheck=getdefault(errcheck,self.errcheck)
+        setup_func(func,argtypes,restype=restype,errcheck=errcheck)
+
+    def wrap(self, func, argtypes=None, argnames=None, addargs=None, restype=None, return_res=None, rvprep=None, rvconv=None, rvref=None, rvnames=None, tuple_single_retval=None, errcheck=None):
         """
         Wrap C function in a Python call.
 
@@ -105,6 +132,8 @@ class CTypesWrapper(object):
                 if an argument is of return-by-pointer kind, it should be the value type (the pointer is added automatically)
             argnames (list): list of argument names of the function. Includes either strings (which are interpreted as argument names passed to the wrapper function),
                 or ``None`` (whcih mean that this argument is return-by-pointer).
+            addargs (list): list of additional arguments which are added to the wrapper function, but are not passed to the wrapped function (added in the end);
+                can be used for, e.g., `rvprep` or `rvconv` functions.
             restype: type of the return value. Can be ``None`` if the return value isn't used.
             return_res (bool): determines whether return the function return value. By default, it is returned only if there are no return-by-pointer arguments.
             rvprep (list): list of functions which prepare return-by-pointer arguments before passing them to the function.
@@ -120,6 +149,7 @@ class CTypesWrapper(object):
         argtypes=getdefault(argtypes,self.argtypes)
         argnames=getdefault(argnames,self.argnames)
         argnames=getdefault(argnames,self._default_names("arg",len(argtypes)))
+        addargs=getdefault(addargs,self.addargs)
         iargs,irvals=self._split_args(argnames)
         restype=getdefault(restype,self.restype)
         return_res=getdefault(return_res,self.return_res)
@@ -136,10 +166,12 @@ class CTypesWrapper(object):
         for i,ref in zip(irvals,rvref):
             if ref:
                 sign_argtypes[i]=ctypes.POINTER(sign_argtypes[i])
-        sign=functions.FunctionSignature([argnames[i] for i in iargs],name=func.__name__)
+        call_argnames=[argnames[i] for i in iargs]+addargs
+        sign=functions.FunctionSignature(call_argnames,name=func.__name__)
         setup_func(func,sign_argtypes,restype=restype,errcheck=errcheck)
         def wrapped_func(*args):
             rvals=self._prep_rval([argtypes[i] for i in irvals],rvprep,args)
+            args=self._prep_args([argtypes[i] for i in iargs],args)
             argrvals=[ctypes.byref(rv) if ref else rv for (ref,rv) in zip(rvref,rvals)]
             func_args=self._join_args(iargs,args,irvals,argrvals)
             res=func(*func_args)
@@ -154,9 +186,10 @@ class CTypesWrapper(object):
     __call__=wrap
 
 
-def strprep(l):
+def strprep(l, ctype=None):
+    ctype=ctype or ctypes.c_char_p
     def prep(*args, **kwargs):
-        return ctypes.create_string_buffer(l)
+        return ctypes.cast(ctypes.create_string_buffer(l),ctype)
     return prep
 
 def buffprep(size_arg_pos, dtype):
@@ -173,6 +206,8 @@ def buffconv(size_arg_pos, dtype):
         return np.fromstring(data,dtype=dformat.to_desc("numpy"))
     return conv
 
+def nullprep(*args, **kwrags):
+    return None
 
 
 class StructWrap(object):
@@ -181,6 +216,9 @@ class StructWrap(object):
     _prep={}
     _conv={}
     _tup={}
+    _tup_exc={}
+    _tup_inc=None
+    _tup_add=[]
     _default={}
     def __init__(self, struct=None):
         struct=struct or self._struct()
@@ -207,7 +245,7 @@ class StructWrap(object):
             if f in self._prep:
                 cv=self._prep[f](*ordparams)
             else:
-                cv=t(params[f])
+                cv=params[f]
             cparams[f]=cv
         return self.prep(self._struct(**cparams))
 
@@ -222,6 +260,10 @@ class StructWrap(object):
     def tup(self):
         params=self.tupdict()
         fnames,ftypes=zip(*self._struct._fields_)
+        fnames=[f for f in fnames if f not in self._tup_exc]
+        fnames+=self._tup_add
+        if self._tup_inc is not None:
+            fnames=[f for f in fnames if f in self._tup_inc]
         for f in fnames:
             if f not in params:
                 params[f]=getattr(self,f)
