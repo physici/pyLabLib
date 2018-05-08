@@ -1,4 +1,5 @@
 from .misc import default_lib_folder, load_lib
+from ...core.utils import py3
 
 import os.path
 import ctypes
@@ -58,8 +59,8 @@ class PerformaxStage(object):
         return devs
     def query(self, comm):
         self._check_handle()
-        if self.dll.fnPerformaxCommandReply(self.handle,comm,self.rbuff):
-            return self.rbuff.value
+        if self.dll.fnPerformaxCommandReply(self.handle,py3.as_builtin_bytes(comm),self.rbuff):
+            return py3.as_str(self.rbuff.value)
         else:
             raise ArcusError("error sending command {}".format(comm))
 

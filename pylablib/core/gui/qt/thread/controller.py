@@ -336,7 +336,7 @@ class QMultiRepeatingThreadController(QThreadController):
         gen=job(*args,**kwargs)
         def do_step():
             try:
-                p=gen.next()
+                p=next(gen)
                 if p is not None:
                     self.change_job_period(name,p)
             except StopIteration:

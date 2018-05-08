@@ -1,7 +1,7 @@
 import time
 import contextlib
 
-from ..utils.py3 import textstring
+from ..utils.py3 import textstring, as_str
 from . import data_format
 from . import backend as backend_module  #@UnresolvedImport
 from ..utils import general as general_utils  #@UnresolvedImport
@@ -291,6 +291,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
     def _parse_msg(self, msg, data_type="string"):
         if data_type=="raw":
             return msg
+        msg=as_str(msg)
         msg=msg.strip()
         if data_type=="string":
             return msg

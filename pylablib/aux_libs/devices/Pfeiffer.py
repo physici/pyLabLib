@@ -29,13 +29,13 @@ class TPG261(backend.IBackendWrapper):
         raise PfeifferError("device returned unexpected acknowledgement: {}".format(rsp))
     def query(self, msg):
         self.comm(msg)
-        self.instr.write("\05")
+        self.instr.write(b"\05")
         return self.instr.readline()
         
     _pstats=["OK","underrange","overrange","sensor error","sensor off","no sensor","ID error"]
     def get_pressure(self, channel=1):
         resp=self.query("PR{}".format(channel))
-        stat,press=[s.strip() for s in resp.split(",")]
+        stat,press=[s.strip() for s in resp.split(b",")]
         stat=int(stat)
         if stat:
             raise PfeifferError("pressure reading error: status {} ({})".format(stat,self._pstats[stat]))

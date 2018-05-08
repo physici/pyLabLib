@@ -338,7 +338,7 @@ class RetryOnException(object):
                     return True
             return False
         def reraise(self):
-            raise
+            raise self.error
     def __iter__(self):
         cnt=0
         while True:

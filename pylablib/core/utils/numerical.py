@@ -58,19 +58,19 @@ def round_significant(x, n):
 
 
 
-def limit_to_range(x, min_val=None, max_val=None):
+def limit_to_range(x, min_val=None, max_val=None, default=0):
     """
     Confine `x` to the given limit.
     
     Default limit values are ``None``, which means no limit.
     """
-    if min_val is None and max_val is None:
-        return x
+    if (min_val is None) and (max_val is None):
+        return x if x is not None else default
     if min_val is None:
-        return min(max_val,x)
+        return min(max_val,x) if x is not None else max_val
     if max_val is None:
-        return max(min_val,x)
-    return sorted([min_val,x,max_val])[1]
+        return max(min_val,x) if x is not None else min_val
+    return sorted([min_val,x,max_val])[1] if x is not None else (max_val+min_val)/2.
 
 
 class infinite_list(object):

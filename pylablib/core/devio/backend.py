@@ -7,7 +7,7 @@ from builtins import range, zip
 
 import time
 import re
-from ..utils import funcargparse, general, log, net
+from ..utils import funcargparse, general, log, net, py3
 import contextlib
 
 
@@ -24,12 +24,16 @@ class IDeviceBackend(object):
         timeout (float): Default timeout (in seconds).
         term_write (str): Line terminator for writing operations.
         term_read (str): Line terminator for reading operations.
+        datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
+            or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
     """
     Error=RuntimeError
     """Base class for the errors raised by the backend operations""" 
     
-    def __init__(self, conn, timeout=None, term_write=None, term_read=None):
+    def __init__(self, conn, timeout=None, term_write=None, term_read=None, datatype="auto"):
         object.__init__(self)
+        funcargparse.check_parameter_range(datatype,"datatype",{"auto","str","bytes"})
+        self.datatype=datatype
         self.conn=conn
         self.term_write=term_write
         self.term_read=term_read
@@ -48,6 +52,13 @@ class IDeviceBackend(object):
         conn=cls._conn_to_dict(conn2).copy()
         conn.update(cls._conn_to_dict(conn1))
         return conn
+
+    def _to_datatype(self, data):
+        if self.datatype=="auto":
+            return data
+        if self.datatype=="str":
+            return py3.as_str(data)
+        return py3.as_bytes(data)
     
     def open(self):
         """Open the connection."""
@@ -150,7 +161,7 @@ def remove_longest_term(msg, terms):
     """
     tcs=0
     for t in terms:
-        if msg.endswith(t):
+        if msg.endswith(py3.as_builtin_bytes(t)):
             tcs=max(tcs,len(t))
     return msg[:-tcs]
     
@@ -366,6 +377,8 @@ try:
                 (normally two processes can't be simultaneously connected to the same device). 
             open_retry_times (int): Number of times the connection is attempted before giving up.
             no_dtr (bool): If ``True``, turn off DTR status line before opening (e.g., turns off reset-on-connection for Arduino controllers).
+            datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
+                or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
         """
         _default_operation_cooldown=0.0
         _backend="serial"
@@ -380,15 +393,15 @@ try:
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts","dsrdtr"]
         _default_conn=["COM1",19200,8,"N",1,0,0,0]
 
-        def __init__(self, conn, timeout=10., term_write=None, term_read=None, connect_on_operation=False, open_retry_times=3, no_dtr=False):
+        def __init__(self, conn, timeout=10., term_write=None, term_read=None, connect_on_operation=False, open_retry_times=3, no_dtr=False, datatype="auto"):
             conn_dict=self.combine_conn(conn,self._default_conn)
             if term_write is None:
-                term_write="\r\n"
+                term_write=b"\r\n"
             if term_read is None:
-                term_read="\n"
+                term_read=b"\n"
             if isinstance(term_read,anystring):
                 term_read=[term_read]
-            IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read)
+            IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read,datatype=datatype)
             port=conn_dict.pop("port")
             try:
                 self.instr=serial.serial_for_url(port,do_not_open=True,**conn_dict)
@@ -466,15 +479,16 @@ try:
             return self.instr.timeout
         
         
-        def _read_terms(self, terms="", timeout=None, error_on_timeout=True):
-            result=""
+        def _read_terms(self, terms=(), timeout=None, error_on_timeout=True):
+            result=b""
             singlechar_terms=all(len(t)==1 for t in terms)
+            terms=[py3.as_builtin_bytes(t) for t in terms]
             with self.single_op():
                 with self.using_timeout(timeout):
                     while True:
                         c=self.instr.read(1 if terms else 8)
                         result=result+c
-                        if c=="":
+                        if c==b"":
                             if error_on_timeout and terms:
                                 raise self.Error()
                             return result
@@ -496,13 +510,13 @@ try:
                 error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
             """
             while True:
-                result=self._read_terms(self.term_read or "",timeout=timeout,error_on_timeout=error_on_timeout)
+                result=self._read_terms(self.term_read or [],timeout=timeout,error_on_timeout=error_on_timeout)
                 self.cooldown()
                 if remove_term and self.term_read:
                     result=remove_longest_term(result,self.term_read)
                 if not (skip_empty and remove_term and (not result)):
                     break
-            return result
+            return self._to_datatype(result)
         def read(self, size=None, error_on_timeout=True):
             """
             Read data from the device.
@@ -517,7 +531,7 @@ try:
                     if len(result)!=size:
                         raise self.Error()
                 self.cooldown()
-                return result
+                return self._to_datatype(result)
         def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
             """
             Read a single line with multiple possible terminators.
@@ -534,7 +548,7 @@ try:
             self.cooldown()
             if remove_term and term:
                 result=remove_longest_term(result,term)
-            return result
+            return self._to_datatype(result)
         def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
             """
             Write data to the device.
@@ -543,8 +557,9 @@ try:
             If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
             """
             with self.single_op():
+                data=py3.as_builtin_bytes(data)
                 if self.term_write:
-                    data=data+self.term_write
+                    data=data+py3.as_builtin_bytes(self.term_write)
                 self.instr.write(data)
                 self.cooldown()
                 if flush:
@@ -589,6 +604,8 @@ try:
                 (normally two processes can't be simultaneously connected to the same device). 
             open_retry_times (int): Number of times the connection is attempted before giving up.
             no_dtr (bool): If ``True``, turn off DTR status line before opening (e.g., turns off reset-on-connection for Arduino controllers).
+            datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
+                or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
         """
         _default_operation_cooldown=0.0
         _backend="ft232"
@@ -603,15 +620,15 @@ try:
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts"]
         _default_conn=[None,9600,8,"N",1,0,0]
 
-        def __init__(self, conn, timeout=10., term_write=None, term_read=None, open_retry_times=3):
+        def __init__(self, conn, timeout=10., term_write=None, term_read=None, open_retry_times=3, datatype="auto"):
             conn_dict=self.combine_conn(conn,self._default_conn)
             if term_write is None:
-                term_write="\r\n"
+                term_write=b"\r\n"
             if term_read is None:
-                term_read="\n"
+                term_read=b"\n"
             if isinstance(term_read,anystring):
                 term_read=[term_read]
-            IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read)
+            IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read,datatype=datatype)
             port=conn_dict.pop("port")
             try:
                 self.instr=ft232.Ft232(port,**conn_dict)
@@ -666,15 +683,16 @@ try:
             return self.instr.timeout
         
         
-        def _read_terms(self, terms="", timeout=None, error_on_timeout=True):
-            result=""
+        def _read_terms(self, terms=(), timeout=None, error_on_timeout=True):
+            result=b""
             singlechar_terms=all(len(t)==1 for t in terms)
+            terms=[py3.as_builtin_bytes(t) for t in terms]
             with self.single_op():
                 with self.using_timeout(timeout):
                     while True:
                         c=self.instr.read(1 if terms else 8)
                         result=result+c
-                        if c=="":
+                        if c==b"":
                             if error_on_timeout and terms:
                                 raise self.Error(4)
                             return result
@@ -696,13 +714,13 @@ try:
                 error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
             """
             while True:
-                result=self._read_terms(self.term_read or "",timeout=timeout,error_on_timeout=error_on_timeout)
+                result=self._read_terms(self.term_read or [],timeout=timeout,error_on_timeout=error_on_timeout)
                 self.cooldown()
                 if remove_term and self.term_read:
                     result=remove_longest_term(result,self.term_read)
                 if not (skip_empty and remove_term and (not result)):
                     break
-            return result
+            return self._to_datatype(result)
         def read(self, size=None, error_on_timeout=True):
             """
             Read data from the device.
@@ -717,7 +735,7 @@ try:
                     if len(result)!=size:
                         raise self.Error(4)
                 self.cooldown()
-                return result
+                return self._to_datatype(result)
         def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
             """
             Read a single line with multiple possible terminators.
@@ -734,7 +752,7 @@ try:
             self.cooldown()
             if remove_term and term:
                 result=remove_longest_term(result,term)
-            return result
+            return self._to_datatype(result)
         def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
             """
             Write data to the device.
@@ -743,8 +761,9 @@ try:
             If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
             """
             with self.single_op():
+                data=py3.as_builtin_bytes(data)
                 if self.term_write:
-                    data=data+self.term_write
+                    data=data+py3.as_builtin_bytes(self.term_write)
                 self.instr.write(data)
                 self.cooldown()
                 if flush:
@@ -779,7 +798,8 @@ class NetworkDeviceBackend(IDeviceBackend):
         timeout (float): Default timeout (in seconds).
         term_write (str): Line terminator for writing operations; appended to the data
         term_read (str): List of possible single-char terminator for reading operations (specifies when :func:`readline` stops).
-        open_retry_times (int): Number of times the connection is attempted before giving up.
+        datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
+            or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
         
     Note:
         If `term_read` is a string, its behavior is different from the VISA backend:
@@ -796,7 +816,7 @@ class NetworkDeviceBackend(IDeviceBackend):
             IBackendOpenError.__init__(self)
             net.socket.error.__init__(self,*e.args)
 
-    def __init__(self, conn, timeout=10., term_write=None, term_read=None):
+    def __init__(self, conn, timeout=10., term_write=None, term_read=None, datatype="auto"):
         if term_write is None:
             term_write="\r\n"
         if term_read is None:
@@ -805,7 +825,7 @@ class NetworkDeviceBackend(IDeviceBackend):
             term_read=[term_read]
         conn=self._conn_to_dict(conn)
         self._split_addr(conn)
-        IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read)
+        IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read,datatype=datatype)
         try:
             self.open()
             self._operation_cooldown=self._default_operation_cooldown
@@ -872,7 +892,7 @@ class NetworkDeviceBackend(IDeviceBackend):
                 result=remove_longest_term(result,self.term_read)
             if not (skip_empty and remove_term and (not result)):
                 break
-        return result
+        return self._to_datatype(result)
     def read(self, size=None, error_on_timeout=True):
         """
         Read data from the device.
@@ -887,7 +907,7 @@ class NetworkDeviceBackend(IDeviceBackend):
             except net.SocketTimeout:
                 if error_on_timeout:
                     raise
-        return data
+        return self._to_datatype(data)
     def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
         """
         Read a single line with multiple possible terminators.
@@ -904,7 +924,7 @@ class NetworkDeviceBackend(IDeviceBackend):
         self.cooldown()
         if remove_term and term:
             result=remove_longest_term(result,term)
-        return result
+        return self._to_datatype(result)
     def write(self, data, flush=True, read_echo=False, read_echo_delay=0, read_echo_lines=1):
         """
         Write data to the device.

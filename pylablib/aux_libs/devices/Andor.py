@@ -1,7 +1,7 @@
 from .Andor_lib import lib, AndorLibError
 
 from ...core.devio import backend
-from ...core.utils import funcargparse
+from ...core.utils import funcargparse, py3
 
 import numpy as np
 import collections
@@ -99,7 +99,7 @@ class AndorCamera(backend.IBackendWrapper):
             raise AndorError("camera index {} is not available ({} cameras exist)".format(self.idx,ncams))
         self.handle=lib.GetCameraHandle(self.idx)
         self._camsel()
-        lib.Initialize(self.ini_path)
+        lib.Initialize(py3.as_builtin_bytes(self.ini_path))
     def close(self):
         try:
             self._camsel()

@@ -7,6 +7,7 @@ except ImportError:
 
 import json
 import time
+import logging
 
 
 c=299792458.
@@ -46,7 +47,7 @@ class M2ICE(object):
             tx_id=self.tx_id
             self.tx_id=self.tx_id%16383+1
         msg={"message":{"transmission_id":[tx_id],"op":op,"parameters":dict(params)}}
-        return json.dumps(msg)
+        return json.dumps(msg,default=float)
     def _parse_message(self, msg):
         pmsg=json.loads(msg)
         if "message" not in pmsg:
@@ -132,6 +133,7 @@ class M2ICE(object):
                 self._wait_for_websocket_status(ws,present_key="wlm_fitted")
                 ws.send(msg)
             finally:
+                logging.getLogger("websocket").setLevel(logging.CRITICAL)
                 ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
@@ -147,6 +149,8 @@ class M2ICE(object):
             try:
                 return self._wait_for_websocket_status(ws,present_key=present_key,nmax=nmax)
             finally:
+                ws.recv()
+                logging.getLogger("websocket").setLevel(logging.CRITICAL)
                 ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")

@@ -175,6 +175,8 @@ class NIDAQ(object):
             self.do_task.close()
         self.do_task=None
         self.do_channels={}
+        if self.ao_task is not None:
+            self.ao_task.close()
         self.ao_task=None
         self.ao_channels={}
         self.ao_values={}
@@ -193,13 +195,13 @@ class NIDAQ(object):
             return "/"+channel
         return "/"+self.dev_name+"/"+channel
     def _update_channel_names(self):
-        self.ai_names=self.ai_channels.keys()
+        self.ai_names=list(self.ai_channels.keys())
         self.ai_names.sort(key=lambda n: self.ai_channels[n][1])
-        self.ci_names=self.ci_tasks.keys()
+        self.ci_names=list(self.ci_tasks.keys())
         self.ci_names.sort(key=lambda n: self.ci_tasks[n][1])
-        self.do_names=self.do_channels.keys()
+        self.do_names=list(self.do_channels.keys())
         self.do_names.sort(key=lambda n: self.do_channels[n][1])
-        self.ao_names=self.ao_channels.keys()
+        self.ao_names=list(self.ao_channels.keys())
         self.ao_names.sort(key=lambda n: self.ao_channels[n][1])
 
     def set_sampling_rate(self, rate):

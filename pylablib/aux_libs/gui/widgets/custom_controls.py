@@ -25,7 +25,7 @@ class ROICtl(QtGui.QWidget):
         if vmax-vmin<minsize: # try decrease lower limit
             vmin=limit_to_range(vmax-minsize,*lim)
         vbin=limit_to_range(rng.bin,1,maxbin)
-        return self.AxisParams(vmin,vmax,vbin)
+        return self.AxisParams(int(vmin),int(vmax),int(vbin))
     def validateROI(self, xparams, yparams):
         xparams=self._limit_range(xparams,self.xlim,self.maxbin,self.minsize)
         yparams=self._limit_range(yparams,self.ylim,self.maxbin,self.minsize)
@@ -61,12 +61,12 @@ class ROICtl(QtGui.QWidget):
         self.labelY.setObjectName("labelY")
         self.labelY.setText("Y")
         self.gridLayout.addWidget(self.labelY, 2, 0, 1, 1)
-        self.x_max = LVNumEdit(self)
-        self.x_max.setObjectName("x_max")
-        self.gridLayout.addWidget(self.x_max, 1, 2, 1, 1)
         self.x_min = LVNumEdit(self)
         self.x_min.setObjectName("x_min")
         self.gridLayout.addWidget(self.x_min, 1, 1, 1, 1)
+        self.x_max = LVNumEdit(self)
+        self.x_max.setObjectName("x_max")
+        self.gridLayout.addWidget(self.x_max, 1, 2, 1, 1)
         self.x_bin = LVNumEdit(self)
         self.x_bin.setObjectName("x_bin")
         self.gridLayout.addWidget(self.x_bin, 1, 3, 1, 1)
@@ -83,8 +83,15 @@ class ROICtl(QtGui.QWidget):
         self.gridLayout.setColumnStretch(1, 2)
         self.gridLayout.setColumnStretch(2, 2)
         self.gridLayout.setColumnStretch(3, 1)
-        for v in [self.x_min,self.x_max,self.x_bin,self.y_min,self.y_max,self.y_bin]:
+        for v in [self.x_min,self.y_min]:
             v.set_number_format("int")
+            v.set_number_limit(value_type="int")
+            v.set_value(0)
+        for v in [self.x_max,self.x_bin,self.y_max,self.y_bin]:
+            v.set_number_format("int")
+            v.set_number_limit(value_type="int")
+            v.set_value(1)
+        for v in [self.x_min,self.x_max,self.x_bin,self.y_min,self.y_max,self.y_bin]:
             v.value_changed.connect(self._on_edit)
         self.set_limits(xlim,ylim,maxbin=maxbin,minsize=minsize)
 
@@ -204,9 +211,6 @@ class RangeCtl(QtGui.QWidget):
         else:
             self.e_step=None
         self.gridLayout.setContentsMargins(2,2,2,2)
-        # self.gridLayout.setColumnStretch(1, 2)
-        # self.gridLayout.setColumnStretch(2, 2)
-        # self.gridLayout.setColumnStretch(3, 1)
         for v in [self.e_min,self.e_max,self.e_cent,self.e_span,self.e_step]:
             if v:
                 v.change_formatter(formatter)

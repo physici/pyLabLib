@@ -42,6 +42,8 @@ class ClientSocket(object):
         wait_callback (Callable): Called periodically (every 100ms by default) while waiting for connecting or sending/receiving.
         send_method (str): Default sending method.
         recv_method (str): Default receiving method.
+        datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
+            or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
     
     Possible sending/receiving methods are:
         - ``'fixedlen'``: data is sent as is, and receiving requires to know the length of the message;
@@ -54,9 +56,10 @@ class ClientSocket(object):
         decllen_ll (int): Length of the prependend length for ``'decllen'`` sending method; default is 4 bytes.
     """
     _default_wait_callback_timeout=0.1
-    def __init__(self, sock=None, timeout=None, wait_callback=None, send_method="decllen", recv_method="decllen"):
+    def __init__(self, sock=None, timeout=None, wait_callback=None, send_method="decllen", recv_method="decllen", datatype="auto"):
         funcargparse.check_parameter_range(send_method,"send_method",{"fixedlen","decllen"})
         funcargparse.check_parameter_range(recv_method,"recv_method",{"fixedlen","decllen"})
+        funcargparse.check_parameter_range(datatype,"datatype",{"auto","str","bytes"})
         object.__init__(self)
         self.sock=sock or socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         self.timeout=timeout
@@ -67,6 +70,7 @@ class ClientSocket(object):
             self.sock.settimeout(timeout)
         self.send_method=send_method
         self.recv_method=recv_method
+        self.datatype=datatype
         self.decllen_bo=">"
         self.decllen_ll=4
         
@@ -129,15 +133,15 @@ class ClientSocket(object):
             raise SocketError("connection closed while receiving")
         return recvd
     def _send_wait(self, msg):
-        sock_func=lambda: self.sock.send(msg)
+        sock_func=lambda: self.sock.send(py3.as_builtin_bytes(msg))
         return _wait_sock_func(sock_func,self.timeout,self.wait_callback)
     
     def recv_fixedlen(self, l):
         """Receive fixed-length message of length `l`."""
-        buf=""
+        buf=b""
         while len(buf)<l:
             buf=buf+self._recv_wait(l-len(buf))
-        return buf
+        return py3.as_datatype(buf,self.datatype)
     def recv_delimiter(self, delim, lmax=None, chunk_l=1024, strict=False):
         """
         Receive a single message ending with a delimiter `delim` (can be several characters, or list several possible delimiter strings).
@@ -147,16 +151,17 @@ class ClientSocket(object):
         If ``strict==False``, keep receiving as much data as possible until a delimiter is found in the end (only works properly if a single line is expected);
         otherwise, receive the data byte-by-byte and stop as soon as a delimiter is found (equivalent ot setting ``chunk_l=1``).
         """
-        buf=""
+        buf=b""
         if isinstance(delim, py3.anystring):
             delim=[delim]
+        delim=[py3.as_builtin_bytes(d) for d in delim]
         if strict:
             chunk_l=1
         while not any([buf.endswith(d) for d in delim]):
             buf=buf+self._recv_wait(chunk_l)
             if (lmax is not None) and len(buf)>lmax:
                 break
-        return buf
+        return py3.as_datatype(buf,self.datatype)
     def recv_decllen(self):
         """
         Receive variable-length message (prepended by its length).
@@ -181,14 +186,14 @@ class ClientSocket(object):
         `chunk_l` specifies the size of data chunk to be read in one try.
         For technical reasons, use 1ms timeout (i.e., this operation takes 1ms).
         """
-        data=b""
+        buf=b""
         with self.using_timeout(1E-3):
             try:
                 while True:
-                    data+=self._recv_wait(chunk_l)
+                    buf+=self._recv_wait(chunk_l)
             except SocketTimeout:
                 pass
-        return data
+        return py3.as_datatype(buf,self.datatype)
     def recv_ack(self, l=None):
         """Receive a message using the default method and send an acknowledgement (message length)."""
         msg=self.recv(l=l)
@@ -252,7 +257,7 @@ def recv_JSON(socket, chunk_l=1024, strict=True):
     If ``strict==False``, keep receiving as much data as possible until the received data forms a complete JSON token.
     otherwise, receive the data byte-by-byte and stop as soon as a token is formed (equivalent ot setting ``chunk_l=1``).
     """
-    msg=""
+    msg="" if socket.datatype=="str" else b""
     while True:
         msg+=socket.recv_delimiter("}",chunk_l=chunk_l,strict=strict)
         try:

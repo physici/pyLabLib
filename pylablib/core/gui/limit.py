@@ -44,14 +44,14 @@ class NumberLimit(object):
         Raise LimitError if value is outside bounds and action=='ignore'.
         """
         value=self.cast(value)
-        if self.range[0]!=None and value<self.range[0]:
+        if self.range[0] is not None and value<self.range[0]:
             if self.action=="coerce":
-                return self.range[0]
+                return self.cast(self.range[0])
             elif self.action=="ignore":
                 raise LimitError(value,*self.range)
-        elif self.range[1]!=None and value>self.range[1]:
+        elif self.range[1] is not None and value>self.range[1]:
             if self.action=="coerce":
-                return self.range[1]
+                return self.cast(self.range[1])
             elif self.action=="ignore":
                 raise LimitError(value,*self.range)
         else:

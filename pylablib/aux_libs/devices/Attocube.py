@@ -1,4 +1,5 @@
 from ...core.devio import backend as backend_mod  #@UnresolvedImport
+from ...core.utils import py3
 
 import re
 
@@ -41,7 +42,7 @@ class ANCDevice(backend_mod.IBackendWrapper):
         self.instr.write(msg)
         reply=self.instr.read_multichar_term(["ERROR","OK"],remove_term=False)
         self.instr.flush_read()
-        if reply.upper().endswith("ERROR"):
+        if reply.upper().endswith(b"ERROR"):
             raise AttocubeError(reply[:-5].strip())
         return reply[:-2].strip()
     
@@ -69,6 +70,7 @@ class ANCDevice(backend_mod.IBackendWrapper):
 
     def _parse_reply(self, reply, name, units):
         patt=name+r"\s*=\s*([\d.]+)\s*"+units
+        reply=py3.as_str(reply)
         m=re.match(patt,reply,re.IGNORECASE)
         if not m:
             raise AttocubeError("unexpected reply: {}".format(reply))
