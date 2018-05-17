@@ -388,6 +388,10 @@ class DataTable(object):
             t2.rearrange_columns(t1.get_column_names())
             t1.r.append(t2)
         return t1
+
+    ## Deleting ##
+    def __delitem__(self, idx):
+        raise NotImplementedError("Deletion is not defined for the whole table. Use row (.r) or column (.c) accessor instead.")
     
     ## Repr ##
     def __str__(self):
