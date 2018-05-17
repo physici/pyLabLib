@@ -1,6 +1,12 @@
 from ...core.devio import SCPI, units, backend  #@UnresolvedImport
 from ...core.utils import strpack
 
+import re
+try:
+    import ft232
+except ImportError:
+    pass
+
 import collections
 
 _depends_local=["...core.devio.SCPI"]
@@ -133,11 +139,18 @@ class KinesisDevice(backend.IBackendWrapper):
         instr=backend.FT232DeviceBackend(conn,term_write=b"",term_read=b"",timeout=timeout)
         backend.IBackendWrapper.__init__(self,instr)
 
+    @staticmethod
+    def list_devices():
+        def _is_thorlabs_id(id):
+            return re.match(b"^\d{8}$",id[0]) is not None
+        ft232_ids=ft232.list_devices()
+        thorlabs_ids=[id for id in ft232_ids if _is_thorlabs_id(id)]
+        return thorlabs_ids
     def send_comm_nodata(self, messageID, param1=0x00, param2=0x00, source=0x01, dest=0x50):
-        msg=strpack.pack_uint(messageID,2,"<")+strpack.pack_uint(param1,1)+strpack.pack_uint(param2,1)+strpack.pack_uint(source,1)+strpack.pack_uint(dest,1)
+        msg=strpack.pack_uint(messageID,2,"<")+strpack.pack_uint(param1,1)+strpack.pack_uint(param2,1)+strpack.pack_uint(dest,1)+strpack.pack_uint(source,1)
         self.instr.write(msg)
     def send_comm_data(self, messageID, data, source=0x01, dest=0x50):
-        msg=strpack.pack_uint(messageID,2,"<")+strpack.pack_uint(len(data),2)+strpack.pack_uint(source,1)+strpack.pack_uint(dest,1)
+        msg=strpack.pack_uint(messageID,2,"<")+strpack.pack_uint(len(data),2)+strpack.pack_uint(dest,1)+strpack.pack_uint(source,1)
         self.instr.write(msg+data)
 
     CommNoData=collections.namedtuple("CommNoData",["messageID","param1","param2","source","dest"])
