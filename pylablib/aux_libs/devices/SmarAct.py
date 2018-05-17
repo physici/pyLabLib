@@ -12,9 +12,15 @@ class SmarActError(RuntimeError):
 
 class SCU3D(IDevice):
     """
-    SCU3D translational stage.
+    SmarAct SCU3D translational stage.
+
+    Args:
+        lib_path(str): path to the SCU3DControl.dll (default is to use the library supplied with the package)
+        idx(int): stage index
+        axis_mapping(str): 3-symbol string specifying indices of x, y and z axes (can be any permutation of ``"xyz"``)
+        axis_dir(str): 3-symbol string specifying default directions of the axes (each symbol be ``"+"`` or ``"-"``)
     """
-    def __init__(self, lib_path=None, idx=0, channel_mapping="xyz", channel_dir="+++"):
+    def __init__(self, lib_path=None, idx=0, axis_mapping="xyz", axis_dir="+++"):
         IDevice.__init__(self)
         if lib_path is None:
             lib_path=os.path.join(default_lib_folder,"SCU3DControl.dll")
@@ -22,13 +28,15 @@ class SCU3D(IDevice):
         self.dll.SA_MoveStep_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.c_int,ctypes.c_uint,ctypes.c_uint]
         self.dll.SA_GetStatus_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.POINTER(ctypes.c_uint)]
         self.idx=idx
-        self.channel_mapping=channel_mapping
-        self.channel_dir=channel_dir
+        self.axis_mapping=axis_mapping
+        self.axis_dir=axis_dir
         self.open()
 
     def open(self):
+        """Open the connection to the stage"""
         self._check_status("SA_InitDevices",self.dll.SA_InitDevices(0))
     def close(self):
+        """Close the connection to the stage"""
         self._check_status("SA_ReleaseDevices",self.dll.SA_ReleaseDevices())
 
     _func_status={  0:"SA_OK",
@@ -69,25 +77,35 @@ class SCU3D(IDevice):
             else:
                 raise SmarActError("function {} raised unknown error: {}".format(func,status))
     
-    def _get_channel(self, channel):
-        if channel in list(self.channel_mapping):
-            return self.channel_mapping.find(channel)
-        return channel
-    def move(self, channel, steps, voltage, frequency):
-        channel=self._get_channel(channel)
-        channel_dir=-1 if self.channel_dir[channel]=="-" else 1
-        stat=self.dll.SA_MoveStep_S(self.idx,self._get_channel(channel),int(steps)*channel_dir,int(voltage*10),int(frequency))
+    def _get_axis(self, axis):
+        if axis in list(self.axis_mapping):
+            return self.axis_mapping.find(axis)
+        return axis
+    def move_macrostep(self, axis, steps, voltage, frequency):
+        """
+        Move along a given axis with a given number of steps.
+
+        `voltage` (in Volts) and `frequency` (in Hz) specify the motion parameters.
+        """
+        axis=self._get_axis(axis)
+        axis_dir=-1 if self.axis_dir[axis]=="-" else 1
+        stat=self.dll.SA_MoveStep_S(self.idx,self._get_axis(axis),int(steps)*axis_dir,int(voltage*10),int(frequency))
         self._check_status("SA_MoveStep_S",stat)
-    _simple_move_settings=[ (1,25.3,1E3), (1,28,1E3), (1,32,1E3), (1,38,1E3), (1,47,1E3),
-                            (1,60.5,1E3), (1,80.8,1E3), (2,65.6,1E3), (2,88.4,1E3), (4,88.4,1E3),
-                            (7,100.,1E3), (14,100.,1E3), (28,100.,1E3), (56,100.,1.1E3), (100,100.,2.2E3), 
-                            (200,100.,4.4E3), (400,100.,8.8E3), (1E3,100.,10E3), (1.8E3,100.,10E3)]
-    def move_simple(self, channel, speed, steps=1):
-        par=self._simple_move_settings[max(speed-1,0)]
+    _move_presets=[ (1,25.3,1E3), (1,28,1E3), (1,32,1E3), (1,38,1E3), (1,47,1E3),
+                    (1,60.5,1E3), (1,80.8,1E3), (2,65.6,1E3), (2,88.4,1E3), (4,88.4,1E3),
+                    (7,100.,1E3), (14,100.,1E3), (28,100.,1E3), (56,100.,1.1E3), (100,100.,2.2E3), 
+                    (200,100.,4.4E3), (400,100.,8.8E3), (1E3,100.,10E3), (1.8E3,100.,10E3)]
+    def move(self, axis, steps=1, stepsize=10):
+        """
+        Move along a given axis with a given number of steps using one of the predefined step size.
+
+        `stepsize` can range from 1 (smallest) to 20 (largest).
+        """
+        par=self._move_presets[max(stepsize-1,0)]
         step_dir=1 if steps>0 else -1
         for _ in range(abs(steps)):
-            self.move(channel,par[0]*step_dir,par[1],par[2])
-            self.wait_status(channel)
+            self.move_macrostep(axis,par[0]*step_dir,par[1],par[2])
+            self.wait_for_axis(axis)
 
     _chan_status={  0:"stopped",
                     1:"setting_amplitude",
@@ -96,20 +114,29 @@ class SCU3D(IDevice):
                     4:"holding",
                     5:"calibrating",
                     6:"moving_to_reference"}
-    def get_status(self, channel):
+    def get_status(self, axis):
+        """Get the axis status"""
         val=ctypes.c_uint()
-        stat=self.dll.SA_GetStatus_S(self.idx,self._get_channel(channel),ctypes.byref(val))
+        stat=self.dll.SA_GetStatus_S(self.idx,self._get_axis(axis),ctypes.byref(val))
         self._check_status("SA_GetStatus_S",stat)
         if val.value in self._chan_status:
             return self._chan_status[val.value]
         else:
             raise SmarActError("function SA_GetStatus_S returned unknown status: {}".format(val.value))
-    def wait_status(self, channel, status="stopped", timeout=3.):
+    def wait_for_axis(self, axis, status="stopped", timeout=3.):
+        """
+        Wait until the axis reaches a given status.
+
+        By default the status is ``"stopped"`` (i.e., wait until the motion is finished).
+        """
         countdown=general.Countdown(timeout)
         while True:
-            cur_status=self.get_status(channel)
+            cur_status=self.get_status(axis)
             if cur_status==status:
                 return
             if countdown.passed():
                 raise SmarActError("status waiting timed out")
             time.sleep(1E-2)
+    def is_moving(self, axis):
+        """Check if a given axis is moving"""
+        return self.get_status(axis)=="moving"
