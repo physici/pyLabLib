@@ -36,6 +36,11 @@ class ImageViewController(QtGui.QWidget):
         self.settings_table.value_changed.connect(lambda: self.view.update_image(update_controls=False))
         self.settings_table.add_padding()
 
+    def get_all_values(self):
+        return self.settings_table.get_all_values()
+    def set_all_values(self, params):
+        self.settings_table.set_all_values(params)
+
 class ImageView(QtGui.QWidget):
     def __init__(self, parent=None):
         super(ImageView, self).__init__(parent)
@@ -94,6 +99,7 @@ class ImageView(QtGui.QWidget):
         self.imgVLine.setPos(self.img.shape[0]/2)
         self.imgHLine.setPos(self.img.shape[1]/2)
     # Update image controls based on PyQtGraph image window
+    @QtCore.pyqtSlot()
     def update_image_controls(self):
         params=self._get_params()
         levels=self.imageWindow.getHistogramWidget().getLevels()

@@ -39,7 +39,7 @@ class ParamTable(QtGui.QWidget):
         self.add_indicator=add_indicator
         self.change_focused_control=False
         self.display_table=display_table
-        self.display_table_root=display_table_root or self.name
+        self.display_table_root=display_table_root if display_table_root is not None else self.name
 
     value_changed=QtCore.pyqtSignal("PyQt_PyObject","PyQt_PyObject")
 
