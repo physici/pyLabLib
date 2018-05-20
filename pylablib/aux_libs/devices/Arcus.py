@@ -179,14 +179,14 @@ class PerformaxStage(IDevice):
         """Get the axis status as an integer"""
         axis=self._check_axis(axis)
         axis_n="XYZU".index(axis)
-        return self._get_status()[axis_n]
+        return self._get_full_status()[axis_n]
     def get_status(self, axis):
         """Get the axis status as a set of string descriptors"""
-        statn=self.get_axis_status_n(axis)
+        statn=self.get_status_n(axis)
         return set([ k for k in self._status_bits if self._status_bits[k]&statn ])
     def is_moving(self, axis):
         """Check if a given axis is moving"""
-        return bool(self.get_axis_status_n(axis)&0x007)
+        return bool(self.get_status_n(axis)&0x007)
 
     def check_limit_error(self, axis):
         """
@@ -194,7 +194,7 @@ class PerformaxStage(IDevice):
 
         Return ``""`` (not errors), ``"+"`` (positive limit error) or ``"-"`` (negaive limit error).
         """
-        stat=self.get_axis_status_n(axis)
+        stat=self.get_status_n(axis)
         err=""
         if stat&self._status_bits["err_plus_lim"]:
             err=err+"+"

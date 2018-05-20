@@ -65,20 +65,20 @@ class FW(ThorlabsInterface):
     """
     def __init__(self, conn, respect_bound=True):
         ThorlabsInterface.__init__(self,conn)
-        self._add_settings_node("pos",self.get_pos,self.set_pos)
+        self._add_settings_node("pos",self.get_position,self.set_position)
         self._add_settings_node("pcount",self.get_pcount,self.set_pcount)
         self._add_settings_node("speed",self.get_speed,self.set_speed)
         self.pcount=self.get_pcount()
         self.respect_bound=respect_bound
 
-    def get_pos(self):
+    def get_position(self):
         """Get the wheel position (starting from 1)"""
         self.flush()
         return self.ask("pos?","int")
-    def set_pos(self, pos):
+    def set_position(self, pos):
         """Set the wheel position (starting from 1)"""
         if self.respect_bound: # check if the wheel could go through zero; if so, manually go around instead
-            cur_pos=self.get_pos()
+            cur_pos=self.get_position()
             if abs(pos-cur_pos)>=self.pcount//2: # could switch by going through zero
                 medp1=(2*cur_pos+pos)//3
                 medp2=(cur_pos+2*pos)//3
@@ -89,7 +89,7 @@ class FW(ThorlabsInterface):
                 self.write("pos={}".format(pos))
         else:
             self.write("pos={}".format(pos))
-        return self.get_pos()
+        return self.get_position()
 
     def get_pcount(self):
         """Get the number of wheel positions (6 or 12)"""

@@ -830,6 +830,7 @@ class NetworkDeviceBackend(IDeviceBackend):
         self._split_addr(conn)
         IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read,datatype=datatype)
         try:
+            self.socket=None
             self.open()
             self._operation_cooldown=self._default_operation_cooldown
             self.cooldown()
@@ -849,11 +850,14 @@ class NetworkDeviceBackend(IDeviceBackend):
             raise ValueError("invalid device address: {}".format(conn))
     def open(self):
         """Open the connection."""
+        self.close()
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen")
         self.socket.connect(self.conn["addr"],self.conn["port"])
     def close(self):
         """Close the connection."""
-        self.socket.close()
+        if self.socket is not None:
+            self.socket.close()
+            self.socket=None
         
     def cooldown(self):
         """
