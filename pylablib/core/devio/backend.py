@@ -784,7 +784,7 @@ try:
         
         
     _backends["ft232"]=FT232DeviceBackend
-except ImportError:
+except (ImportError,NameError):
     pass
 
 

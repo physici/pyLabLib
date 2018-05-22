@@ -59,7 +59,7 @@ except (ImportError):
                     new_trace[i]+=new_trace[i-yi-1]*yc
             return new_trace
         if notify_fallback:
-            print("Couldn't find appropriate precompiled IIR filter implementation, using pure Python fallback instead; expect sever performance drop.")
+            print("Couldn't find appropriate precompiled IIR filter implementation, using pure Python fallback instead; expect severe performance drop.")
     else:
         raise
 
