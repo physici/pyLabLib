@@ -6,11 +6,15 @@ import ctypes
 
 
 class HFError(RuntimeError):
-    """Generic HighFinesse wavemeter error."""
+    """Generic HighFinesse wavemeter error"""
 
 class WS(IDevice):
     """
-    WS precision wavemeter.
+    WS precision wavemeter
+
+    Args:
+        lib_path(str): path to the wlmData6.dll or wlmData7.dll (default is to use the library supplied with the package)
+        idx(int): wavemeter input index
     """
     def __init__(self, lib_path=None, idx=0):
         IDevice.__init__(self)
@@ -80,6 +84,12 @@ class WS(IDevice):
         else:
             raise HFError("{} returned unknown error: {}".format(func_name,err))
     def get_frequency(self, return_exp_error=True):
+        """
+        Get the wavemeter readings (in Hz).
+
+        If ``return_exp_error==True``, return ``"under"`` if the meter is underexposed or ``"over"`` is it is overexposed.
+        Otherwise, raise an error.
+        """
         res=self.dll.GetFrequencyNum(self.idx,0.)
         if int(res)<=0:
             err=int(res)
@@ -92,17 +102,21 @@ class WS(IDevice):
         return res*1E12
 
     def get_exposure_mode(self):
+        """Get the exposure mode (0 for manual, 1 for auto)"""
         return self.dll.GetExposureModeNum(self.idx,0)
     def set_exposure_mode(self, auto_exposure=True):
+        """Get the exposure mode (manual or auto)"""
         err=self.dll.GetExposureModeNum(self.idx,1 if auto_exposure else 0)
         self._check_setfunc_error("SetExposureModeNum",err)
         return self.get_exposure_mode()
 
     def get_exposure(self, sensor=1):
+        """Get the exposure for a given sensor (starting from 1)"""
         exposure=self.dll.GetExposureNum(self.idx,sensor,0)
         self._check_getfunc_error("GetExposureNum",exposure)
         return exposure
     def set_exposure(self, exposure, sensor=1):
+        """Manually set the exposure for a given sensor (starting from 1)"""
         err=self.dll.SetExposureNum(self.idx,sensor,exposure)
         self._check_setfunc_error("SetExposureNum",err)
         return self.get_exposure()
