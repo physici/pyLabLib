@@ -4,7 +4,7 @@ if is_pyqt5():
 else:
     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 
-from PyQt4 import QtGui
+from PyQt5 import QtWidgets
 
 import matplotlib.pyplot as mpl
 import time
@@ -25,10 +25,10 @@ class MPLFigureCanvas(FigureCanvasQTAgg):
 
 
 
-class MPLFigureToolbarCanvas(QtGui.QWidget):
+class MPLFigureToolbarCanvas(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        QtGui.QFrame.__init__(self,parent)
-        self.layout=QtGui.QVBoxLayout(self)
+        QtWidgets.QFrame.__init__(self,parent)
+        self.layout=QtWidgets.QVBoxLayout(self)
         self.canvas=MPLFigureCanvas(self)
         self.layout.addWidget(self.canvas)
         self.figure=self.canvas.figure

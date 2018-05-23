@@ -1,6 +1,6 @@
 from ....utils import general
 
-from PyQt4 import QtCore
+from PyQt5 import QtCore
 
 import threading
 

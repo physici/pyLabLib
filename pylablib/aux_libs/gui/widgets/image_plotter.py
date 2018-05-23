@@ -1,19 +1,19 @@
 from .param_table import ParamTable, FixedParamTable
 
-from PyQt4 import QtGui, QtCore
+from PyQt5 import QtWidgets, QtCore
 import pyqtgraph
 import numpy as np
 import contextlib
 
 
-class ImageViewController(QtGui.QWidget):
+class ImageViewController(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(ImageViewController, self).__init__(parent)
 
     def setupUi(self, name, view, display_table=None, display_table_root=None):
         self.name=name
         self.setObjectName(self.name)
-        self.layout=QtGui.QHBoxLayout(self)
+        self.layout=QtWidgets.QHBoxLayout(self)
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setObjectName("layout")
         self.view=view
@@ -41,7 +41,7 @@ class ImageViewController(QtGui.QWidget):
     def set_all_values(self, params):
         self.settings_table.set_all_values(params)
 
-class ImageView(QtGui.QWidget):
+class ImageView(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(ImageView, self).__init__(parent)
         self.ctl=None
@@ -49,7 +49,7 @@ class ImageView(QtGui.QWidget):
     def setupUi(self, name, img_size=(1024,1024), min_size=(512,512)):
         self.name=name
         self.setObjectName(self.name)
-        self.layout=QtGui.QHBoxLayout(self)
+        self.layout=QtWidgets.QHBoxLayout(self)
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setObjectName("layout")
         self.img=np.zeros(img_size)

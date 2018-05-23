@@ -1,7 +1,7 @@
 from ....mthread import threadprop, controller, sync_primitives
 from ....utils import funcargparse
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtWidgets
 
 import threading
 import sys
@@ -134,7 +134,7 @@ class GUIThreadController(controller.IThreadController):
         controller.IThreadController.__init__(self,name)
         self.setup=setup
         self.cleanup=cleanup
-        self.app=get_app() or QtGui.QApplication(sys.argv)
+        self.app=get_app() or QtWidgets.QApplication(sys.argv)
         if hasattr(self.app,"_controller"):
             raise threadprop.ThreadError("a GUI thread controller already exists")
         self.app._controller=self

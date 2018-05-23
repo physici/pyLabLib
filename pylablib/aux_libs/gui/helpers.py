@@ -2,7 +2,7 @@ from ...core.gui.qt.thread import controller
 from ...core.utils import files as file_utils
 from ...core.fileio import logfile
 
-from PyQt4 import QtCore
+from PyQt5 import QtCore
 import numpy as np
 import threading
 import collections

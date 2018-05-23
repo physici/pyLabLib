@@ -1,9 +1,9 @@
-from PyQt4 import QtGui,QtCore
+from PyQt5 import QtWidgets, QtCore
 from ... import format, limit
 
-class LVTextEdit(QtGui.QLineEdit):
+class LVTextEdit(QtWidgets.QLineEdit):
     def __init__(self, parent, value=None):
-        QtGui.QLineEdit.__init__(self, parent)
+        QtWidgets.QLineEdit.__init__(self, parent)
         self.returnPressed.connect(self._on_enter)
         self.editingFinished.connect(self._on_edit_done)
         self._value=None
@@ -24,7 +24,7 @@ class LVTextEdit(QtGui.QLineEdit):
             self.clearFocus()
             self.show_value()
         else:
-            QtGui.QLineEdit.keyPressEvent(self,event)
+            QtWidgets.QLineEdit.keyPressEvent(self,event)
 
     value_entered=QtCore.pyqtSignal("PyQt_PyObject")
     value_changed=QtCore.pyqtSignal("PyQt_PyObject")
@@ -44,9 +44,9 @@ class LVTextEdit(QtGui.QLineEdit):
         self.show_value(interrupt_edit=interrupt_edit)
         return value_changed
 
-class LVNumEdit(QtGui.QLineEdit):
+class LVNumEdit(QtWidgets.QLineEdit):
     def __init__(self, parent, value=None, num_limit=None, num_format=None):
-        QtGui.QLineEdit.__init__(self, parent)
+        QtWidgets.QLineEdit.__init__(self, parent)
         self.num_limit=limit.as_limiter(num_limit) if num_limit is not None else limit.NumberLimit()
         self.num_format=format.as_formatter(num_format) if num_format is not None else format.FloatFormatter()
         self.returnPressed.connect(self._on_enter)
@@ -87,7 +87,7 @@ class LVNumEdit(QtGui.QLineEdit):
             except ValueError:
                 self.show_value(interrupt_edit=True)
         else:
-            QtGui.QLineEdit.keyPressEvent(self,event)
+            QtWidgets.QLineEdit.keyPressEvent(self,event)
     def _read_input(self):
         try:
             return format.str_to_float(str(self.text()))

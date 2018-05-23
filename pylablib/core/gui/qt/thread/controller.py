@@ -1,7 +1,7 @@
 from ....utils import general, funcargparse, dictionary
 from . import signal_pool, threadprop, synchronizing
 
-from PyQt4 import QtCore
+from PyQt5 import QtCore
 
 import threading
 import time

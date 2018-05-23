@@ -3,7 +3,7 @@ from ....core.gui.qt.thread import threadprop
 from ....core.gui.qt import values as values_module
 from ....core.utils import py3, dictionary
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtWidgets
 
 import collections
 
@@ -14,15 +14,15 @@ except AttributeError:
         return s
 
 try:
-    _encoding = QtGui.QApplication.UnicodeUTF8
+    _encoding = QtWidgets.QApplication.UnicodeUTF8
     def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig, _encoding)
+        return QtWidgets.QApplication.translate(context, text, disambig, _encoding)
 except AttributeError:
     def _translate(context, text, disambig):
-        return QtGui.QApplication.translate(context, text, disambig)
+        return QtWidgets.QApplication.translate(context, text, disambig)
 
 
-class ParamTable(QtGui.QWidget):
+class ParamTable(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(ParamTable, self).__init__(parent)
         self.params={}
@@ -32,8 +32,8 @@ class ParamTable(QtGui.QWidget):
     def setupUi(self, name, add_indicator=False, display_table=None, display_table_root=None):
         self.name=name
         self.setObjectName(_fromUtf8(self.name))
-        self.formLayout = QtGui.QGridLayout(self)
-        self.formLayout.setSizeConstraint(QtGui.QLayout.SetDefaultConstraint)
+        self.formLayout = QtWidgets.QGridLayout(self)
+        self.formLayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
         self.formLayout.setContentsMargins(5,5,5,5)
         self.formLayout.setObjectName(_fromUtf8("formLayout"))
         self.add_indicator=add_indicator
@@ -58,7 +58,7 @@ class ParamTable(QtGui.QWidget):
             raise KeyError("widget {} already exists".format(name))
         row=self.formLayout.rowCount()
         if label is not None:
-            wlabel=QtGui.QLabel(self)
+            wlabel=QtWidgets.QLabel(self)
             wlabel.setObjectName(_fromUtf8("{}__label".format(name)))
             self.formLayout.addWidget(wlabel,row,0)
             wlabel.setText(_translate(self.name,label,None))
@@ -66,7 +66,7 @@ class ParamTable(QtGui.QWidget):
             wlabel=None
         value_handler=value_handler or values_module.get_default_value_handler(widget)
         if self.add_indicator:
-            windicator=QtGui.QLabel(self)
+            windicator=QtWidgets.QLabel(self)
             windicator.setObjectName(_fromUtf8("{}__indicator".format(name)))
             self.formLayout.addWidget(windicator,row,2)
             indicator_handler=values_module.WidgetLabelIndicatorHandler(windicator,widget=value_handler)
@@ -95,20 +95,20 @@ class ParamTable(QtGui.QWidget):
         return widget
 
     def add_button(self, name, caption, checkable=False, value=False, label=None):
-        widget=QtGui.QPushButton(self)
+        widget=QtWidgets.QPushButton(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(name))
         widget.setCheckable(checkable)
         widget.setChecked(value)
         return self.add_simple_widget(name,widget,label=label)
     def add_check_box(self, name, caption, value=False, label=None):
-        widget=QtGui.QCheckBox(self)
+        widget=QtWidgets.QCheckBox(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(name))
         widget.setChecked(value)
         return self.add_simple_widget(name,widget,label=label)
     def add_text_label(self, name, value=None, label=None):
-        widget=QtGui.QLabel(self)
+        widget=QtWidgets.QLabel(self)
         widget.setObjectName(_fromUtf8(name))
         if value is not None:
             widget.setText(str(value))
@@ -126,13 +126,13 @@ class ParamTable(QtGui.QWidget):
         widget.setObjectName(_fromUtf8(name))
         return self.add_simple_widget(name,widget,label=label)
     def add_progress_bar(self, name, value=None, label=None):
-        widget=QtGui.QProgressBar(self)
+        widget=QtWidgets.QProgressBar(self)
         widget.setObjectName(_fromUtf8(name))
         if value is not None:
             widget.setValue(value)
         return self.add_simple_widget(name,widget,label=label)
     def add_combo_box(self, name, value=None, options=None, label=None):
-        widget=QtGui.QComboBox(self)
+        widget=QtWidgets.QComboBox(self)
         widget.setObjectName(_fromUtf8(name))
         if options is not None:
             widget.addItems(options)
@@ -141,11 +141,11 @@ class ParamTable(QtGui.QWidget):
         return self.add_simple_widget(name,widget,label=label)
 
     def add_spacer(self, height):
-        spacer=QtGui.QSpacerItem(1,height,QtGui.QSizePolicy.Minimum,QtGui.QSizePolicy.Expanding)
+        spacer=QtWidgets.QSpacerItem(1,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Expanding)
         self.formLayout.addItem(spacer)
         return spacer
     def add_label(self, text):
-        label=QtGui.QLabel(self)
+        label=QtWidgets.QLabel(self)
         label.setText(str(text))
         label.setAlignment(QtCore.Qt.AlignLeft)
         self.formLayout.addWidget(label,self.formLayout.rowCount(),0,1,3 if self.add_indicator else 2)

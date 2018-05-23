@@ -1,11 +1,11 @@
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtWidgets
 
 from ....core.gui.qt.widgets.edit import LVNumEdit
 from ....core.utils.numerical import limit_to_range
 
 import collections
 
-class ROICtl(QtGui.QWidget):
+class ROICtl(QtWidgets.QWidget):
     AxisParams=collections.namedtuple("AxisParams",["min","max","bin"])
     def __init__(self, parent=None):
         super(ROICtl, self).__init__(parent)
@@ -35,29 +35,29 @@ class ROICtl(QtGui.QWidget):
         self.setObjectName(self.name)
         self.setMinimumSize(QtCore.QSize(232, 83))
         self.setMaximumSize(QtCore.QSize(16777215, 83))
-        self.gridLayout = QtGui.QGridLayout(self)
+        self.gridLayout = QtWidgets.QGridLayout(self)
         self.gridLayout.setObjectName("gridLayout")
-        self.labelROI = QtGui.QLabel(self)
+        self.labelROI = QtWidgets.QLabel(self)
         self.labelROI.setObjectName("labelROI")
         self.labelROI.setText("ROI")
         self.gridLayout.addWidget(self.labelROI, 0, 0, 1, 1)
-        self.labelMin = QtGui.QLabel(self)
+        self.labelMin = QtWidgets.QLabel(self)
         self.labelMin.setObjectName("labelMin")
         self.labelMin.setText("Min")
         self.gridLayout.addWidget(self.labelMin, 0, 1, 1, 1)
-        self.labelMax = QtGui.QLabel(self)
+        self.labelMax = QtWidgets.QLabel(self)
         self.labelMax.setObjectName("labelMax")
         self.labelMax.setText("Max")
         self.gridLayout.addWidget(self.labelMax, 0, 2, 1, 1)
-        self.labelBin = QtGui.QLabel(self)
+        self.labelBin = QtWidgets.QLabel(self)
         self.labelBin.setObjectName("labelBin")
         self.labelBin.setText("Bin")
         self.gridLayout.addWidget(self.labelBin, 0, 3, 1, 1)
-        self.labelX = QtGui.QLabel(self)
+        self.labelX = QtWidgets.QLabel(self)
         self.labelX.setObjectName("labelX")
         self.labelX.setText("X")
         self.gridLayout.addWidget(self.labelX, 1, 0, 1, 1)
-        self.labelY = QtGui.QLabel(self)
+        self.labelY = QtWidgets.QLabel(self)
         self.labelY.setObjectName("labelY")
         self.labelY.setText("Y")
         self.gridLayout.addWidget(self.labelY, 2, 0, 1, 1)
@@ -141,7 +141,7 @@ class ROICtl(QtGui.QWidget):
 
 
 
-class RangeCtl(QtGui.QWidget):
+class RangeCtl(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(RangeCtl, self).__init__(parent)
         self.rng=(0,0,0)
@@ -152,15 +152,15 @@ class RangeCtl(QtGui.QWidget):
         self.setObjectName(self.name)
         # self.setMinimumSize(QtCore.QSize(232, 83))
         # self.setMaximumSize(QtCore.QSize(16777215, 83))
-        self.gridLayout = QtGui.QGridLayout(self)
+        self.gridLayout = QtWidgets.QGridLayout(self)
         self.gridLayout.setObjectName("gridLayout")
         row=0
         if "minmax" in elements:
-            self.labelMin = QtGui.QLabel(self)
+            self.labelMin = QtWidgets.QLabel(self)
             self.labelMin.setObjectName("labelMin")
             self.labelMin.setText(labels[0])
             self.gridLayout.addWidget(self.labelMin, row, 0, 1, 1)
-            self.labelMax = QtGui.QLabel(self)
+            self.labelMax = QtWidgets.QLabel(self)
             self.labelMax.setObjectName("labelMax")
             self.labelMax.setText(labels[1])
             self.gridLayout.addWidget(self.labelMax, row, 2, 1, 1)
@@ -177,11 +177,11 @@ class RangeCtl(QtGui.QWidget):
             self.e_min=None
             self.e_max=None
         if "cspan" in elements:
-            self.labelCent = QtGui.QLabel(self)
+            self.labelCent = QtWidgets.QLabel(self)
             self.labelCent.setObjectName("labelCent")
             self.labelCent.setText(labels[2])
             self.gridLayout.addWidget(self.labelCent, row, 0, 1, 1)
-            self.labelSpan = QtGui.QLabel(self)
+            self.labelSpan = QtWidgets.QLabel(self)
             self.labelSpan.setObjectName("labelSpan")
             self.labelSpan.setText(labels[3])
             self.gridLayout.addWidget(self.labelSpan, row, 2, 1, 1)
@@ -198,7 +198,7 @@ class RangeCtl(QtGui.QWidget):
             self.e_cent=None
             self.e_span=None
         if "step" in elements:
-            self.labelStep = QtGui.QLabel(self)
+            self.labelStep = QtWidgets.QLabel(self)
             self.labelStep.setObjectName("labelStep")
             self.labelStep.setText(labels[4])
             self.gridLayout.addWidget(self.labelStep, row, 0, 1, 1)

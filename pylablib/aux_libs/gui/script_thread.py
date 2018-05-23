@@ -1,7 +1,7 @@
 from ...core.gui.qt.thread import controller,signal_pool
 from ...core.utils import general
 
-from PyQt4 import QtCore
+from PyQt5 import QtCore
 
 
 class ScriptThread(controller.QThreadController):

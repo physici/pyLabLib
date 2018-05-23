@@ -1,9 +1,9 @@
-from PyQt4 import QtGui
+from PyQt5 import QtWidgets
 from ... import format,limit
 
-class LVNumLabel(QtGui.QLabel):
+class LVNumLabel(QtWidgets.QLabel):
     def __init__(self, parent, value=None, num_limit=None, num_format=None):
-        QtGui.QLineEdit.__init__(self, parent)
+        QtWidgets.QLineEdit.__init__(self, parent)
         self.num_limit=limit.as_limiter(num_limit) if num_limit is not None else limit.NumberLimit()
         self.num_format=format.as_formatter(num_format) if num_format is not None else format.FloatFormatter()
         self._value=None

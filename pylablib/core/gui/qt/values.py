@@ -1,5 +1,5 @@
 from .widgets import edit
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtWidgets
 from ...utils import dictionary, py3, string
 from ...utils.functions import FunctionSignature
 
@@ -207,17 +207,17 @@ def is_handled_widget(widget):
 def get_default_value_handler(widget):
     if is_handled_widget(widget):
         return IDefaultValueHandler(widget)
-    if isinstance(widget,QtGui.QLineEdit):
+    if isinstance(widget,QtWidgets.QLineEdit):
         return LineEditValueHandler(widget)
-    if isinstance(widget,QtGui.QLabel):
+    if isinstance(widget,QtWidgets.QLabel):
         return LabelValueHandler(widget)
-    if isinstance(widget,QtGui.QCheckBox):
+    if isinstance(widget,QtWidgets.QCheckBox):
         return CheckboxValueHandler(widget)
-    if isinstance(widget,QtGui.QPushButton):
+    if isinstance(widget,QtWidgets.QPushButton):
         return PushButtonValueHandler(widget)
-    if isinstance(widget,(QtGui.QComboBox)):
+    if isinstance(widget,(QtWidgets.QComboBox)):
         return ComboBoxValueHandler(widget)
-    if isinstance(widget,QtGui.QProgressBar):
+    if isinstance(widget,QtWidgets.QProgressBar):
         return ProgressBarValueHandler(widget)
     return IValueHandler(widget)
 
@@ -236,7 +236,7 @@ class ValuesTable(object):
         return self.add_handler(name,get_default_value_handler(widget))
     def add_table(self, name, table):
         return self.add_handler(name,IDefaultValueHandler(table))
-    _default_value_types=(edit.LVTextEdit,edit.LVNumEdit,QtGui.QLineEdit,QtGui.QCheckBox,QtGui.QPushButton,QtGui.QComboBox)
+    _default_value_types=(edit.LVTextEdit,edit.LVNumEdit,QtWidgets.QLineEdit,QtWidgets.QCheckBox,QtWidgets.QPushButton,QtWidgets.QComboBox)
     def add_all_children(self, root, root_name=None, types_include=None, types_exclude=(), names_exclude=None):
         name_filt=string.sfregex(exclude=names_exclude)
         def is_excluded(w):
