@@ -182,6 +182,8 @@ class NIDAQ(IDevice):
         self.ao_channels={}
         self.ao_values={}
         self._update_channel_names()
+    def is_opened(self):
+        return self.ai_task is not None
 
     def _build_channel_name(self, channel):
         channel=channel.lower().strip("/")

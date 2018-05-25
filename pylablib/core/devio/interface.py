@@ -12,11 +12,16 @@ class IDevice(object):
         self._settings_nodes_order=[]
         
     def open(self):
-        """Open the backend."""
+        """Open the connection"""
         pass
     def close(self):
-        """Close the backend."""
+        """Close the connection"""
         pass
+    def is_opened(self):
+        """Check if the device is connected"""
+        return True
+    def __bool__(self):
+        return self.is_opened()
     def __enter__(self):
         return self
     def __exit__(self, *args, **vargs):

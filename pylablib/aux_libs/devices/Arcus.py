@@ -53,6 +53,8 @@ class PerformaxStage(IDevice):
                     return
                 time.sleep(0.3)
             raise ArcusError("can't disconnect from the stage with index {}".format(self.idx))
+    def is_opened(self):
+        return self.handle is not None
     def _check_handle(self):
         if not self.handle:
             raise ArcusError("device is not opened")

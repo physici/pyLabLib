@@ -67,6 +67,12 @@ class IDeviceBackend(object):
     def close(self):
         """Close the connection."""
         pass
+    def is_opened(self):
+        """Check if the device is connected"""
+        return True
+    def __bool__(self):
+        return self.is_opened()
+
     
     def lock(self, timeout=None):
         """Lock the access to the device from other threads/processes (isn't necessarily implemented)."""
@@ -249,6 +255,7 @@ try:
             IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read,datatype=datatype)
             try:
                 self.instr=self._open_resource(self.conn)
+                self.opened=True
                 self._operation_cooldown=self._default_operation_cooldown
                 self._do_lock=do_lock if do_lock is not None else self._lock_default
                 self.cooldown()
@@ -259,11 +266,15 @@ try:
         def open(self):
             """Open the connection."""
             self.instr.open()
+            self.opened=True
             self.cooldown()
         def close(self):
             """Close the connection."""
             self.instr.close()
+            self.opened=False
             self.cooldown()
+        def is_opened(self):
+            return self.opened
 
         def lock(self, timeout=None):
             """Lock the access to the device from other threads/processes."""
@@ -408,6 +419,7 @@ try:
             port=conn_dict.pop("port")
             try:
                 self.instr=serial.serial_for_url(port,do_not_open=True,**conn_dict)
+                self.opened=True
                 if no_dtr:
                     try:
                         self.instr.setDTR(0)
@@ -433,10 +445,14 @@ try:
             """Open the connection."""
             if not self._connect_on_operation:
                 self._do_open()
+            self.opened=True
         def close(self):
             """Close the connection."""
             if not self._connect_on_operation:
                 self._do_close()
+            self.opened=False
+        def is_opened(self):
+            return self.opened
         def _op_open(self):
             if self._connect_on_operation:
                 if not self._opened_stack:
@@ -654,6 +670,8 @@ try:
         def close(self):
             """Close the connection."""
             self._do_close()
+        def is_opened(self):
+            return not self.instr.closed
         @contextlib.contextmanager
         def single_op(self):
             """
@@ -858,6 +876,8 @@ class NetworkDeviceBackend(IDeviceBackend):
         if self.socket is not None:
             self.socket.close()
             self.socket=None
+        def is_opened(self):
+            return bool(self.socket)
         
     def cooldown(self):
         """
@@ -1023,6 +1043,9 @@ class IBackendWrapper(interface.IDevice):
     def close(self):
         """Close the backend."""
         return self.instr.close()
+    def is_opened(self):
+        """Check if the device is connected"""
+        return bool(self.instr)
     
     def lock(self, timeout=None):
         """Lock the access to the device from other threads/processes (isn't necessarily implemented)."""

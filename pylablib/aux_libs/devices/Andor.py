@@ -24,6 +24,37 @@ class AndorCamera(IDevice):
         self.ini_path=ini_path
         self.handle=None
         self.open()
+
+        self._add_settings_node("model_data",lambda: tuple(self.get_model_data()))
+        self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
+        self._add_settings_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
+        self._add_settings_node("temperature_status",self.get_temperature_status,ignore_error=AndorLibError)
+        self._add_settings_node("cooler",self.is_cooler_on,self.set_cooler,ignore_error=AndorLibError)
+        self._add_settings_node("channel",lambda:self.channel,lambda x:self.set_amp_mode(channel=x))
+        self._add_settings_node("oamp",lambda:self.oamp,lambda x:self.set_amp_mode(oamp=x))
+        self._add_settings_node("hsspeed",lambda:self.hsspeed,lambda x:self.set_amp_mode(hsspeed=x))
+        self._add_settings_node("preamp",lambda:self.preamp,lambda x:self.set_amp_mode(preamp=x))
+        self._add_settings_node("vsspeed",lambda:self.vsspeed,self.set_vsspeed)
+        self._add_settings_node("EMCCD_gain",lambda:self.EMCCD_gain,lambda x: self.set_EMCCD_gain(*x))
+        self._add_settings_node("shutter",lambda:self.shutter_mode,self.set_shutter)
+        self._add_settings_node("fan_mode",lambda:self.fan_mode,self.set_fan_mode)
+        self._add_settings_node("trigger_mode",lambda:self.trigger_mode,self.set_trigger_mode)
+        self._add_settings_node("acq_parameters/accum",lambda:self.acq_params["accum"],lambda p: self.setup_accum_mode(*p))
+        self._add_settings_node("acq_parameters/kinetics",lambda:self.acq_params["kinetics"],lambda p: self.setup_kinetic_mode(*p))
+        self._add_settings_node("acq_parameters/fast_kinetics",lambda:self.acq_params["fast_kinetics"],lambda p: self.setup_fast_kinetic_mode(*p))
+        self._add_settings_node("acq_parameters/cont",lambda:self.acq_params["cont"],self.setup_cont_mode)
+        self._add_settings_node("acq_mode",lambda:self.acq_mode,self.set_acquisition_mode)
+        self._add_settings_node("frame_transfer",lambda:self.frame_transfer_mode,self.enable_frame_transfer_mode)
+        self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
+        self._add_settings_node("timings",self.get_timings)
+        self._add_settings_node("read_parameters/single_track",lambda:self.read_params["single_track"],lambda p: self.setup_single_track_mode(*p))
+        self._add_settings_node("read_parameters/multi_track",lambda:self.read_params["multi_track"],lambda p: self.setup_multi_track_mode(*p))
+        self._add_settings_node("read_parameters/random_track",lambda:self.read_params["random_track"],self.setup_random_track_mode)
+        self._add_settings_node("read_parameters/image",lambda:self.read_params["image"],lambda p: self.setup_image_mode(*p))
+        self._add_settings_node("read_mode",lambda:self.read_mode,self.set_read_mode)
+        self._add_settings_node("detector_size",self.get_detector_size)
+
+    def _setup_default_settings(self):
         self.temperature_setpoint=None
         self.set_temperature(-100)
         self.channel=None
@@ -59,35 +90,6 @@ class AndorCamera(IDevice):
         self.setup_random_track_mode([(1,1)])
         self.flush_buffer()
 
-        self._add_settings_node("model_data",lambda: tuple(self.get_model_data()))
-        self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
-        self._add_settings_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
-        self._add_settings_node("temperature_status",self.get_temperature_status,ignore_error=AndorLibError)
-        self._add_settings_node("cooler",self.is_cooler_on,self.set_cooler,ignore_error=AndorLibError)
-        self._add_settings_node("channel",lambda:self.channel,lambda x:self.set_amp_mode(channel=x))
-        self._add_settings_node("oamp",lambda:self.oamp,lambda x:self.set_amp_mode(oamp=x))
-        self._add_settings_node("hsspeed",lambda:self.hsspeed,lambda x:self.set_amp_mode(hsspeed=x))
-        self._add_settings_node("preamp",lambda:self.preamp,lambda x:self.set_amp_mode(preamp=x))
-        self._add_settings_node("vsspeed",lambda:self.vsspeed,self.set_vsspeed)
-        self._add_settings_node("EMCCD_gain",lambda:self.EMCCD_gain,lambda x: self.set_EMCCD_gain(*x))
-        self._add_settings_node("shutter",lambda:self.shutter_mode,self.set_shutter)
-        self._add_settings_node("fan_mode",lambda:self.fan_mode,self.set_fan_mode)
-        self._add_settings_node("trigger_mode",lambda:self.trigger_mode,self.set_trigger_mode)
-        self._add_settings_node("acq_parameters/accum",lambda:self.acq_params["accum"],lambda p: self.setup_accum_mode(*p))
-        self._add_settings_node("acq_parameters/kinetics",lambda:self.acq_params["kinetics"],lambda p: self.setup_kinetic_mode(*p))
-        self._add_settings_node("acq_parameters/fast_kinetics",lambda:self.acq_params["fast_kinetics"],lambda p: self.setup_fast_kinetic_mode(*p))
-        self._add_settings_node("acq_parameters/cont",lambda:self.acq_params["cont"],self.setup_cont_mode)
-        self._add_settings_node("acq_mode",lambda:self.acq_mode,self.set_acquisition_mode)
-        self._add_settings_node("frame_transfer",lambda:self.frame_transfer_mode,self.enable_frame_transfer_mode)
-        self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
-        self._add_settings_node("timings",self.get_timings)
-        self._add_settings_node("read_parameters/single_track",lambda:self.read_params["single_track"],lambda p: self.setup_single_track_mode(*p))
-        self._add_settings_node("read_parameters/multi_track",lambda:self.read_params["multi_track"],lambda p: self.setup_multi_track_mode(*p))
-        self._add_settings_node("read_parameters/random_track",lambda:self.read_params["random_track"],self.setup_random_track_mode)
-        self._add_settings_node("read_parameters/image",lambda:self.read_params["image"],lambda p: self.setup_image_mode(*p))
-        self._add_settings_node("read_mode",lambda:self.read_mode,self.set_read_mode)
-        self._add_settings_node("detector_size",self.get_detector_size)
-
     def _camsel(self):
         if self.handle is None:
             raise AndorError("camera is not opened")
@@ -100,6 +102,7 @@ class AndorCamera(IDevice):
         self.handle=lib.GetCameraHandle(self.idx)
         self._camsel()
         lib.Initialize(py3.as_builtin_bytes(self.ini_path))
+        self._setup_default_settings()
     def close(self):
         try:
             self._camsel()
@@ -111,6 +114,9 @@ class AndorCamera(IDevice):
             if e.text_code!="DRV_NOT_INITIALIZED":
                 raise
         self.handle=None
+    def is_opened(self):
+        """Check if the device is connected"""
+        return self.handle is not None
 
     ModelData=collections.namedtuple("ModelData",["controller_model","head_model","serial_number"])
     def get_model_data(self):

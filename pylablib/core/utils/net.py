@@ -62,6 +62,7 @@ class ClientSocket(object):
         funcargparse.check_parameter_range(datatype,"datatype",{"auto","str","bytes"})
         object.__init__(self)
         self.sock=sock or socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        self.connected=False
         self.timeout=timeout
         self.wait_callback=wait_callback
         if wait_callback is not None:
@@ -109,12 +110,20 @@ class ClientSocket(object):
             self.wait_callback()
     def connect(self, host, port):
         """Connect to a remote host."""
-        sock_func=lambda: self.sock.connect((host,port))
+        def sock_func():
+            self.sock.connect((host,port))
+            self.connected=True
         return _wait_sock_func(sock_func,self.timeout,self._connect_callback)
     def close(self):
         """Close the connection."""
         self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
+        self.connected=False
+    def is_connected(self):
+        """Check if the connection is opened"""
+        return self.connected
+    def __bool__(self):
+        return self.is_connected()
 
     def get_local_name(self):
         """Return IP address and port of this socket."""

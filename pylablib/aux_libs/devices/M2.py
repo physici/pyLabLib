@@ -36,6 +36,8 @@ class M2ICE(IDevice):
         self._last_status={}
     def close(self):
         self.socket.close()
+    def is_opened(self):
+        return self.socket.is_connected()
 
     def _build_message(self, op, params, tx_id=None):
         if tx_id is None:

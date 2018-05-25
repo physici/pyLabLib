@@ -35,9 +35,13 @@ class SCU3D(IDevice):
     def open(self):
         """Open the connection to the stage"""
         self._check_status("SA_InitDevices",self.dll.SA_InitDevices(0))
+        self.connected=True
     def close(self):
         """Close the connection to the stage"""
         self._check_status("SA_ReleaseDevices",self.dll.SA_ReleaseDevices())
+        self.connected=False
+    def is_opened(self):
+        return self.connected
 
     _func_status={  0:"SA_OK",
                     1:"SA_INITIALIZATION_ERROR",
