@@ -38,10 +38,7 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.imgmath',
     'sphinx.ext.viewcode']
 
-autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt5', 'PyQt5.QtCore', 'PyQt5.QtGui', 'websocket', 'zhinst', 'matplotlib']
-sys.modules['PyQt5.QtCore']=mock.Mock(PYQT_VERSION_STR='5.10.1', QT_VERSION_STR='5.10.1')
-sys.modules['PyQt5.QtWidgets']=mock.Mock(QGraphicsObject=object, QGraphicsWidget=object)
-sys.modules['PyQt5']=mock.Mock(QtCore=sys.modules['PyQt5.QtCore'], QtWidgets=sys.modules['PyQt5.QtWidgets'])
+autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt5', 'pywinusb', 'pyqtgraph', 'websocket', 'zhinst', 'matplotlib']
 sys.modules['visa']=mock.Mock(VisaIOError=object, __version__='1.9.0')
 sys.modules['serial']=mock.Mock(SerialException=object)
 sys.modules['ft232']=mock.Mock(Ft232Exception=object)
