@@ -9,7 +9,7 @@ class LM500(SCPI.SCPIDevice):
     Cryomagnetics LM500/510 level monitor.
 
     Channels are enumerated from 1.
-    To abort filling or reset a timeout, call :method:`reset`.
+    To abort filling or reset a timeout, call :meth:`reset`.
 
     Args:
         conn: serial connection parameters (usually port or a tuple containing port and baudrate)

@@ -12,8 +12,8 @@ class DCAMGenericError(RuntimeError):
 class CSizePrepStruct(ctypes_wrap.StructWrap):
     _tup_exc={"size"}
     def prep(self, struct):
-		struct.size=ctypes.sizeof(struct)
-		return struct
+        struct.size=ctypes.sizeof(struct)
+        return struct
 
 
 class DCAM_GUID(ctypes.Structure):
@@ -103,8 +103,8 @@ class CDCAMPROP_ATTR(ctypes_wrap.StructWrap):
     _struct=DCAMPROP_ATTR
     _tup_exc={"cbSize","iReserved1","iGroup","iReserved3","option"}
     def prep(self, struct):
-		struct.cbSize=ctypes.sizeof(struct)
-		return struct
+        struct.cbSize=ctypes.sizeof(struct)
+        return struct
 
 DCAMPROP_VALUETEXT_MAXSIZE=512
 class DCAMPROP_VALUETEXT(ctypes.Structure):
@@ -119,8 +119,8 @@ class CDCAMPROP_VALUETEXT(ctypes_wrap.StructWrap):
     _prep={"text":ctypes_wrap.strprep(DCAMPROP_VALUETEXT_MAXSIZE)}
     _default={"textbytes":DCAMPROP_VALUETEXT_MAXSIZE}
     def prep(self, struct):
-		struct.cbSize=ctypes.sizeof(struct)
-		return struct
+        struct.cbSize=ctypes.sizeof(struct)
+        return struct
 
 class DCAM_TIMESTAMP(ctypes.Structure):
 	_fields_=[  ("sec",ctypes.c_uint32),

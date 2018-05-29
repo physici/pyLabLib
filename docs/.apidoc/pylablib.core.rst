@@ -1,5 +1,5 @@
-pylablib\.core package
-======================
+pylablib.core package
+=====================
 
 Subpackages
 -----------
@@ -17,8 +17,8 @@ Subpackages
 Submodules
 ----------
 
-pylablib\.core\.version module
-------------------------------
+pylablib.core.version module
+----------------------------
 
 .. automodule:: pylablib.core.version
     :members:

@@ -12,8 +12,8 @@ Subpackages
 Submodules
 ----------
 
-pylablib\.deploy module
------------------------
+pylablib.deploy module
+----------------------
 
 .. automodule:: pylablib.deploy
     :members:

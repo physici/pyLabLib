@@ -1,19 +1,19 @@
-pylablib\.aux\_libs\.file\_formats package
-==========================================
+pylablib.aux\_libs.file\_formats package
+========================================
 
 Submodules
 ----------
 
-pylablib\.aux\_libs\.file\_formats\.waveguide module
-----------------------------------------------------
+pylablib.aux\_libs.file\_formats.waveguide module
+-------------------------------------------------
 
 .. automodule:: pylablib.aux_libs.file_formats.waveguide
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.aux\_libs\.file\_formats\.zi module
----------------------------------------------
+pylablib.aux\_libs.file\_formats.zi module
+------------------------------------------
 
 .. automodule:: pylablib.aux_libs.file_formats.zi
     :members:

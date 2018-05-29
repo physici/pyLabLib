@@ -202,11 +202,11 @@ try:
         _backend="visa"
         Error=visa.VisaIOError
         """Base class for the errors raised by the backend operations""" 
-        class BackendOpenError(visa.VisaIOError,IBackendOpenError):
+        class BackendOpenError(IBackendOpenError,visa.VisaIOError):
             """Visa backend opening error"""
             def __init__(self, e):
                 IBackendOpenError.__init__(self)
-                visa.VisaIOError.__init__(self,*e.args)
+                visa.VisaIOError.__init__(self,e.error_code)
         
         if visa.__version__<"1.6": # older pyvisa versions have a slightly different interface
             def _set_timeout(self, timeout):
@@ -398,7 +398,7 @@ try:
         _backend="serial"
         Error=serial.SerialException
         """Base class for the errors raised by the backend operations"""
-        class BackendOpenError(serial.SerialException,IBackendOpenError):
+        class BackendOpenError(IBackendOpenError,serial.SerialException):
             """Serial backend opening error"""
             def __init__(self, e):
                 IBackendOpenError.__init__(self)
@@ -630,7 +630,7 @@ try:
         _backend="ft232"
         Error=ft232.Ft232Exception
         """Base class for the errors raised by the backend operations"""
-        class BackendOpenError(ft232.Ft232Exception,IBackendOpenError):
+        class BackendOpenError(IBackendOpenError,ft232.Ft232Exception):
             """FT232 backend opening error"""
             def __init__(self, e):
                 IBackendOpenError.__init__(self)
@@ -802,7 +802,7 @@ try:
         
         
     _backends["ft232"]=FT232DeviceBackend
-except (ImportError,NameError):
+except (ImportError,NameError,OSError):
     pass
 
 
@@ -831,7 +831,7 @@ class NetworkDeviceBackend(IDeviceBackend):
     _backend="network"
     Error=net.socket.error
     """Base class for the errors raised by the backend operations"""
-    class BackendOpenError(net.socket.error,IBackendOpenError):
+    class BackendOpenError(IBackendOpenError,net.socket.error):
         """Network backend opening error"""
         def __init__(self, e):
             IBackendOpenError.__init__(self)

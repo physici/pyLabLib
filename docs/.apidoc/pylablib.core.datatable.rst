@@ -1,51 +1,51 @@
-pylablib\.core\.datatable package
-=================================
+pylablib.core.datatable package
+===============================
 
 Submodules
 ----------
 
-pylablib\.core\.datatable\.column module
-----------------------------------------
+pylablib.core.datatable.column module
+-------------------------------------
 
 .. automodule:: pylablib.core.datatable.column
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.datatable\.indexing module
-------------------------------------------
+pylablib.core.datatable.indexing module
+---------------------------------------
 
 .. automodule:: pylablib.core.datatable.indexing
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.datatable\.table module
----------------------------------------
+pylablib.core.datatable.table module
+------------------------------------
 
 .. automodule:: pylablib.core.datatable.table
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.datatable\.table\_storage module
-------------------------------------------------
+pylablib.core.datatable.table\_storage module
+---------------------------------------------
 
 .. automodule:: pylablib.core.datatable.table_storage
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.datatable\.utils module
----------------------------------------
+pylablib.core.datatable.utils module
+------------------------------------
 
 .. automodule:: pylablib.core.datatable.utils
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.datatable\.wrapping module
-------------------------------------------
+pylablib.core.datatable.wrapping module
+---------------------------------------
 
 .. automodule:: pylablib.core.datatable.wrapping
     :members:

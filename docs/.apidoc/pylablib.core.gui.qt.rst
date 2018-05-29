@@ -1,5 +1,5 @@
-pylablib\.core\.gui\.qt package
-===============================
+pylablib.core.gui.qt package
+============================
 
 Subpackages
 -----------
@@ -12,8 +12,8 @@ Subpackages
 Submodules
 ----------
 
-pylablib\.core\.gui\.qt\.values module
---------------------------------------
+pylablib.core.gui.qt.values module
+----------------------------------
 
 .. automodule:: pylablib.core.gui.qt.values
     :members:

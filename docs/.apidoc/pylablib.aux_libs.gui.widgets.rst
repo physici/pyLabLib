@@ -1,19 +1,27 @@
-pylablib\.aux\_libs\.gui\.widgets package
-=========================================
+pylablib.aux\_libs.gui.widgets package
+======================================
 
 Submodules
 ----------
 
-pylablib\.aux\_libs\.gui\.widgets\.custom\_controls module
-----------------------------------------------------------
+pylablib.aux\_libs.gui.widgets.custom\_controls module
+------------------------------------------------------
 
 .. automodule:: pylablib.aux_libs.gui.widgets.custom_controls
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.aux\_libs\.gui\.widgets\.param\_table module
-------------------------------------------------------
+pylablib.aux\_libs.gui.widgets.image\_plotter module
+----------------------------------------------------
+
+.. automodule:: pylablib.aux_libs.gui.widgets.image_plotter
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pylablib.aux\_libs.gui.widgets.param\_table module
+--------------------------------------------------
 
 .. automodule:: pylablib.aux_libs.gui.widgets.param_table
     :members:

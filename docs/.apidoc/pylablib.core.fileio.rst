@@ -1,67 +1,67 @@
-pylablib\.core\.fileio package
-==============================
+pylablib.core.fileio package
+============================
 
 Submodules
 ----------
 
-pylablib\.core\.fileio\.datafile module
----------------------------------------
+pylablib.core.fileio.datafile module
+------------------------------------
 
 .. automodule:: pylablib.core.fileio.datafile
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.fileio\.dict\_entry module
-------------------------------------------
+pylablib.core.fileio.dict\_entry module
+---------------------------------------
 
 .. automodule:: pylablib.core.fileio.dict_entry
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.fileio\.errors module
--------------------------------------
+pylablib.core.fileio.errors module
+----------------------------------
 
 .. automodule:: pylablib.core.fileio.errors
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.fileio\.loadfile module
----------------------------------------
+pylablib.core.fileio.loadfile module
+------------------------------------
 
 .. automodule:: pylablib.core.fileio.loadfile
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.fileio\.location module
----------------------------------------
+pylablib.core.fileio.location module
+------------------------------------
 
 .. automodule:: pylablib.core.fileio.location
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.fileio\.logfile module
---------------------------------------
+pylablib.core.fileio.logfile module
+-----------------------------------
 
 .. automodule:: pylablib.core.fileio.logfile
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.fileio\.parse\_csv module
------------------------------------------
+pylablib.core.fileio.parse\_csv module
+--------------------------------------
 
 .. automodule:: pylablib.core.fileio.parse_csv
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.fileio\.savefile module
----------------------------------------
+pylablib.core.fileio.savefile module
+------------------------------------
 
 .. automodule:: pylablib.core.fileio.savefile
     :members:

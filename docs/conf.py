@@ -20,6 +20,8 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
+from unittest import mock
+
 
 # -- General configuration ------------------------------------------------
 
@@ -36,7 +38,13 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.imgmath',
     'sphinx.ext.viewcode']
 
-autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt4', 'PyQt5', 'websocket', 'zhinst', 'matplotlib']
+autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt5', 'PyQt5.QtCore', 'PyQt5.QtGui', 'websocket', 'zhinst', 'matplotlib']
+sys.modules['PyQt5.QtCore']=mock.Mock(PYQT_VERSION_STR='5.10.1', QT_VERSION_STR='5.10.1')
+sys.modules['PyQt5.QtWidgets']=mock.Mock(QGraphicsObject=object, QGraphicsWidget=object)
+sys.modules['PyQt5']=mock.Mock(QtCore=sys.modules['PyQt5.QtCore'], QtWidgets=sys.modules['PyQt5.QtWidgets'])
+sys.modules['visa']=mock.Mock(VisaIOError=object, __version__='1.9.0')
+sys.modules['serial']=mock.Mock(SerialException=object)
+sys.modules['ft232']=mock.Mock(Ft232Exception=object)
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

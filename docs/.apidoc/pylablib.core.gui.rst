@@ -1,5 +1,5 @@
-pylablib\.core\.gui package
-===========================
+pylablib.core.gui package
+=========================
 
 Subpackages
 -----------
@@ -11,16 +11,16 @@ Subpackages
 Submodules
 ----------
 
-pylablib\.core\.gui\.format module
-----------------------------------
+pylablib.core.gui.format module
+-------------------------------
 
 .. automodule:: pylablib.core.gui.format
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.gui\.limit module
----------------------------------
+pylablib.core.gui.limit module
+------------------------------
 
 .. automodule:: pylablib.core.gui.limit
     :members:

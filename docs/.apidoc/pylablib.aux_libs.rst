@@ -1,5 +1,5 @@
-pylablib\.aux\_libs package
-===========================
+pylablib.aux\_libs package
+==========================
 
 Subpackages
 -----------

@@ -4,7 +4,7 @@ from ...core.utils import strpack
 import re
 try:
     import ft232
-except ImportError:
+except (ImportError,NameError,OSError):
     pass
 
 import collections

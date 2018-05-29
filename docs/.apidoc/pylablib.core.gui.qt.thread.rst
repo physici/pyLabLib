@@ -1,43 +1,43 @@
-pylablib\.core\.gui\.qt\.thread package
-=======================================
+pylablib.core.gui.qt.thread package
+===================================
 
 Submodules
 ----------
 
-pylablib\.core\.gui\.qt\.thread\.controller module
---------------------------------------------------
+pylablib.core.gui.qt.thread.controller module
+---------------------------------------------
 
 .. automodule:: pylablib.core.gui.qt.thread.controller
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.gui\.qt\.thread\.mthread module
------------------------------------------------
+pylablib.core.gui.qt.thread.mthread module
+------------------------------------------
 
 .. automodule:: pylablib.core.gui.qt.thread.mthread
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.gui\.qt\.thread\.signal\_pool module
-----------------------------------------------------
+pylablib.core.gui.qt.thread.signal\_pool module
+-----------------------------------------------
 
 .. automodule:: pylablib.core.gui.qt.thread.signal_pool
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.gui\.qt\.thread\.synchronizing module
------------------------------------------------------
+pylablib.core.gui.qt.thread.synchronizing module
+------------------------------------------------
 
 .. automodule:: pylablib.core.gui.qt.thread.synchronizing
     :members:
     :undoc-members:
     :show-inheritance:
 
-pylablib\.core\.gui\.qt\.thread\.threadprop module
---------------------------------------------------
+pylablib.core.gui.qt.thread.threadprop module
+---------------------------------------------
 
 .. automodule:: pylablib.core.gui.qt.thread.threadprop
     :members:
