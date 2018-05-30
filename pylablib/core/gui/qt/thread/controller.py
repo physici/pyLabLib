@@ -143,7 +143,6 @@ class QThreadController(QtCore.QObject):
     finished=QtCore.pyqtSignal()
     @exsafeSlot()
     def _on_finish_event(self):
-        print("OnFinish {}".format(self.name))
         is_stopped=self._stopped
         self._stopped=False
         self.finished.emit()
@@ -153,7 +152,6 @@ class QThreadController(QtCore.QObject):
         except:
             traceback.print_exc()
         finally:
-            print("Stopping {}".format(self.name))
             self._stopped=is_stopped
             self._running=False
             for uid in self._signal_pool_uids:
@@ -162,10 +160,8 @@ class QThreadController(QtCore.QObject):
             unregister_controller(self)
             if self.kind=="main":
                 stop_all_controllers()
-            print("Stopped {}".format(self.name))
     @QtCore.pyqtSlot()
     def _on_last_window_closed(self):
-        print("Last window closed")
         if threadprop.get_app().quitOnLastWindowClosed():
             self._request_stop()
     
@@ -274,7 +270,6 @@ class QThreadController(QtCore.QObject):
         self.messaged.emit(("stop",None,None))
     def stop(self, code=0):
         if self.kind=="main":
-            print("Stopping {} with code {}".format(self.name,code))
             self.call_in_thread_callback(lambda: threadprop.get_app().exit(code))
         else:
             self.thread.quit_sync()
