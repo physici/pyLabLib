@@ -1,10 +1,11 @@
-from ....utils import general, funcargparse, dictionary
+from ....utils import general, funcargparse, dictionary, functions as func_utils
 from . import signal_pool, threadprop, synchronizing
 
 from PyQt5 import QtCore
 
 import threading
 import time
+import sys, traceback
     
 _depends_local=["....mthread.notifier"]
 
@@ -15,6 +16,27 @@ _running_threads={}
 _running_threads_lock=threading.Lock()
 _running_threads_notifier=synchronizing.QMultiThreadNotifier()
 _running_threads_stopping=False
+
+
+def exsafe(func):
+    """Decorator that intercepts exceptions raised by `func` and stops the execution in a controlled manner (quitting the main thread)"""
+    @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
+    def safe_func(*args, **kwargs):
+        try:
+            return func(*args,**kwargs)
+        except:
+            traceback.print_exc()
+            try:
+                get_controller().stop(1)
+                get_controller("gui").stop(1)
+            except threadprop.NoControllerThreadError:
+                sys.exit(1)
+    return safe_func
+def exsafeSlot(*slargs, **slkwargs):
+    """Wrapper around :func:`PyQt5.QtCore.pyqtSlot` which intercepts exceptions and stops the execution in a controlled manner"""
+    def wrapper(func):
+        return QtCore.pyqtSlot(*slargs,**slkwargs)(exsafe(func))
+    return wrapper
 
 class QThreadControllerThread(QtCore.QThread):
     finalized=QtCore.pyqtSignal()
@@ -29,7 +51,9 @@ class QThreadControllerThread(QtCore.QThread):
             QtCore.QThread.run(self)
         finally:
             self.finalized.emit()
+    @QtCore.pyqtSlot()
     def quit_sync(self):
+        """quit_sync docstring"""
         if self.isRunning():
             self.quit()
             self.controller._request_stop()
@@ -40,8 +64,10 @@ class QThreadControllerThread(QtCore.QThread):
 class QThreadController(QtCore.QObject):
     def __init__(self, name=None, kind="loop", signal_pool=None):
         QtCore.QObject.__init__(self)
-        self.name=name or threadprop._thread_uids(type(self).__name__)
         funcargparse.check_parameter_range(kind,"kind",{"loop","run","main"})
+        if kind=="main":
+            name="gui"
+        self.name=name or threadprop._thread_uids(type(self).__name__)
         self.kind=kind
         store_created_controller(self)
         if self.kind=="main":
@@ -54,9 +80,7 @@ class QThreadController(QtCore.QObject):
             register_controller(self)
         else:
             self.thread=QThreadControllerThread(self)
-        # self._wait_timer=QtCore.QTimer(self)
-        # self._wait_timer.setSingleShot(True)
-        # self._wait_timer.timeout.connect(self._on_wait_timeout)
+
         self._wait_timer=QtCore.QBasicTimer()
         self._message_queue={}
         self._sync_queue={}
@@ -77,11 +101,8 @@ class QThreadController(QtCore.QObject):
         else:
             self.thread.finalized.connect(self._on_finish_event)
         
-    @QtCore.pyqtSlot()
-    def _on_wait_timeout(self):
-        pass
     messaged=QtCore.pyqtSignal("PyQt_PyObject")
-    @QtCore.pyqtSlot("PyQt_PyObject")
+    @exsafeSlot("PyQt_PyObject")
     def _get_message(self, msg):
         kind,tag,value=msg
         if kind=="msg":
@@ -99,11 +120,11 @@ class QThreadController(QtCore.QObject):
         elif kind=="stop":
             self._stopped=True
     interrupt_called=QtCore.pyqtSignal("PyQt_PyObject")
-    @QtCore.pyqtSlot("PyQt_PyObject")
+    @exsafeSlot("PyQt_PyObject")
     def _on_call_in_thread(self, call):
         call()
     started=QtCore.pyqtSignal()
-    @QtCore.pyqtSlot()
+    @exsafeSlot()
     def _on_start_event(self):
         self._stopped=False
         threadprop._local_data.controller=self
@@ -120,14 +141,19 @@ class QThreadController(QtCore.QObject):
         except threadprop.InterruptExceptionStop:
             self.thread.stop_request.emit()
     finished=QtCore.pyqtSignal()
-    @QtCore.pyqtSlot()
+    @exsafeSlot()
     def _on_finish_event(self):
+        print("OnFinish {}".format(self.name))
         is_stopped=self._stopped
         self._stopped=False
         self.finished.emit()
         try:
+            self.check_messages()
             self.on_finish()
+        except:
+            traceback.print_exc()
         finally:
+            print("Stopping {}".format(self.name))
             self._stopped=is_stopped
             self._running=False
             for uid in self._signal_pool_uids:
@@ -136,8 +162,10 @@ class QThreadController(QtCore.QObject):
             unregister_controller(self)
             if self.kind=="main":
                 stop_all_controllers()
+            print("Stopped {}".format(self.name))
     @QtCore.pyqtSlot()
     def _on_last_window_closed(self):
+        print("Last window closed")
         if threadprop.get_app().quitOnLastWindowClosed():
             self._request_stop()
     
@@ -244,9 +272,10 @@ class QThreadController(QtCore.QObject):
         self.thread.start()
     def _request_stop(self):
         self.messaged.emit(("stop",None,None))
-    def stop(self):
+    def stop(self, code=0):
         if self.kind=="main":
-            self.call_in_thread_callback(threadprop.get_app().quit)
+            print("Stopping {} with code {}".format(self.name,code))
+            self.call_in_thread_callback(lambda: threadprop.get_app().exit(code))
         else:
             self.thread.quit_sync()
     def running(self):
@@ -447,7 +476,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         self.finalize_task()
 
     _directed_signal=QtCore.pyqtSignal("PyQt_PyObject")
-    @QtCore.pyqtSlot("PyQt_PyObject")
+    @exsafeSlot("PyQt_PyObject")
     def _on_directed_signal(self, msg):
         self.process_signal(*msg)
     def _recv_directed_signal(self, tag, src, value):
@@ -579,7 +608,7 @@ def get_controller(name=None, wait=True, timeout=None):
             else:
                 return _running_threads[name]
         cnt=_running_threads_notifier.wait(cnt,timeout=ctd.time_left())
-        # print cnt
+
 def stop_controller(name, sync=True, require_controller=False):
     try:
         controller=get_controller(name,wait=False)
@@ -593,6 +622,6 @@ def stop_all_controllers(sync=True):
     global _running_threads_stopping
     with _running_threads_lock:
         _running_threads_stopping=True
-        names=_running_threads.values()
+        names=list(_running_threads.keys())
     for n in names:
         stop_controller(n)

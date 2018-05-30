@@ -139,7 +139,7 @@ class FunctionSignature(object):
         
         `overwrite` is a set or a list specifying which original parameters are overwritten by the addition.
         It includes ``'name'``, ``'doc'``, ``'cls'``, ``'obj'``, ``'varg_name'`` and ``'kwarg_name'``;
-        the default value is {'varg_name','kwarg_name','doc'}
+        the default value is ``{'varg_name','kwarg_name','doc'}``
         
         Returns:
             tuple: ``(signature, pass_order)``

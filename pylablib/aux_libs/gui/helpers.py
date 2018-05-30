@@ -18,7 +18,7 @@ class StreamFormerThread(controller.QThreadController):
         self._row_lock=threading.RLock()
         self._row_cnt=0
         self.block_period=1
-        self.new_block_done.connect(self.on_new_block)
+        self.new_block_done.connect(self._on_new_block_slot)
         self.new_row_done.connect(self._add_new_row)
         self.setupargs=setupargs or []
         self.setupkwargs=setupkwargs or {}
@@ -28,7 +28,9 @@ class StreamFormerThread(controller.QThreadController):
     def on_new_row(self, row):
         return row
     new_block_done=QtCore.pyqtSignal()
-    @QtCore.pyqtSlot()
+    @controller.exsafeSlot()
+    def _on_new_block_slot(self):
+        self.on_new_block()
     def on_new_block(self):
         pass
     def cleanup(self):
@@ -78,6 +80,7 @@ class StreamFormerThread(controller.QThreadController):
                 return
         self.new_row_done.emit()
     new_row_done=QtCore.pyqtSignal()
+    @controller.exsafeSlot()
     def _add_new_row(self):
         with self._channel_lock:
             row={}

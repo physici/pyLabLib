@@ -1,4 +1,5 @@
 from .param_table import ParamTable, FixedParamTable
+from ....core.gui.qt.thread import controller
 
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph
@@ -65,6 +66,8 @@ class ImageView(QtWidgets.QWidget):
         self.imgHLine=pyqtgraph.InfiniteLine(angle=0,movable=True,bounds=[0,None])
         self.imageWindow.getView().addItem(self.imgVLine)
         self.imageWindow.getView().addItem(self.imgHLine)
+        self._signals_connected=False
+        self._connect_signals()
         self.imgVLine.sigPositionChanged.connect(self.update_image_controls)
         self.imgHLine.sigPositionChanged.connect(self.update_image_controls)
         self.imageWindow.getHistogramWidget().sigLevelsChanged.connect(self.update_image_controls)
@@ -82,19 +85,30 @@ class ImageView(QtWidgets.QWidget):
                 "vlinepos":0,
                 "hlinepos":0})
     
+    def _connect_signals(self):
+        if not self._signals_connected:
+            self.imgVLine.sigPositionChanged.connect(self.update_image_controls)
+            self.imgHLine.sigPositionChanged.connect(self.update_image_controls)
+            self.imageWindow.getHistogramWidget().sigLevelsChanged.connect(self.update_image_controls)
+            self._signals_connected=True
+    def _disconnect_signals(self):
+        if self._signals_connected:
+            self.imgVLine.sigPositionChanged.disconnect(self.update_image_controls)
+            self.imgHLine.sigPositionChanged.disconnect(self.update_image_controls)
+            self.imageWindow.getHistogramWidget().sigLevelsChanged.disconnect(self.update_image_controls)
+            self._signals_connected=False
     @contextlib.contextmanager
     def no_events(self):
-        self.imgVLine.sigPositionChanged.disconnect(self.update_image_controls)
-        self.imgHLine.sigPositionChanged.disconnect(self.update_image_controls)
-        self.imageWindow.getHistogramWidget().sigLevelsChanged.disconnect(self.update_image_controls)
-        yield
-        self.imgVLine.sigPositionChanged.connect(self.update_image_controls)
-        self.imgHLine.sigPositionChanged.connect(self.update_image_controls)
-        self.imageWindow.getHistogramWidget().sigLevelsChanged.connect(self.update_image_controls)
+        self._disconnect_signals()
+        try:
+            yield
+        finally:
+            self._connect_signals()
 
 
     def set_image(self, img):
         self.img=img
+    @controller.exsafe
     def center_lines(self):
         self.imgVLine.setPos(self.img.shape[0]/2)
         self.imgHLine.setPos(self.img.shape[1]/2)
@@ -107,6 +121,7 @@ class ImageView(QtWidgets.QWidget):
         params.v["vlinepos"]=self.imgVLine.getPos()[0]
         params.v["hlinepos"]=self.imgHLine.getPos()[1]
     # Update image plot
+    @controller.exsafe
     def update_image(self, update_controls=False):
         with self.no_events():
             params=self._get_params()
