@@ -149,6 +149,7 @@ class NIDAQ(IDevice):
         IDevice.__init__(self)
         self.dev_name=dev_name.strip("/")
         self.rate=rate
+        self.clk_src=None
         self.buffer_size=buffer_size
         self.ai_channels={}
         self.ci_tasks={}
@@ -200,10 +201,16 @@ class NIDAQ(IDevice):
         self.ao_names=list(self.ao_channels.keys())
         self.ao_names.sort(key=lambda n: self.ao_channels[n][1])
 
-    def set_sampling_rate(self, rate):
-        self.rate=rate
+    def setup_clock(self, rate, src=None):
         if self.ai_task.ai_channels:
-            self.ai_task.timing.samp_clk_rate=self.rate
+            if src==self.clk_src:
+                self.ai_task.timing.samp_clk_rate=self.rate
+            else:
+                if src:
+                    src=self._build_channel_name(src)
+                self.ai_task.timing.cfg_samp_clk_timing(rate,source=src,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
+        self.rate=rate
+        self.clk_src=src
 
     _voltage_input_terms={  "default":nidaqmx.constants.TerminalConfiguration.DEFAULT,
                             "rse":nidaqmx.constants.TerminalConfiguration.RSE,
@@ -214,7 +221,7 @@ class NIDAQ(IDevice):
         channel=self._build_channel_name(channel)
         term_config=self._voltage_input_terms[term_config]
         self.ai_task.ai_channels.add_ai_voltage_chan(channel,name,terminal_config=term_config,min_val=rng[0],max_val=rng[1])
-        self.ai_task.timing.cfg_samp_clk_timing(self.rate,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
+        self.ai_task.timing.cfg_samp_clk_timing(self.rate,source=self.clk_src,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
         self.ai_channels[name]=(channel,len(self.ai_task.ai_channels))
         self._update_channel_names()
     def add_counter_input(self, name, counter, terminal, clk_src="ai/SampleClock", max_rate=1E7, output_format="rate"):
