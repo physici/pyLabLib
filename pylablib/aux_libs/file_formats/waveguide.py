@@ -17,6 +17,21 @@ import numpy as np
 
 
 ##### .cam format (camera images) #####
+def _read_cam_frame(f, skip=False):
+    size=np.fromfile(f,"<u4",count=2)
+    if len(size)==0 and file_utils.eof(f):
+        raise StopIteration
+    if len(size)<2:
+        raise IOError("not enough cam data to read the frame size")
+    w,h=size
+    if not skip:
+        data=np.fromfile(f,"<u2",count=w*h)
+        if len(data)<w*h:
+            raise IOError("not enough cam data to read the frame: {} pixels available instead of {}".format(len(data),w*h))
+        return data.reshape((w,h))
+    else:
+        f.seek(w*h*2,1)
+        return None
 def iter_cam_frames(path, start=0, step=1):
     """
     Iterate of frames in a .cam datafile.
@@ -27,19 +42,13 @@ def iter_cam_frames(path, start=0, step=1):
     n=0
     with open(path,"rb") as f:
         while True:
-            size=np.fromfile(f,"<u4",count=2)
-            if len(size)==0 and file_utils.eof(f):
+            skip=not ((n>=start) and ((n-start)%step==0))
+            try:
+                data=_read_cam_frame(f,skip=skip)
+            except StopIteration:
                 break
-            if len(size)<2:
-                raise IOError("not enough cam data to read the frame size")
-            w,h=size
-            if (n>=start) and ((n-start)%step==0):
-                data=np.fromfile(f,"<u2",count=w*h)
-                if len(data)<w*h:
-                    raise IOError("not enough cam data to read the frame: {} pixels available instead of {}".format(len(data),w*h))
-                yield data.reshape((w,h))
-            else:
-                f.seek(w*h*2,1)
+            if not skip:
+                yield data
             n+=1
 def load_cam(path, same_size=True):
     """
@@ -74,6 +83,115 @@ def combine_cam_frames(path, func, init=None, start=0, step=1, max_frames=None, 
         if max_frames and n>=max_frames:
             break
     return (result,n) if return_total else result
+
+
+class CamReader(object):
+    """
+    Reader class for .cam files.
+
+    Allows transparent access to frames by reading them from the file on the fly (without loading the whole file).
+    Supports determining length, indexing (only positive single-element indices) and iteration.
+
+    Args:
+        path(str): path to .cam file.
+        same_size(bool): if ``True``, assume that all frames have the same size, which speeds up random access and obtaining number of frames;
+            otherwise, the first time the length is determined or a large-index frame is accessed can take a long time (all subsequent calls are faster).
+    """
+    def __init__(self, path, same_size=False):
+        object.__init__(self)
+        self.path=path
+        self.frame_offsets=[0]
+        self.frames_num=None
+        self.same_size=same_size
+
+    def _read_frame_at(self, offset):
+        with open(self.path,"rb") as f:
+            f.seek(offset)
+            return _read_cam_frame(f)
+    def _read_next_frame(self, f, skip=False):
+        data=_read_cam_frame(f,skip=skip)
+        self.frame_offsets.append(f.tell())
+        return data
+    def _read_frame(self, idx):
+        if self.same_size:
+            if len(self.frame_offsets)==1:
+                with open(self.path,"rb") as f:
+                    self._read_next_frame(f,skip=True)
+            offset=self.frame_offsets[1]*idx
+            return self._read_frame_at(offset)
+        else:
+            if idx<len(self.frame_offsets):
+                return self._read_frame_at(self.frame_offsets[idx])
+            next_idx=len(self.frame_offsets)
+            offset=self.frame_offsets[-1]
+            with open(self.path,"rb") as f:
+                f.seek(offset)
+                while next_idx<=idx:
+                    data=self._read_next_frame(f,next_idx<idx)
+                    next_idx+=1
+            return data
+
+    def _fill_offsets(self):
+        if self.frames_num is not None:
+            return
+        if self.same_size:
+            file_size=os.path.getsize(self.path)
+            if file_size==0:
+                self.frames_num=0
+            else:
+                with open(self.path,"rb") as f:
+                    self._read_next_frame(f,skip=True)
+                if file_size%self.frame_offsets[1]:
+                    raise IOError("File size {} is not a multile of single frame size {}".format(file_size,self.frame_offsets[1]))
+                self.frames_num=file_size//self.frame_offsets[1]
+        else:
+            offset=self.frame_offsets[-1]
+            try:
+                with open(self.path,"rb") as f:
+                    f.seek(offset)
+                    while True:
+                        self._read_next_frame(f,skip=True)
+            except StopIteration:
+                pass
+            self.frames_num=len(self.frame_offsets)-1
+    
+    def size(self):
+        """Get the total number of frames"""
+        self._fill_offsets()
+        return self.frames_num
+    __len__=size
+
+    def __getitem__(self, idx):
+        try:
+            return self._read_frame(idx)
+        except StopIteration:
+            raise IndexError("index {} is out of range".format(idx))
+    def __iter__(self):
+        return self.iterslice()
+    def iterrange(self, *args):
+        """
+        iterrange([start,] stop[, step])
+
+        Iterate over frames starting with `start` ending at `stop` (``None`` means until the end of file) with the given `step`.
+        """
+        start,stop,step=0,None,1
+        if len(args)==1:
+            stop,=args
+        elif len(args)==2:
+            start,stop=args
+        elif len(args)==3:
+            start,stop,step=args
+        try:
+            n=start
+            while True:
+                yield self._read_frame(n)
+                n+=step
+                if stop is not None and n>=stop:
+                    break
+        except StopIteration:
+            pass
+
+
 def save_cam(frames, path, append=True):
     """
     Save `frames` into a .cam datafile.
