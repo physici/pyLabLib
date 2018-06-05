@@ -86,7 +86,7 @@ def get_reload_order(modules):
         except AttributeError:
             pass
         for ch_name in modules:
-            if ch_name!=name and ch_name.startswith(name+"."):
+            if ch_name.startswith(name+"."):
                 deps.setdefault(name,[]).append(ch_name)
     for name in deps:
         deps[name]=list(set(deps[name]))
