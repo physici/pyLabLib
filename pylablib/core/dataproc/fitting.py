@@ -33,7 +33,15 @@ class Fitter(object):
         self.set_xarg_name(xarg_name or [])
         self.set_fixed_parameters(fixed_parameters)
         self.set_fit_parameters(fit_parameters)
+        self.max_xtol=1E-8
+        self.min_xtol=1E-14
+        self.diff_step_rel=1E-8
+        self.xtol_rel=1E-8
     
+    def _limit_xtol(self, xtol):
+        xtol=abs(xtol)
+        return max(self.min_xtol,min(xtol,self.max_xtol))
+
     def _prepare_parameters(self, fit_parameters):
         """Normalize fit_parameters"""
         fit_parameters=general_utils.to_pairs_list(fit_parameters)
@@ -58,8 +66,11 @@ class Fitter(object):
             return [value]
     @staticmethod
     def _build_unpacker_single(packed, template):
-        """Build a function that unpackes and array of floats into a parameters array.
-        Return 2 values: function and the number of consumed array elements."""
+        """
+        Build a function that unpackes and array of floats into a parameters array.
+
+        Return 2 values: function and the number of consumed array elements.
+        """
         if funcargparse.is_sequence(template,"array"):
             ufs=[]
             uns=[]
@@ -81,7 +92,7 @@ class Fitter(object):
             return (lambda p: p[0]), 1
     @staticmethod
     def _build_unpacker(template):
-        """Build a function that unpackes and array of floats into a parameters array."""
+        """Build a function that unpackes an array of floats into a parameters array given the template"""
         packed=Fitter._pack_parameters(template)
         unpacker,n=Fitter._build_unpacker_single(packed,template)
         if n!=len(packed):
@@ -130,7 +141,7 @@ class Fitter(object):
         unaccounted_names=set.difference(self.func.get_mandatory_args(),supplied_names)
         return unaccounted_names
     
-    def fit(self, x, y, fit_parameters=None, fixed_parameters=None, weight=1., return_stderr=False, return_residual=False, **kwargs):
+    def fit(self, x, y, fit_parameters=None, fixed_parameters=None, scale=None, limits=None, weight=1., return_stderr=False, return_residual=False, **kwargs):
         """
         Fit the data.
         
@@ -140,9 +151,17 @@ class Fitter(object):
             y: Target function values.
             fit_parameters (dict): Overrides the default `fit_parameters` of the fitter.
             fixed_parameters (dict): Overrides the default `fixed_parameters` of the fitter.
+            scale (dict): Defines typical scale of fit parameters (used to set up `x_scale`, `xtol` and `diff_step` parameters of :func:`scipy.optimize.least_squares`).
+                Note: for complex parameters scale must also be a complex number, with re and im parts of the scale variable corresponding to the scale of the re and im part.
+            limits (dict): Boundaries for the fit parameters (missing entries are assumed to be unbound). Each boundary parameter is a tuple ``(lower, upper)``.
+                ``lower`` or ``upper`` can be ``None``, ``np.nan`` or ``np.inf`` (with the appropriate sign), which implies no bounds in the given direction.
+                Note: for compound data types (such as lists) the entries are still tuples of 2 elements,
+                each of which is either ``None`` (no bound for any sub-element) or has the same structure as the full parameter.
+                Note: for complex parameters limits must also be complex numbers (or ``None``), with re and im parts of the limits variable corresponding to the limits of the re and im part.
             weight: Can be an array-like object that determines the relative weight of y-points.
             return_stderr (bool): If ``True``, append `stderr` to the output.
             return_residual: If not ``False``, append `residual` to the output.
+            **kwargs: arguments passed to :func:`scipy.optimize.least_squares` function
         
         Returns:
             tuple: ``(params, bound_func[, stderr][, residual])``:
@@ -172,6 +191,31 @@ class Fitter(object):
         props=[fit_parameters[name] for name in p_names]
         init_p=self._pack_parameters(props)
         unpacker=self._build_unpacker(props)
+        if scale: # setup scale-related parameters
+            scale_default=dict(zip(p_names,unpacker([np.nan]*len(init_p))))
+            scale_default.update(scale)
+            p_scale=self._pack_parameters([scale_default[name] for name in p_names])
+            if len(p_scale)!=len(init_p):
+                raise ValueError("inconsistent shapes of fit parameters and scale argument")
+            x_scale=[1. if np.isnan(sc) else abs(sc) for sc in p_scale]
+            rel_scale=[1. if np.isnan(sc) else float(sc)/max(sc,abs(par)) for (sc,par) in zip(p_scale,init_p)]
+            diff_step=[self._limit_xtol(rsc*self.diff_step_rel) for rsc in rel_scale]
+            xtol=min([self._limit_xtol(rsc*self.xtol_rel) for rsc in rel_scale])
+            kwargs.setdefault("x_scale",x_scale)
+            kwargs.setdefault("diff_step",diff_step)
+            kwargs.setdefault("xtol",xtol)
+        if limits: # setup bounds
+            p_bounds=[]
+            for (idx,default) in [(0,-np.inf),(1,+np.inf)]:
+                ibounds=dict([ (n,limits[n][idx]) for n in limits if limits[n][idx] is not None])
+                ibounds_default=dict(zip(p_names,unpacker([default]*len(init_p))))
+                ibounds_default.update(ibounds)
+                p_ibounds=self._pack_parameters([ibounds_default[name] for name in p_names])
+                if len(p_ibounds)!=len(init_p):
+                    raise ValueError("inconsistent shapes of fit parameters and {} bounds argument".format("lower" if idx==0 else "upper"))
+                p_ibounds=[default if (b is None or np.isnan(b)) else b for b in p_ibounds]
+                p_bounds.append(p_ibounds)
+            kwargs.setdefault("bounds",p_bounds)
         def fit_func(fit_p):
             up=x+unpacker(fit_p)
             y_diff=(np.asarray(y-np.asarray(bound_func(*up)))*weight).flatten()
