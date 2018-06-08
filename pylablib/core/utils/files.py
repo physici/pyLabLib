@@ -32,11 +32,16 @@ import collections
 
 
 ### General routines ###
-def eof(f):
-    """Standard EOF function. Returns ``True`` if the the marker is at the end of the file."""
+def eof(f, strict=False):
+    """
+    Standard EOF function.
+    
+    Return ``True`` if the the marker is at the end of the file.
+    If ``strict==True``, only return ``True`` if the marker is exactly at the end of file; otherwise, return ``True`` if it's at the end of further.
+    """
     p=f.tell()
     f.seek(0,2)
-    if f.tell()==p:
+    if f.tell()<=p:
         return True
     else:
         f.seek(p)
