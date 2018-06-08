@@ -13,6 +13,7 @@ _default_signal_pool=signal_pool.SignalPool()
 
 _created_threads={}
 _running_threads={}
+_stopped_threads={}
 _running_threads_lock=threading.Lock()
 _running_threads_notifier=synchronizing.QMultiThreadNotifier()
 _running_threads_stopping=False
@@ -27,9 +28,10 @@ def exsafe(func):
         except:
             traceback.print_exc()
             try:
-                get_controller().stop(1)
-                get_controller("gui").stop(1)
+                stop_controller("gui",code=1,sync=False)
             except threadprop.NoControllerThreadError:
+                print("Can't stop GUI thread; quitting the application")
+                sys.stdout.flush()
                 sys.exit(1)
     return safe_func
 def exsafeSlot(*slargs, **slkwargs):
@@ -43,22 +45,20 @@ class QThreadControllerThread(QtCore.QThread):
     stop_request=QtCore.pyqtSignal()
     def __init__(self, controller):
         QtCore.QThread.__init__(self)
+        self.moveToThread(self)
         self.controller=controller
         threadprop.get_app().aboutToQuit.connect(self.quit_sync)
         self.stop_request.connect(self.quit_sync)
     def run(self):
         try:
-            QtCore.QThread.run(self)
+            self.exec_()
         finally:
             self.finalized.emit()
     @QtCore.pyqtSlot()
     def quit_sync(self):
-        """quit_sync docstring"""
         if self.isRunning():
             self.quit()
             self.controller._request_stop()
-            if self.currentThread() is not self:
-                self.wait()
             
 
 class QThreadController(QtCore.QObject):
@@ -94,13 +94,15 @@ class QThreadController(QtCore.QObject):
         self.moveToThread(self.thread)
         self.messaged.connect(self._get_message)
         self.interrupt_called.connect(self._on_call_in_thread)
-        self.thread.started.connect(self._on_start_event)
         if self.kind=="main":
             threadprop.get_app().aboutToQuit.connect(self._on_finish_event)
             threadprop.get_app().lastWindowClosed.connect(self._on_last_window_closed)
+            self._recv_started_event.connect(self._on_start_event,type=QtCore.Qt.QueuedConnection)
+            self._recv_started_event.emit()
         else:
+            self.thread.started.connect(self._on_start_event)
             self.thread.finalized.connect(self._on_finish_event)
-        
+    
     messaged=QtCore.pyqtSignal("PyQt_PyObject")
     @exsafeSlot("PyQt_PyObject")
     def _get_message(self, msg):
@@ -123,13 +125,16 @@ class QThreadController(QtCore.QObject):
     @exsafeSlot("PyQt_PyObject")
     def _on_call_in_thread(self, call):
         call()
+
+    _recv_started_event=QtCore.pyqtSignal()
     started=QtCore.pyqtSignal()
     @exsafeSlot()
     def _on_start_event(self):
         self._stopped=False
-        threadprop._local_data.controller=self
         try:
-            register_controller(self)
+            if self.kind!="main":
+                threadprop._local_data.controller=self
+                register_controller(self)
             self.notify_exec("start")
             self._running=True
             self.on_start()
@@ -588,6 +593,7 @@ def unregister_controller(controller):
         name=controller.name
         if name not in _running_threads:
             raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
+        _stopped_threads[name]=controller
         del _running_threads[name]
     _running_threads_notifier.notify()
 def get_controller(name=None, wait=True, timeout=None):
@@ -602,12 +608,14 @@ def get_controller(name=None, wait=True, timeout=None):
                     raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
             else:
                 return _running_threads[name]
+            if name in _stopped_threads:
+                raise threadprop.NoControllerThreadError("thread with name {} is stopped".format(name))
         cnt=_running_threads_notifier.wait(cnt,timeout=ctd.time_left())
 
-def stop_controller(name, sync=True, require_controller=False):
+def stop_controller(name=None, code=0, sync=True, require_controller=False):
     try:
         controller=get_controller(name,wait=False)
-        controller.stop()
+        controller.stop(code=code)
         if sync:
             controller.sync_exec("stop")
     except threadprop.NoControllerThreadError:

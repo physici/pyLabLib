@@ -18,8 +18,8 @@ class StreamFormerThread(controller.QThreadController):
         self._row_lock=threading.RLock()
         self._row_cnt=0
         self.block_period=1
-        self.new_block_done.connect(self._on_new_block_slot)
-        self.new_row_done.connect(self._add_new_row)
+        self.new_block_done.connect(self._on_new_block_slot,type=QtCore.Qt.QueuedConnection)
+        self.new_row_done.connect(self._add_new_row,type=QtCore.Qt.QueuedConnection)
         self.setupargs=setupargs or []
         self.setupkwargs=setupkwargs or {}
 
