@@ -517,13 +517,13 @@ class AndorLib(object):
 	AmpModeFull=collections.namedtuple("AmpModeFull",["channel","channel_bitdepth","oamp","oamp_kind","hsspeed","hsspeed_MHz","preamp","preamp_gain"])
 	_oamp_kinds=["EMCCD/Conventional","CCD/ExtendedNIR"]
 	def get_all_amp_modes(self):
-        """
-        Get all available pream modes.
+		"""
+		Get all available pream modes.
 
-        Each preamp mode is characterized by an AD channel index, amplifier index, channel speed (horizontal scan speed) index and preamp gain index.
-        Return list of tuples ``(channel, channel_bitdepth, oamp, oamp_kind, hsspeed, hsspeed_MHz, preamp, preamp_gain)``,
-        where ``channel``, ``oamp``, ``hsspeed`` and ``preamp`` are indices, while ``channel_bitdepth``, ``oamp_kind``, ``hsspeed_MHz`` and ``preamp_gain`` are descriptions.
-        """
+		Each preamp mode is characterized by an AD channel index, amplifier index, channel speed (horizontal scan speed) index and preamp gain index.
+		Return list of tuples ``(channel, channel_bitdepth, oamp, oamp_kind, hsspeed, hsspeed_MHz, preamp, preamp_gain)``,
+		where ``channel``, ``oamp``, ``hsspeed`` and ``preamp`` are indices, while ``channel_bitdepth``, ``oamp_kind``, ``hsspeed_MHz`` and ``preamp_gain`` are descriptions.
+		"""
 		channels=self.GetNumberADChannels()
 		oamps=self.GetNumberAmp()
 		preamps=self.GetNumberPreAmpGains()
@@ -544,11 +544,11 @@ class AndorLib(object):
 		return modes
 
 	def set_amp_mode(self, amp_mode):
-        """
-        Setup preamp mode.
+		"""
+		Setup preamp mode.
 
 		`amp_mode` is a tuple ``(channel, oamp, hsspeed, preamp)``, specifying AD channel index, amplifier index, channel speed (horizontal scan speed) index and preamp gain index.
-        """
+		"""
 		if len(amp_mode)==4:
 			amp_mode=self.AmpModeSimple(*amp_mode)
 		else:
@@ -559,20 +559,20 @@ class AndorLib(object):
 		self.SetPreAmpGain(amp_mode.preamp)
 
 	def get_EMCCD_gain(self):
-        """
-        Get current EMCCD gain.
+		"""
+		Get current EMCCD gain.
 
-        Return tuple ``(gain, advanced)``.
-        """
+		Return tuple ``(gain, advanced)``.
+		"""
 		advanced=self.GetEMAdvanced()
 		gain=self.GetEMCCDGain()
 		return advanced, gain
 	def set_EMCCD_gain(self, gain, advanced=False):
-        """
-        Set EMCCD gain.
+		"""
+		Set EMCCD gain.
 
-        Gain goes up to 300 if ``advanced==False`` or higher if ``advanced==True`` (in this mode the sensor can be permanently damaged by strong light).
-        """
+		Gain goes up to 300 if ``advanced==False`` or higher if ``advanced==True`` (in this mode the sensor can be permanently damaged by strong light).
+		"""
 		self.SetEMAdvanced(advanced)
 		self.SetEMCCDGain(gain)
 
