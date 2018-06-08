@@ -187,18 +187,36 @@ class CTypesWrapper(object):
 
 
 def strprep(l, ctype=None):
+    """
+    Make a string preparation function.
+    
+    Return a function which creates a string with a fixed length of `l` bytes and returns a pointer to it.
+    `ctype` can specify the type of the result (by default, :class:`ctypes.c_char_p`).
+    """
     ctype=ctype or ctypes.c_char_p
     def prep(*args, **kwargs):
         return ctypes.cast(ctypes.create_string_buffer(l),ctype)
     return prep
 
 def buffprep(size_arg_pos, dtype):
+    """
+    Make a buffer preparation function.
+    
+    Return a function which creates a string with a variable size (specified by an argument at a position `size_arg_pos`).
+    The buffer size is given in elements. `dtype` specifies the datatype of the buffer, whose size is used to determine buffer size in bytes.
+    """
     el_size=data_format.DataFormat.from_desc(dtype).size
     def prep(*args, **kwargs):
         n=args[size_arg_pos]
         return ctypes.create_string_buffer(n*el_size)
     return prep
 def buffconv(size_arg_pos, dtype):
+    """
+    Make a buffer conversion function.
+    
+    Return a function which converts a pointer of a variable size (specified by an argument at a position `size_arg_pos`) into a numpy array.
+    The buffer size is given in elements. `dtype` specifies the datatype of the resulting array.
+    """
     dformat=data_format.DataFormat.from_desc(dtype)
     def conv(buff, *args, **kwargs):
         n=args[size_arg_pos]
@@ -207,6 +225,7 @@ def buffconv(size_arg_pos, dtype):
     return conv
 
 def nullprep(*args, **kwrags):
+    """NULL preperation function which always returns ``None``"""
     return None
 
 
