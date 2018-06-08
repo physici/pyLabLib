@@ -229,6 +229,7 @@ class ClientSocket(object):
         Length format is described by `decllen_bo` and `decllen_ll` attributes.
         """
         len_msg=strpack.pack_uint(len(msg),self.decllen_ll,self.decllen_bo)
+        msg=py3.as_builtin_bytes(msg)
         return self.send_fixedlen(len_msg+msg)-len(len_msg)
     def send_delimiter(self, msg, delimiter):
         """

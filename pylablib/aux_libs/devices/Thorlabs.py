@@ -42,7 +42,7 @@ class ThorlabsInterface(SCPI.SCPIDevice):
     """
     def __init__(self, conn):
         conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",115200))
-        SCPI.SCPIDevice.__init__(self,conn,backend="serial",term_read=["\r","\n"],term_write="\r")
+        SCPI.SCPIDevice.__init__(self,conn,backend="serial",term_read=["\r","\n"],term_write="\r",timeout=5.)
     
     def _instr_write(self, msg):
         return self.instr.write(msg,read_echo=True)
