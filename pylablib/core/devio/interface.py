@@ -8,6 +8,7 @@ class IDevice(object):
     """
     def __init__(self):
         object.__init__(self)
+        self._settings_ignore_error={"get":(),"set":()}
         self._settings_nodes={}
         self._settings_nodes_order=[]
         
@@ -36,6 +37,8 @@ class IDevice(object):
         `getter`/`setter` are methods for getting/setting this parameter.
         Can be ``None``, meaning that this parameter is ingored when executing :func:`get_settings`/:func:`apply_settings`.
         """
+        if not isinstance(ignore_error,tuple):
+            ignore_error=(ignore_error,)
         self._settings_nodes[path]=(getter,setter,ignore_error)
         self._settings_nodes_order.append(path)
     def get_settings(self):
@@ -46,7 +49,7 @@ class IDevice(object):
             if g:
                 try:
                     settings[k]=g()
-                except err:
+                except err+self._settings_ignore_error["get"]:
                     pass
         return settings
     def apply_settings(self, settings):
@@ -61,7 +64,7 @@ class IDevice(object):
             if s and (k in settings):
                 try:
                     s(settings[k])
-                except err:
+                except err+self._settings_ignore_error["set"]:
                     pass
     def __getitem__(self, key):
         """Get the value of a settings parameter."""

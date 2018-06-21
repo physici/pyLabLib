@@ -3,6 +3,8 @@ from .Andor_lib import lib, AndorLibError
 from ...core.devio.interface import IDevice
 from ...core.utils import funcargparse, py3
 
+_depends_local=[".Andor_lib","...core.devio.interface"]
+
 import numpy as np
 import collections
 import contextlib
@@ -11,6 +13,8 @@ class AndorError(RuntimeError):
     "Generic Andor camera error."
 class AndorTimeoutError(AndorError):
     "Timeout while waiting."
+class AndorNotSupportedError(AndorError):
+    "Option not supported."
 
 def get_cameras_number():
     """Get number of connected Andor cameras"""
@@ -35,7 +39,8 @@ class AndorCamera(IDevice):
         self.ini_path=ini_path
         self.handle=None
         self.open()
-
+        
+        self._settings_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
         self._add_settings_node("model_data",lambda: tuple(self.get_model_data()))
         self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
         self._add_settings_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
@@ -66,46 +71,74 @@ class AndorCamera(IDevice):
         self._add_settings_node("detector_size",self.get_detector_size)
 
     def _setup_default_settings(self):
-        self.temperature_setpoint=None
-        self.set_temperature(-100)
-        self.channel=None
-        self.oamp=None
-        self.hsspeed=None
-        self.preamp=None
-        self.vsspeed=None
-        self.init_speeds()
-        self.EMCCD_gain=None
-        self.set_EMCCD_gain(0,False)
-        self.fan_mode=None
-        self.set_fan_mode("off")
-        self.shutter_mode=None
-        self.set_shutter("close")
-        self.trigger_mode=None
-        self.set_trigger_mode("int")
-        self.set_exposure(10E-3)
-        self.acq_mode=None
-        self.set_acquisition_mode("cont")
-        self.acq_params=dict(zip(self._acq_modes,[None]*len(self._acq_modes)))
-        self.setup_accum_mode(1)
-        self.setup_kinetic_mode(1)
-        self.setup_fast_kinetic_mode(1)
-        self.setup_cont_mode()
-        self.frame_transfer_mode=None
-        self.enable_frame_transfer_mode(False)
-        self.read_mode=None
-        self.set_read_mode("image")
-        self.read_params=dict(zip(self._read_modes,[None]*len(self._read_modes)))
-        self.setup_image_mode()
-        self.setup_single_track_mode(1,1)
-        self.setup_multi_track_mode(1,1,1)
-        self.setup_random_track_mode([(1,1)])
-        self.flush_buffer()
+        self.capabilities=self.get_capibilities()
+        self.model_data=self.get_model_data()
+        try:
+            self._strict_option_check=False
+            self.temperature_setpoint=None
+            self.set_temperature(-100)
+            self.channel=None
+            self.oamp=None
+            self.hsspeed=None
+            self.preamp=None
+            self.vsspeed=None
+            self.init_speeds()
+            self.EMCCD_gain=None
+            self.set_EMCCD_gain(0)
+            self.set_EMCCD_gain(0,False)
+            self.fan_mode=None
+            self.set_fan_mode("off")
+            self.shutter_mode=None
+            self.set_shutter("close")
+            self.trigger_mode=None
+            self.set_trigger_mode("int")
+            self.set_exposure(10E-3)
+            self.acq_mode=None
+            self.set_acquisition_mode("cont")
+            self.acq_params=dict(zip(self._acq_modes,[()]*len(self._acq_modes)))
+            self.setup_accum_mode(1)
+            self.setup_kinetic_mode(1)
+            self.setup_fast_kinetic_mode(1)
+            self.setup_cont_mode()
+            self.frame_transfer_mode=None
+            self.enable_frame_transfer_mode(False)
+            self.read_mode=None
+            self.set_read_mode("image")
+            self.read_params=dict(zip(self._read_modes,[()]*len(self._read_modes)))
+            self.setup_image_mode()
+            self.setup_single_track_mode()
+            self.setup_multi_track_mode()
+            self.setup_random_track_mode()
+            self.flush_buffer()
+        finally:
+            self._strict_option_check=True
 
     def _camsel(self):
         if self.handle is None:
             raise AndorError("camera is not opened")
         if lib.GetCurrentCamera()!=self.handle:
             lib.SetCurrentCamera(self.handle)
+    def _has_option(self, kind, option):
+        if kind=="acq":
+            opt=self.capabilities.AcqModes
+        elif kind=="read":
+            opt=self.capabilities.ReadModes
+        elif kind=="trig":
+            opt=self.capabilities.TriggerModes
+        elif kind=="set":
+            opt=self.capabilities.SetFunctions
+        elif kind=="get":
+            opt=self.capabilities.GetFunctions
+        elif kind=="feat":
+            opt=self.capabilities.Features
+        else:
+            raise AndorLibError("unknown option kind: {}".format(kind))
+        return option in opt
+    def _check_option(self, kind, option):
+        has_option=self._has_option(kind,option)
+        if (not has_option) and self._strict_option_check:
+            raise AndorNotSupportedError("option {}.{} is not supported by {}".format(kind,option,self.model_data.head_model))
+        return has_option
     def open(self):
         """Open connection to the camera"""
         ncams=get_cameras_number()
@@ -153,6 +186,7 @@ class AndorCamera(IDevice):
         Return either ``"idle"`` (no acquisition), ``"acquiring"`` (acquisition in progress) or ``"temp_cycle"`` (temperature cycle in progress).
         """
         self._camsel()
+        if not self._check_option("feat","AC_FEATURES_POLLING"): return
         status=lib.GetStatus()
         text_status=lib.Andor_statuscodes[status]
         if text_status=="DRV_IDLE":
@@ -175,10 +209,12 @@ class AndorCamera(IDevice):
     def is_cooler_on(self):
         """Check if the cooler is on"""
         self._camsel()
+        if not self._check_option("set","AC_SETFUNCTION_TEMPERATURE"): return
         return bool(lib.IsCoolerOn())
     def set_cooler(self, on=True):
         """Set the cooler on or off"""
         self._camsel()
+        if not self._check_option("get","AC_GETFUNCTION_TEMPERATURE"): return
         if on:
             lib.CoolerON()
         else:
@@ -193,11 +229,13 @@ class AndorCamera(IDevice):
         ``"stabilized"`` (completely stabilized) or ``"drifted"``.
         """
         self._camsel()
+        if not self._check_option("get","AC_GETFUNCTION_TEMPERATURE"): return
         status=lib.GetTemperature()[1]
         return self._temp_status[status]
     def get_temperature(self):
         """Get the current camera temperature"""
         self._camsel()
+        if not self._check_option("get","AC_GETFUNCTION_TEMPERATURE"): return
         return lib.GetTemperatureF()[0]
     def set_temperature(self, temperature, enable_cooler=True):
         """
@@ -206,6 +244,8 @@ class AndorCamera(IDevice):
         If ``enable_cooler==True``, turn the cooler on automatically.
         """
         self._camsel()
+        if not self._check_option("set","AC_SETFUNCTION_TEMPERATURE"): return
+        if not self._check_option("get","AC_GETFUNCTION_TEMPERATURERANGE"): return
         rng=lib.GetTemperatureRange()
         temperature=max(temperature,rng[0])
         temperature=min(temperature,rng[1])
@@ -241,6 +281,10 @@ class AndorCamera(IDevice):
         oamp=self.oamp if oamp is None else oamp
         hsspeed=self.hsspeed if hsspeed is None else hsspeed
         preamp=self.preamp if preamp is None else preamp
+        if not self._has_option("set","AC_SETFUNCTION_PREAMPGAIN"):
+            preamp=None
+        if not self._has_option("set","AC_SETFUNCTION_HREADOUT"):
+            hsspeed=None
         lib.set_amp_mode((channel,oamp,hsspeed,preamp))
         self.channel=channel
         self.oamp=oamp
@@ -249,6 +293,7 @@ class AndorCamera(IDevice):
     def set_vsspeed(self, vsspeed):
         """Set vertical scan speed index"""
         self._camsel()
+        if not self._check_option("set","AC_SETFUNCTION_VREADOUT"): return
         lib.SetVSSpeed(vsspeed)
         self.vsspeed=vsspeed
 
@@ -279,8 +324,9 @@ class AndorCamera(IDevice):
         Return tuple ``(gain, advanced)``.
         """
         self._camsel()
+        if not self._check_option("get","AC_GETFUNCTION_EMCCDGAIN"): return
         return lib.get_EMCCD_gain()
-    def set_EMCCD_gain(self, gain, advanced=False):
+    def set_EMCCD_gain(self, gain, advanced=None):
         """
         Set EMCCD gain.
 
@@ -288,6 +334,8 @@ class AndorCamera(IDevice):
         """
         self._camsel()
         gain=int(gain)
+        if not self._check_option("set","AC_SETFUNCTION_EMCCDGAIN"): return
+        if (advanced is not None) and not self._check_option("set","AC_SETFUNCTION_EMADVANCED"): return
         lib.set_EMCCD_gain(gain,advanced)
         self.EMCCD_gain=(gain,advanced)
 
@@ -303,6 +351,7 @@ class AndorCamera(IDevice):
     def get_min_shutter_times(self):
         """Get minimal shutter opening and closing times"""
         self._camsel()
+        if not self._check_option("feat","AC_FEATURES_SHUTTER"): return
         return lib.GetShutterMinTimes()
     def set_shutter(self, mode, ttl_mode=0, open_time=None, close_time=None):
         """
@@ -312,13 +361,14 @@ class AndorCamera(IDevice):
         `open_time` and `close_time` specify opening and closing times (required to calculate the minimal exposure times).
         By default, these time are minimal allowed times.
         """
+        self._camsel()
+        if not self._check_option("feat","AC_FEATURES_SHUTTER"): return
         if mode in [0,False]:
             mode="close"
         if mode in [1,True]:
             mode="open"
         shutter_modes=["auto","open","close"]
         funcargparse.check_parameter_range(mode,"state",shutter_modes)
-        self._camsel()
         min_open_time,min_close_time=self.get_min_shutter_times()
         open_time=min_open_time if open_time is None else open_time
         close_time=min_close_time if close_time is None else close_time
@@ -332,9 +382,10 @@ class AndorCamera(IDevice):
 
         Can be ``"full"``, ``"low"`` or ``"off"``.
         """
+        self._camsel()
+        if not self._check_option("feat","AC_FEATURES_FANCONTROL"): return
         text_modes=["full","low","off"]
         funcargparse.check_parameter_range(mode,"mode",text_modes)
-        self._camsel()
         lib.SetFanMode(text_modes.index(mode))
         self.fan_mode=mode
 
@@ -358,8 +409,12 @@ class AndorCamera(IDevice):
         For description, see Andor SDK manual.
         """
         trigger_modes={"int":0,"ext":1,"ext_start":6,"ext_exp":7,"ext_fvb_em":9,"software":10,"ext_charge_shift":12}
+        trigger_modes_cap={"int":"AC_TRIGGERMODE_INTERNAL","ext":"AC_TRIGGERMODE_EXTERNAL",
+            "ext_start":"AC_TRIGGERMODE_EXTERNALSTART","ext_exp":"AC_TRIGGERMODE_EXTERNALEXPOSURE",
+            "ext_fvb_em":"AC_TRIGGERMODE_EXTERNAL_FVB_EM","software":"AC_TRIGGERMODE_INTERNAL"}
         funcargparse.check_parameter_range(mode,"mode",trigger_modes.keys())
         self._camsel()
+        if not self._check_option("trig",trigger_modes_cap[mode]): return
         lib.SetTriggerMode(trigger_modes[mode])
         self.trigger_mode=mode
     def get_trigger_level_limits(self):
@@ -379,6 +434,9 @@ class AndorCamera(IDevice):
 
     ### Acquisition mode controls ###
     _acq_modes={"single":1,"accum":2,"kinetics":3,"fast_kinetics":4,"cont":5}
+    _acq_modes_cap={"single":"AC_ACQMODE_SINGLE", "accum":"AC_ACQMODE_ACCUMULATE",
+        "kinetics":"AC_ACQMODE_KINETIC", "fast_kinetics":"AC_ACQMODE_FASTKINETICS",
+        "cont":"AC_ACQMODE_VIDEO"}
     def set_acquisition_mode(self, mode):
         """
         Set acquisition mode.
@@ -388,6 +446,7 @@ class AndorCamera(IDevice):
         """
         funcargparse.check_parameter_range(mode,"mode",self._acq_modes.keys())
         self._camsel()
+        if not self._check_option("acq",self._acq_modes_cap[mode]): return
         lib.SetAcquisitionMode(self._acq_modes[mode])
         self.acq_mode=mode
     def setup_accum_mode(self, num, cycle_time=0):
@@ -398,6 +457,7 @@ class AndorCamera(IDevice):
         (by default the minimal possible based on exposure and transfer time).
         """
         self._camsel()
+        if not self._check_option("acq","AC_ACQMODE_ACCUMULATE"): return
         self.set_acquisition_mode("accum")
         lib.SetNumberAccumulations(num)
         lib.SetAccumulationCycleTime(cycle_time)
@@ -411,6 +471,7 @@ class AndorCamera(IDevice):
         `num_prescan` is the number of prescans.
         """
         self._camsel()
+        if not self._check_option("acq","AC_ACQMODE_KINETIC"): return
         self.set_acquisition_mode("kinetics")
         lib.SetNumberKinetics(num)
         lib.SetNumberAccumulations(num_acc)
@@ -426,6 +487,7 @@ class AndorCamera(IDevice):
         (by default the minimal possible based on exposure and transfer time).
         """
         self._camsel()
+        if not self._check_option("acq","AC_ACQMODE_FASTKINETICS"): return
         self.set_acquisition_mode("fast_kinetics")
         lib.SetNumberKinetics(num)
         lib.SetAccumulationCycleTime(cycle_time_acc)
@@ -437,6 +499,7 @@ class AndorCamera(IDevice):
         `cycle_time` is the acquistion period (by default the minimal possible based on exposure and transfer time).
         """
         self._camsel()
+        if not self._check_option("acq","AC_ACQMODE_VIDEO"): return
         self.set_acquisition_mode("cont")
         lib.SetKineticCycleTime(cycle_time)
         self.acq_params["cont"]=cycle_time
@@ -465,6 +528,7 @@ class AndorCamera(IDevice):
         For description, see Andor SDK manual.
         """
         self._camsel()
+        if not self._check_option("acq","AC_ACQMODE_FRAMETRANSFER"): return
         lib.SetFrameTransferMode(enable)
         self.frame_transfer_mode=enable
     AcqTimes=collections.namedtuple("AcqTimes",["exposure","accum_cycle_time","kinetic_cycle_time"])
@@ -577,8 +641,12 @@ class AndorCamera(IDevice):
     def get_detector_size(self):
         """Get camera detector size (in pixels)"""
         self._camsel()
+        if not self._check_option("get","AC_GETFUNCTION_DETECTORSIZE"): return
         return lib.GetDetector()
     _read_modes=["fvb","multi_track","random_track","single_track","image"]
+    _read_modes_cap={"fvb":"AC_READMODE_FVB", "multi_track":"AC_READMODE_MULTITRACK",
+        "random_track":"AC_READMODE_RANDOMTRACK", "single_track":"AC_READMODE_SINGLETRACK",
+        "image":"AC_READMODE_FULLIMAGE"}
     def set_read_mode(self, mode):
         """
         Set camera read mode.
@@ -589,18 +657,20 @@ class AndorCamera(IDevice):
         """
         funcargparse.check_parameter_range(mode,"mode",self._read_modes)
         self._camsel()
+        if not self._check_option("read",self._read_modes_cap[mode]): return
         lib.SetReadMode(self._read_modes.index(mode))
         self.read_mode=mode
-    def setup_single_track_mode(self, center, width):
+    def setup_single_track_mode(self, center=1, width=1):
         """
         Setup singe-track read mode.
 
         `center` and `width` specify selection of the rows to be averaged together.
         """
         self._camsel()
+        if not self._check_option("read","AC_READMODE_FULLIMAGE"): return
         lib.SetSingleTrack(center,width)
         self.read_params["single_track"]=(center,width)
-    def setup_multi_track_mode(self, number, height, offset):
+    def setup_multi_track_mode(self, number=1, height=1, offset=1):
         """
         Setup multi-track read mode.
 
@@ -608,11 +678,14 @@ class AndorCamera(IDevice):
         `offset` is the distance between the row sets.
         """
         self._camsel()
+        if not self._check_option("read","AC_READMODE_MULTITRACK"): return
         res=lib.SetMultiTrack(number,height,offset)
         self.read_params["multi_track"]=(number,height,offset)
         return res
-    def setup_random_track_mode(self, tracks):
+    def setup_random_track_mode(self, tracks=None):
         self._camsel()
+        if not self._check_option("read","AC_READMODE_RANDOMTRACK"): return
+        tracks=tracks or [(1,1)]
         lib.SetRandomTracks(tracks)
         self.read_params["random_track"]=list(tracks)
     def setup_image_mode(self, hstart=1, hend=None, vstart=1, vend=None, hbin=1, vbin=1):
@@ -623,10 +696,13 @@ class AndorCamera(IDevice):
         (both are inclusive and starting from 1), `hbin` and `vbin` specify binning.
         """
         hdet,vdet=self.get_detector_size()
+        if not self._check_option("read","AC_READMODE_FULLIMAGE"): return
         hend=hdet if hend is None else hend
         vend=vdet if vend is None else vend
         hend=min(hdet,hend) # truncate the image size
         vend=min(vdet,vend)
+        if (hstart,hend,vstart,vend)!=(1,hdet,1,vdet):
+            if not self._check_option("read","AC_READMODE_SUBIMAGE"): return
         hend-=(hend-hstart+1)%hbin # make size divisible by bin
         vend-=(vend-vstart+1)%vbin
         lib.SetImage(hbin,vbin,hstart,hend,vstart,vend)

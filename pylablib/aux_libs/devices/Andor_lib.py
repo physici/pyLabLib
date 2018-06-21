@@ -549,10 +549,14 @@ class AndorLib(object):
 			amp_mode=self.AmpModeSimple(*amp_mode)
 		else:
 			amp_mode=self.AmpModeFull(*amp_mode)
-		self.SetADChannel(amp_mode.channel)
-		self.SetOutputAmplifier(amp_mode.oamp)
-		self.SetHSSpeed(amp_mode.oamp,amp_mode.hsspeed)
-		self.SetPreAmpGain(amp_mode.preamp)
+		if amp_mode.channel is not None:
+			self.SetADChannel(amp_mode.channel)
+		if amp_mode.oamp is not None:
+			self.SetOutputAmplifier(amp_mode.oamp)
+			if amp_mode.hsspeed is not None:
+				self.SetHSSpeed(amp_mode.oamp,amp_mode.hsspeed)
+		if amp_mode.preamp is not None:
+			self.SetPreAmpGain(amp_mode.preamp)
 
 	def get_EMCCD_gain(self):
 		"""
@@ -563,13 +567,14 @@ class AndorLib(object):
 		advanced=self.GetEMAdvanced()
 		gain=self.GetEMCCDGain()
 		return advanced, gain
-	def set_EMCCD_gain(self, gain, advanced=False):
+	def set_EMCCD_gain(self, gain, advanced=None):
 		"""
 		Set EMCCD gain.
 
 		Gain goes up to 300 if ``advanced==False`` or higher if ``advanced==True`` (in this mode the sensor can be permanently damaged by strong light).
 		"""
-		self.SetEMAdvanced(advanced)
+		if advanced is not None:
+			self.SetEMAdvanced(advanced)
 		self.SetEMCCDGain(gain)
 
 
