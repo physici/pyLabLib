@@ -3,10 +3,35 @@ from .misc import load_lib
 
 import ctypes
 
+from . import DCAM_lib_const as const
 
-class DCAMGenericError(RuntimeError):
-        """Generic DCAM error."""
-        pass
+
+class DCAMLibError(RuntimeError):
+    """Generic DCAM error."""
+    def __init__(self, func, code):
+        self.func=func
+        self.code=code
+        self.text_code,self.text_desc=const.DCAMERR.get(code,("UNKNOWN",""))
+        msg="function '{}' raised error {} ({}): ".format(func,code,self.text_code,self.text_desc)
+        RuntimeError.__init__(self,msg)
+
+def errcheck(passing=None):
+    """
+    Build an error checking function.
+
+    Return a function which checks return codes of Andor library functions.
+    `passing` is a list specifying which return codes are acceptable (by default only 20002, which is success code, is acceptable).
+    """
+    passing=set(passing) if passing is not None else set()
+    def checker(result, func, arguments):
+        if isinstance(result,tuple):
+            code,result=result[0],result[1:]
+        else:
+            code=result
+        if code<0 and code not in passing: # positive codes are always success
+            # print("function '{}' raised error {}({})".format(func.__name__,result,Andor_statuscodes.get(result,"UNKNOWN")))
+            raise DCAMLibError(func.__name__,code)
+    return checker
 
 
 class CSizePrepStruct(ctypes_wrap.StructWrap):
@@ -197,7 +222,7 @@ class DCAMLib(object):
         self.lib=load_lib(self.lib_path)
         lib=self.lib
 
-        wrapper=ctypes_wrap.CTypesWrapper(restype=ctypes.c_int, return_res=True)
+        wrapper=ctypes_wrap.CTypesWrapper(restype=ctypes.c_int, return_res=False, errcheck=errcheck())
 
         self.dcamapi_init=wrapper(lib.dcamapi_init, [DCAMAPI_INIT], [None], rvprep=[CDCAMAPI_INIT.prep_struct], rvconv=[lambda s: CDCAMAPI_INIT(s).iDeviceCount],)
         self.dcamapi_uninit=wrapper(lib.dcamapi_uninit)
@@ -210,11 +235,11 @@ class DCAMLib(object):
         self.dcamdev_close=wrapper(lib.dcamdev_close, [HDCAM], ["hdcam"])
 
         def dcamdev_getcapability_prep(_, domain, kind):
-            cstruct=DCAMDEV_CAPABILITY()
+            cstruct=CDCAMDEV_CAPABILITY()
             cstruct.domain=domain
             cstruct.kind=kind
             return cstruct.to_struct()
-        self.dcamdev_getcapability=wrapper(lib.dcamdev_getcapability, [HDCAM, DCAMDEV_CAPABILITY], ["hdcam", None], addargs=["domain","kind"], rvprep=[dcamdev_getcapability_prep], rvconv=[lambda s, *args: DCAMDEV_CAPABILITY(s).capflag])
+        self.dcamdev_getcapability=wrapper(lib.dcamdev_getcapability, [HDCAM, DCAMDEV_CAPABILITY], ["hdcam", None], addargs=["domain","kind"], rvprep=[dcamdev_getcapability_prep], rvconv=[lambda s, *args: CDCAMDEV_CAPABILITY(s).capflag])
 
         def dcamdev_outstring_prep(_, iString):
             cstruct=CDCAMDEV_STRING()
@@ -271,6 +296,8 @@ class DCAMLib(object):
         self.dcamwait_start=wrapper(lib.dcamwait_start, [HDCAMWAIT, DCAMWAIT_START], ["hwait", None], addargs=["eventmask","timeout"], rvprep=[dcamwait_start_prep], rvconv=[lambda s, *args: CDCAMWAIT_START(s).eventhappened])
         self.dcamwait_abort=wrapper(lib.dcamwait_abort, [HDCAMWAIT], ["hwait"])
 
+        self._initialized=True
+
     def dcamprop_setgetvalue(self, hdcam, iProp, fValue):
         return self.dcamprop_setgetvalue_lib(hdcam,iProp,0,fValue)
     def dcamprop_queryvalue(self, hdcam, iProp, fValue, option):
@@ -281,7 +308,12 @@ class DCAMLib(object):
         ids=[]
         iProp=0
         while True:
-            iProp=self.dcamprop_getnextid(hdcam,iProp,option)[1]
+            try:
+                iProp=self.dcamprop_getnextid(hdcam,iProp,option)
+            except DCAMLibError as e:
+                if e.code==-2147481560:
+                    break
+                raise
             if iProp==0 or iProp in ids:
                 break
             ids.append(iProp)
