@@ -495,17 +495,13 @@ class AndorLib(object):
 		self.GetMostRecentImage16=wrapper(lib.GetMostRecentImage16, [ctypes.c_char_p,ctypes.c_uint32], [None,"size"], rvprep=[buffer16_prep], rvconv=[buffer16_conv], rvref=[False])
 		self.GetNumberNewImages=wrapper(lib.GetNumberNewImages, [ctypes.c_int32,ctypes.c_int32], [None,None])
 		def images_buffer16_prep(first, last, size):
-			buffsize=max(last-first+1,1)*size
-			return buffer16_prep(buffsize)
+			return buffer16_prep(size)
 		def images_buffer32_prep(first, last, size):
-			buffsize=max(last-first+1,1)*size
-			return buffer32_prep(buffsize)
+			return buffer32_prep(size)
 		def images_buffer16_conv(buff, first, last, size):
-			buffsize=max(last-first+1,1)*size
-			return buffer16_conv(buff,buffsize)
+			return buffer16_conv(buff,size)
 		def images_buffer32_conv(buff, first, last, size):
-			buffsize=max(last-first+1,1)*size
-			return buffer32_conv(buff,buffsize)
+			return buffer32_conv(buff,size)
 		self.GetImages=wrapper(lib.GetImages, [ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["first","last",None,"size",None,None],
 			rvprep=[images_buffer32_prep,None,None], rvconv=[images_buffer32_conv,None,None], rvref=[False,True,True])
 		self.GetImages16=wrapper(lib.GetImages16, [ctypes.c_int32,ctypes.c_int32,ctypes.c_char_p,ctypes.c_int32,ctypes.c_int32,ctypes.c_int32], ["first","last",None,"size",None,None],

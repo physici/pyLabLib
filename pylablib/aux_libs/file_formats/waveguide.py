@@ -113,6 +113,7 @@ class CamReader(object):
         self.frame_offsets.append(f.tell())
         return data
     def _read_frame(self, idx):
+        idx=int(idx)
         if self.same_size:
             if len(self.frame_offsets)==1:
                 with open(self.path,"rb") as f:

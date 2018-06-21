@@ -1,10 +1,7 @@
 from ...core.utils import net
 from ...core.devio.interface import IDevice
 
-try:
-    import websocket
-except ImportError:
-    websocket=None
+import websocket
 
 import json
 import time
@@ -28,7 +25,7 @@ class M2ICE(IDevice):
         if start_link:
             self.start_link()
         self._last_status={}
-        self.use_websocket=use_websocket and (websocket is not None)
+        self.use_websocket=use_websocket
 
     def open(self):
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen",timeout=self.timeout)
@@ -92,7 +89,7 @@ class M2ICE(IDevice):
         if reply_op and preply[0]!=reply_op:
             raise M2Error("unexpected reply op: '{}' (expected '{}')".format(preply[0],reply_op))
         return preply
-    def check_reports(self, timeout=0.):
+    def update_reports(self, timeout=0.):
         timeout=max(timeout,0.001)
         try:
             with self.socket.using_timeout(timeout):
@@ -105,6 +102,9 @@ class M2ICE(IDevice):
         if rep:
             return "fail" if rep["report"][0] else "success"
         return None
+    def check_report(self, op):
+        self.update_reports()
+        return self.get_last_report(op)
     def wait_for_report(self, op, error_msg=None, timeout=None):
         with self.socket.using_timeout(timeout):
             preport=self._recv_reply(expected=op+"_f_r")
@@ -161,12 +161,37 @@ class M2ICE(IDevice):
                 ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
-    def connect_wavemeter(self):
+    def connect_wavemeter(self, sync=True):
+        if not self.use_websocket:
+            return
+        if self.is_wavelemeter_connected():
+            return
+        self.stop_all_operation()
         self._send_websocket_request('{"message_type":"task_request","task":["start_wavemeter_link"]}')
-    def disconnect_wavemeter(self):
-        self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
+        if sync:
+            while not self.is_wavelemeter_connected():
+                time.sleep(0.02)
+    def disconnect_wavemeter(self, sync=True):
+        if not self.use_websocket:
+            return
+        if not self.is_wavelemeter_connected():
+            return
+        if not sync:
+            self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
+        else:
+            while self.is_wavelemeter_connected():
+                self.stop_all_operation()
+                self.lock_wavemeter(False)
+                if self.is_wavelemeter_lock_on():
+                    time.sleep(1.)
+                self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
+                for _ in range(25):
+                    if not self.is_wavelemeter_connected():
+                        return
+                    time.sleep(0.02)
     def is_wavelemeter_connected(self):
-        return self._read_websocket_status(present_key="wlm_fitted")["wlm_fitted"]
+        return self._read_websocket_status(present_key="wlm_fitted")["wlm_fitted"] if self.use_websocket else None
+        # return self.get_tuning_status()!="nolink"
 
     def get_system_status(self):
         _,reply=self.query("get_status",{})
@@ -175,7 +200,7 @@ class M2ICE(IDevice):
                 reply[k]=reply[k][0]
         return reply
     def get_full_web_status(self):
-        return self._read_websocket_status()
+        return self._read_websocket_status() if self.use_websocket else None
     def _as_web_status(self, status):
         if status=="auto":
             status="new" if self.use_websocket else None
@@ -187,24 +212,29 @@ class M2ICE(IDevice):
     
     def get_full_tuning_status(self):
         return self.query("poll_wave_m",{})[1]
-    def lock_wavemeter(self, lock=True):
+    def lock_wavemeter(self, lock=True, sync=True):
         _,reply=self.query("lock_wave_m",{"operation":"on" if lock else "off"})
         if reply["status"][0]==1:
             raise M2Error("can't lock wavemeter: no wavemeter link")
+        if sync:
+            while self.is_wavelemeter_lock_on()!=lock:
+                time.sleep(0.05)
     def is_wavelemeter_lock_on(self):
-        return self.get_full_tuning_status()["lock_status"][0]
+        return bool(self.get_full_tuning_status()["lock_status"][0])
 
     def tune_wavelength(self, wavelength, sync=True, timeout=None):
-        _,reply=self.query("set_wave_m",{"wavelength":[wavelength*1E9]},report=sync)
+        _,reply=self.query("set_wave_m",{"wavelength":[wavelength*1E9]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune wavelength: no wavemeter link")
         elif reply["status"][0]==2:
             raise M2Error("can't tune wavelength: {}nm is out of range".format(wavelength*1E9))
         if sync:
             self.wait_for_report("set_wave_m",timeout=timeout)
+    def check_tuning_report(self):
+        return self.check_report("set_wave_m")
     def get_tuning_status(self):
         status=self.get_full_tuning_status()["status"][0]
-        return ["lock_off","nolink","tuning","done"][status]
+        return ["idle","nolink","tuning","locked"][status]
     def get_wavelength(self):
         return self.get_full_tuning_status()["current_wavelength"][0]*1E-9
     def stop_tuning(self):
@@ -213,7 +243,7 @@ class M2ICE(IDevice):
             raise M2Error("can't stop tuning: no wavemeter link")
 
     def tune_wavelength_table(self, wavelength, sync=True):
-        _,reply=self.query("move_wave_t",{"wavelength":[wavelength*1E9]},report=sync)
+        _,reply=self.query("move_wave_t",{"wavelength":[wavelength*1E9]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune etalon: command failed")
         elif reply["status"][0]==2:
@@ -231,7 +261,7 @@ class M2ICE(IDevice):
         _,reply=self.query("stop_move_wave_t",{})
 
     def tune_etalon(self, perc, sync=True):
-        _,reply=self.query("tune_etalon",{"setting":[perc]},report=sync)
+        _,reply=self.query("tune_etalon",{"setting":[perc]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune etalon: {} is out of range".format(perc))
         elif reply["status"][0]==2:
@@ -239,14 +269,14 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("tune_etalon")
     def lock_etalon(self, sync=True):
-        _,reply=self.query("etalon_lock",{"operation":"on"},report=sync)
+        _,reply=self.query("etalon_lock",{"operation":"on"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't lock etalon")
         if sync:
             self.wait_for_report("etalon_lock")
     def unlock_etalon(self, sync=True):
         self.unlock_reference_cavity(sync=True)
-        _,reply=self.query("etalon_lock",{"operation":"off"},report=sync)
+        _,reply=self.query("etalon_lock",{"operation":"off"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't unlock etalon")
         if sync:
@@ -258,7 +288,7 @@ class M2ICE(IDevice):
         return reply["condition"]
 
     def tune_reference_cavity(self, perc, fine=False, sync=True):
-        _,reply=self.query("fine_tune_cavity" if fine else "tune_cavity",{"setting":[perc]},report=sync)
+        _,reply=self.query("fine_tune_cavity" if fine else "tune_cavity",{"setting":[perc]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune reference cavity: {} is out of range".format(perc))
         elif reply["status"][0]==2:
@@ -267,13 +297,13 @@ class M2ICE(IDevice):
             self.wait_for_report("fine_tune_cavity")
     def lock_reference_cavity(self, sync=True):
         self.lock_etalon(sync=True)
-        _,reply=self.query("cavity_lock",{"operation":"on"},report=sync)
+        _,reply=self.query("cavity_lock",{"operation":"on"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't lock reference cavity")
         if sync:
             self.wait_for_report("cavity_lock")
     def unlock_reference_cavity(self, sync=True):
-        _,reply=self.query("cavity_lock",{"operation":"off"},report=sync)
+        _,reply=self.query("cavity_lock",{"operation":"off"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't unlock reference cavity")
         if sync:
@@ -285,7 +315,7 @@ class M2ICE(IDevice):
         return reply["condition"]
 
     def tune_laser_resonator(self, perc, fine=False, sync=True):
-        _,reply=self.query("fine_tune_resonator" if fine else "tune_resonator",{"setting":[perc]},report=sync)
+        _,reply=self.query("fine_tune_resonator" if fine else "tune_resonator",{"setting":[perc]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune resonator: {} is out of range".format(perc))
         elif reply["status"][0]==2:
@@ -327,11 +357,11 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("scan_stitch_op")
     def check_terascan_report(self):
-        self.check_reports()
+        self.update_reports()
         return self.get_last_report("scan_stitch_op")
     def stop_terascan(self, scan_type, sync=False):
         self._check_terascan_type(scan_type)
-        _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"stop"},report=sync)
+        _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"stop"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't stop TeraScan: operation failed")
         elif reply["status"][0]==2:
@@ -417,6 +447,8 @@ class M2ICE(IDevice):
 
 
     def stop_scan_web(self, scan_type):
+        if not self.use_websocket:
+            return
         try:
             self._check_terascan_type(scan_type)
             scan_type=scan_type+"_scan"
