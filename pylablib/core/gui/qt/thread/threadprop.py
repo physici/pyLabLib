@@ -4,9 +4,9 @@ from PyQt5 import QtCore
 
 import threading
 
-_local_data=threading.local()
+local_data=threading.local()
 
-_thread_uids=general.NamedUIDGenerator(thread_safe=True)
+thread_uids=general.NamedUIDGenerator(thread_safe=True)
 
 ### Errors ###
 class ThreadError(RuntimeError):
@@ -86,7 +86,7 @@ def is_gui_thread():
     app=get_app()
     return (app is not None) and (QtCore.QThread.currentThread() is app.thread())
 def current_controller(require_controller=True):
-    controller=getattr(_local_data,"controller",None)
+    controller=getattr(local_data,"controller",None)
     if require_controller and (controller is None):
         raise NoControllerThreadError("current thread has no controller")
     return controller

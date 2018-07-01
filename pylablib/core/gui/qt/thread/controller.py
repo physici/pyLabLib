@@ -42,23 +42,25 @@ def exsafeSlot(*slargs, **slkwargs):
 
 class QThreadControllerThread(QtCore.QThread):
     finalized=QtCore.pyqtSignal()
-    stop_request=QtCore.pyqtSignal()
+    _stop_request=QtCore.pyqtSignal()
     def __init__(self, controller):
         QtCore.QThread.__init__(self)
         self.moveToThread(self)
         self.controller=controller
         threadprop.get_app().aboutToQuit.connect(self.quit_sync)
-        self.stop_request.connect(self.quit_sync)
+        self._stop_request.connect(self._do_quit)
     def run(self):
         try:
             self.exec_()
         finally:
             self.finalized.emit()
     @QtCore.pyqtSlot()
-    def quit_sync(self):
+    def _do_quit(self):
         if self.isRunning():
-            self.quit()
-            self.controller._request_stop()
+            self.quit() # stop event lopp
+            self.controller.request_stop() # signal controller to stop
+    def quit_sync(self):
+        self._stop_request.emit()
             
 
 class QThreadController(QtCore.QObject):
@@ -67,7 +69,7 @@ class QThreadController(QtCore.QObject):
         funcargparse.check_parameter_range(kind,"kind",{"loop","run","main"})
         if kind=="main":
             name="gui"
-        self.name=name or threadprop._thread_uids(type(self).__name__)
+        self.name=name or threadprop.thread_uids(type(self).__name__)
         self.kind=kind
         store_created_controller(self)
         if self.kind=="main":
@@ -76,7 +78,7 @@ class QThreadController(QtCore.QObject):
             if threadprop.current_controller(require_controller=False):
                 raise threadprop.DuplicateControllerThreadError()
             self.thread=threadprop.get_gui_thread()
-            threadprop._local_data.controller=self
+            threadprop.local_data.controller=self
             register_controller(self)
         else:
             self.thread=QThreadControllerThread(self)
@@ -89,8 +91,8 @@ class QThreadController(QtCore.QObject):
         self._exec_notes_lock=threading.Lock()
         self._signal_pool=signal_pool or _default_signal_pool
         self._signal_pool_uids=[]
-        self._stopped=(self.kind!="main")
-        self._running=not self._stopped
+        self._stop_requested=(self.kind!="main")
+        self._running=not self._stop_requested
         self.moveToThread(self.thread)
         self.messaged.connect(self._get_message)
         self.interrupt_called.connect(self._on_call_in_thread)
@@ -109,7 +111,7 @@ class QThreadController(QtCore.QObject):
         kind,tag,value=msg
         if kind=="msg":
             if tag.startswith("interrupt."):
-                self._process_interrupt(tag[len("interrupt."):],value)
+                self.process_interrupt(tag[len("interrupt."):],value)
                 return
             if self.process_message(tag,value):
                 return
@@ -120,7 +122,7 @@ class QThreadController(QtCore.QObject):
             else:
                 self._sync_queue.setdefault(tag,set()).add(value)
         elif kind=="stop":
-            self._stopped=True
+            self._stop_requested=True
     interrupt_called=QtCore.pyqtSignal("PyQt_PyObject")
     @exsafeSlot("PyQt_PyObject")
     def _on_call_in_thread(self, call):
@@ -130,10 +132,10 @@ class QThreadController(QtCore.QObject):
     started=QtCore.pyqtSignal()
     @exsafeSlot()
     def _on_start_event(self):
-        self._stopped=False
+        self._stop_requested=False
         try:
             if self.kind!="main":
-                threadprop._local_data.controller=self
+                threadprop.local_data.controller=self
                 register_controller(self)
             self.notify_exec("start")
             self._running=True
@@ -142,22 +144,19 @@ class QThreadController(QtCore.QObject):
             self.notify_exec("run")
             if self.kind=="run":
                 self._do_run()
-                self.thread.stop_request.emit()
+                self.thread.quit_sync()
         except threadprop.InterruptExceptionStop:
-            self.thread.stop_request.emit()
+            self.thread.quit_sync()
     finished=QtCore.pyqtSignal()
     @exsafeSlot()
     def _on_finish_event(self):
-        is_stopped=self._stopped
-        self._stopped=False
+        is_stopped=self._stop_requested
+        self._stop_requested=False
         self.finished.emit()
         try:
             self.check_messages()
             self.on_finish()
-        except:
-            traceback.print_exc()
         finally:
-            self._stopped=is_stopped
             self._running=False
             for uid in self._signal_pool_uids:
                 self._signal_pool.unsubscribe(uid)
@@ -165,16 +164,17 @@ class QThreadController(QtCore.QObject):
             unregister_controller(self)
             if self.kind=="main":
                 stop_all_controllers()
+            self._stop_requested=is_stopped
     @QtCore.pyqtSlot()
     def _on_last_window_closed(self):
         if threadprop.get_app().quitOnLastWindowClosed():
-            self._request_stop()
+            self.request_stop()
     
 
     def is_controlled(self):
         return QtCore.QThread.currentThread() is self.thread
 
-    def _process_interrupt(self, tag, value):
+    def process_interrupt(self, tag, value):
         if tag=="execute":
             value()
     def process_message(self, tag, value):
@@ -188,10 +188,10 @@ class QThreadController(QtCore.QObject):
 
     def _do_run(self):
         self.run()
-    def _wait_in_process_loop(self, is_done, timeout=None):
+    def _wait_in_process_loop(self, done_check, timeout=None):
         ctd=general.Countdown(timeout)
         while True:
-            if self._stopped:
+            if self._stop_requested:
                 raise threadprop.InterruptExceptionStop()
             if timeout is not None:
                 time_left=ctd.time_left()
@@ -204,16 +204,16 @@ class QThreadController(QtCore.QObject):
                     raise threadprop.TimeoutThreadError()
             else:
                 threadprop.get_app().processEvents(QtCore.QEventLoop.WaitForMoreEvents)
-            done,value=is_done()
+            done,value=done_check()
             if done:
                 return value
     def wait_for_message(self, tag, timeout=None):
-        def is_done():
+        def done_check():
             if self._message_queue.setdefault(tag,[]):
                 value=self._message_queue[tag].pop(0)
                 return True,value
             return False,None
-        return self._wait_in_process_loop(is_done,timeout=timeout)
+        return self._wait_in_process_loop(done_check,timeout=timeout)
     def new_messages_number(self, tag):
         return len(self._message_queue.setdefault(tag,[]))
     def pop_message(self, tag):
@@ -221,13 +221,13 @@ class QThreadController(QtCore.QObject):
             return self._message_queue[tag].pop(0)
         raise threadprop.NoMessageThreadError("no messages with tag '{}'".format(tag))
     def wait_for_sync(self, tag, uid, timeout=None):
-        def is_done():
+        def done_check():
             if uid in self._sync_queue.setdefault(tag,set()):
                 self._sync_queue[tag].remove(uid)
                 return True,None
             return False,None
         try:
-            self._wait_in_process_loop(is_done,timeout=timeout)
+            self._wait_in_process_loop(done_check,timeout=timeout)
         except threadprop.TimeoutThreadError:
             self._sync_clearance.add((tag,uid))
             raise
@@ -237,7 +237,7 @@ class QThreadController(QtCore.QObject):
         self._wait_in_process_loop(lambda: (check(),None),timeout=timeout)
     def check_messages(self):
         threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents)
-        if self._stopped:
+        if self._stop_requested:
             raise threadprop.InterruptExceptionStop()
     def sleep(self, timeout):
         try:
@@ -271,7 +271,7 @@ class QThreadController(QtCore.QObject):
 
     def start(self):
         self.thread.start()
-    def _request_stop(self):
+    def request_stop(self):
         self.messaged.emit(("stop",None,None))
     def stop(self, code=0):
         if self.kind=="main":
@@ -627,4 +627,4 @@ def stop_all_controllers(sync=True):
         _running_threads_stopping=True
         names=list(_running_threads.keys())
     for n in names:
-        stop_controller(n)
+        stop_controller(n,sync=sync)
