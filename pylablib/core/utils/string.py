@@ -99,7 +99,7 @@ def find_first_entry(line, elements, start=0, not_found_value=-1):
 
 ##### String filter #####
 
-def translate_string_filter(filt, syntax, default=False):
+def translate_string_filter(filt, syntax, match_case=True, default=False):
     """
     Turns `filt` into a matching function.
     
@@ -112,6 +112,7 @@ def translate_string_filter(filt, syntax, default=False):
         - anything else: returned as is (assumed to already be a callable).
     
     `syntax` can be ``'re'`` (:mod:`re`), ``'glob'`` (:mod:`glob`) or ``'pred'`` (simply matching predicate).
+    `match_case` determines whether the filter cares about the string case when matching.
     """
     if filt is None:
         return lambda _: default
@@ -119,7 +120,7 @@ def translate_string_filter(filt, syntax, default=False):
         return lambda _: filt
     funcargparse.check_parameter_range(syntax,"syntax",{"re","glob","pred"})
     if syntax=="re":
-        comp=re.compile(filt)
+        comp=re.compile(filt,flags=0 if match_case else re.RegexFlag.I)
         return lambda x: (comp.match(x) is not None)
     elif syntax=="glob":
         comp=re.compile(fnmatch.translate(filt))
@@ -137,14 +138,15 @@ class StringFilter(object):
         include: Inclusion filter (translated by :func:`translate_string_filter`; regex by default).
         exclude: Exclusion filter (translated by :func:`translate_string_filter`; regex by default).
         syntax: Default syntax for pattern filters.
+        match_case (bool): Determines whether filter ignores case when matching.
     """
-    def __init__(self, include=None, exclude=None, syntax="re"):
+    def __init__(self, include=None, exclude=None, syntax="re", match_case=False):
         object.__init__(self)
-        self.include=translate_string_filter(include,syntax,default=True)
-        self.exclude=translate_string_filter(exclude,syntax,default=False)
+        self.include=translate_string_filter(include,syntax,match_case=match_case,default=True)
+        self.exclude=translate_string_filter(exclude,syntax,match_case=match_case,default=False)
     def __call__(self, s):
         return self.include(s) and not self.exclude(s)
-def get_string_filter(include=None, exclude=None, syntax="re"):
+def get_string_filter(include=None, exclude=None, syntax="re", match_case=False):
     """
     Generate :class:`StringFilter` with the given parameters.
     
@@ -154,17 +156,17 @@ def get_string_filter(include=None, exclude=None, syntax="re"):
         return include
     if isinstance(include, tuple):
         return StringFilter(*include)
-    return StringFilter(include,exclude,syntax)
+    return StringFilter(include,exclude,syntax=syntax,match_case=match_case)
 def sfglob(include=None, exclude=None):
     """
     Return string filter based on :mod:`glob` syntax.
     """
     return get_string_filter(include=include,exclude=exclude,syntax="glob")
-def sfregex(include=None, exclude=None):
+def sfregex(include=None, exclude=None, match_case=False):
     """
     Return string filter based on :mod:`re` syntax.
     """
-    return get_string_filter(include=include,exclude=exclude,syntax="re")
+    return get_string_filter(include=include,exclude=exclude,syntax="re",match_case=match_case)
 def filter_string_list(l, filt):
     """
     Filter string list based on the filter.

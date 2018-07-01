@@ -168,7 +168,7 @@ class CamReader(object):
         except StopIteration:
             raise IndexError("index {} is out of range".format(idx))
     def __iter__(self):
-        return self.iterslice()
+        return self.iterrange()
     def iterrange(self, *args):
         """
         iterrange([start,] stop[, step])

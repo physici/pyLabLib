@@ -41,11 +41,9 @@ def eof(f, strict=False):
     """
     p=f.tell()
     f.seek(0,2)
-    if f.tell()<=p:
-        return True
-    else:
-        f.seek(p)
-        return False
+    ep=f.tell()
+    f.seek(p)
+    return (ep==p) or (ep<=p and not strict)
     
 def get_file_creation_time(path, timestamp=True):
     """
@@ -136,6 +134,9 @@ def fullsplit(path, ignore_empty=True):
 def normalize_path(p):
     """Normalize filesystem path (case and origin). If two paths are identical, they should be equal when normalized."""
     return os.path.normcase(os.path.abspath(p))
+def case_sensitive_path():
+    """Check if OS path names are case-sensitive (e.g., Linux)"""
+    return os.path.normcase("TEMP")!="temp"
 def paths_equal(a, b):
     """
     Determine if the two paths are equal (can be local or have different case).
@@ -336,6 +337,8 @@ def list_dir(folder="", folder_filter=None, file_filter=None, separate_kinds=Tru
             return FolderList([], [])
     elements=os.listdir(folder)
     elements.sort()
+    file_filter=string.get_string_filter(file_filter,match_case=case_sensitive_path())
+    folder_filter=string.get_string_filter(folder_filter,match_case=case_sensitive_path())
     if separate_kinds:
         folders,files=general.partition_list(lambda p: os.path.isdir(os.path.join(folder,p)), elements)
         files=string.filter_string_list(files,file_filter)
@@ -396,6 +399,8 @@ def walk_dir(folder, folder_filter=None, file_filter=None, rel_path=True, topdow
         raise OSError("path {0} is not a directory".format(folder))
     if visit_folder_filter is not None:
         all_folders,files=list_dir(folder,file_filter=file_filter)
+        file_filter=string.get_string_filter(file_filter,match_case=case_sensitive_path())
+        folder_filter=string.get_string_filter(folder_filter,match_case=case_sensitive_path())
         return_folders=string.filter_string_list(all_folders,folder_filter)
         walk_folders=string.filter_string_list(all_folders,visit_folder_filter)
     else:
