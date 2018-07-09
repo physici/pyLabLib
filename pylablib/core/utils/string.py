@@ -120,7 +120,7 @@ def translate_string_filter(filt, syntax, match_case=True, default=False):
         return lambda _: filt
     funcargparse.check_parameter_range(syntax,"syntax",{"re","glob","pred"})
     if syntax=="re":
-        comp=re.compile(filt,flags=0 if match_case else re.RegexFlag.I)
+        comp=re.compile(filt,flags=0 if match_case else re.IGNORECASE)
         return lambda x: (comp.match(x) is not None)
     elif syntax=="glob":
         comp=re.compile(fnmatch.translate(filt))

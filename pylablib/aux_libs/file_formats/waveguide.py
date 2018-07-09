@@ -167,6 +167,8 @@ class CamReader(object):
             return self._read_frame(idx)
         except StopIteration:
             raise IndexError("index {} is out of range".format(idx))
+    def get_data(self, idx):
+        return self[idx]
     def __iter__(self):
         return self.iterrange()
     def iterrange(self, *args):

@@ -247,3 +247,46 @@ def find_state_hysteretic(wf, threshold_off, threshold_on, normalize=True):
         if u<len(states)-1:
             states[u]=states[u+1]
     return states
+
+def trigger_hysteretic(wf, threshold_on, threshold_off, init_state="undef", result_kind="separate"):
+    """
+    Determine indices of rise and fall trigger events with hysteresis thresholds.
+    
+    Return either two arrays ``(rise_trig, fall_trig)`` containing trigger indices (if ``result_kind=="separate"``),
+    or a single array of tuples ``[(dir,pos)]``, where `dir` is the trigger direction (``+1`` or ``-1``) and `pos` is its index  (if ``result_kind=="joined"``).
+    Triggers happe when a state switch from 'high' to 'low' (rising) or vice versa (falling).
+    The state switches from 'low' to 'high' when the trace value goes above `threshold_on`, and from 'high' to 'low' when the trace value goes below `threshold_off`.
+    `init_state` speicifies the initial state: ``"low"``, ``"high"``, or ``"undef"`` (undefined state).
+    """
+    if threshold_off>threshold_on:
+        raise ValueError("off threshold level should be below on threshold level")
+    trace_pos=wf>threshold_on
+    trace_rise=trace_pos[1:]&(~trace_pos[:-1])
+    trace_neg=wf<threshold_off
+    trace_fall=trace_neg[1:]&(~trace_neg[:-1])
+    if init_state=="undef":
+        state=0
+    elif init_state=="low":
+        state=-1
+    elif init_state=="high":
+        state=1
+    else:
+        raise ValueError("unrecognized initial state: {}".format(init_state))
+    trace_trig=trace_rise.astype(int)-trace_fall.astype(int)
+    rise_trig=[]
+    fall_trig=[]
+    for i in trace_trig.nonzero()[0]:
+        if state!=trace_trig[i]:
+            state=trace_trig[i]
+            if state>0:
+                rise_trig.append(i)
+            else:
+                fall_trig.append(i)
+    if result_kind=="separate":
+        return rise_trig,fall_trig
+    elif result_kind=="joined":
+        res=[(1,i) for i in rise_trig]+[(-1,i) for i in fall_trig]
+        res.sort(lambda x: x[1])
+        return res
+    else:
+        raise ValueError("unrecognized result kind: {}".format(result_kind))

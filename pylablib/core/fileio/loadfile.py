@@ -103,7 +103,14 @@ def _try_columns_line(line, row_size):
         return None # all numerical, can't be column names
     except ValueError:
         return split_line
-
+def _find_columns_lines(corrupted, comments, row_size):
+    if len(corrupted["type"])>0:
+        return corrupted["type"][0],None
+    for i,l in enumerate(comments):
+        columns=_try_columns_line(l,row_size)
+        if columns is not None:
+            return columns,i
+    return None,None
 
 
 
@@ -117,9 +124,9 @@ def _parse_dict_line(line):
     value=string.from_string(value)
     return key,value
 
-_dicttable_start=r"^#+\s*table\s+start"
+_dicttable_start=r"^#+\s*(table\s+start|start\s+table)"
 _dicttable_start_regexp=re.compile(_dicttable_start,re.IGNORECASE)
-_dicttable_end=r"^#+\s*table\s+end"
+_dicttable_end=r"^#+\s*(table\s+end|end\s+table)"
 _dicttable_end_regexp=re.compile(_dicttable_end,re.IGNORECASE)
 def _load_dict_and_comments(f, case_normalization=None, inline_dtype="generic"):
     case_sensitive=case_normalization is None
@@ -141,7 +148,12 @@ def _load_dict_and_comments(f, case_normalization=None, inline_dtype="generic"):
                         prev_key=key
             else:
                 if _dicttable_start_regexp.match(line[1:]) is not None:
-                    table,comments,_=parse_csv.load_table(f,dtype=inline_dtype,stop_comment=_dicttable_end_regexp)
+                    table,comments,corrupted=parse_csv.load_table(f,dtype=inline_dtype,stop_comment=_dicttable_end_regexp)
+                    columns,comment_idx=_find_columns_lines(corrupted,comments,table.shape[1])
+                    if comment_idx is not None:
+                        del comments[comment_idx]
+                    if columns is not None:
+                        table.set_column_names(columns)
                     comment_lines=comment_lines+comments
                     if prev_key is not None:
                         data[prev_key]=table
@@ -236,15 +248,6 @@ class CSVTableInputFileFormat(ITextInputFileFormat):
     def __init__(self):
         ITextInputFileFormat.__init__(self)
     @staticmethod
-    def _find_columns_lines(corrupted, comments, row_size):
-        if len(corrupted["type"])>0:
-            return corrupted["type"][0],None
-        for i,l in enumerate(comments):
-            columns=_try_columns_line(l,row_size)
-            if columns is not None:
-                return columns,i
-        return None,None
-    @staticmethod
     def read_file(location_file, out_type="table", dtype="numeric", columns=None, delimiters=None, empty_entry_substitute=None, ignore_corrupted_lines=True, skip_lines=0, **kwargs):
         """
         Read CSV file.
@@ -275,7 +278,7 @@ class CSVTableInputFileFormat(ITextInputFileFormat):
                         delimiters=delimiters,empty_entry_substitute=empty_entry_substitute,ignore_corrupted_lines=ignore_corrupted_lines)
         location_file.close()
         if out_type=="table" and not funcargparse.is_sequence(columns,"builtin;nostring") and len(data)>0:
-            columns,comment_idx=CSVTableInputFileFormat._find_columns_lines(corrupted,comments,data.shape[1])
+            columns,comment_idx=_find_columns_lines(corrupted,comments,data.shape[1])
             if comment_idx is not None:
                 del comments[comment_idx]
             if columns is not None:

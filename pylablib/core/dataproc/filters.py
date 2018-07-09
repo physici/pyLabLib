@@ -278,7 +278,7 @@ def _decimate(wf, n=1, dec_mode="skip", axis=0, mode="drop"):
         res=_decimation_filter(wf,_dec_fun,n,axis=axis,mode=mode)
     else:
         raise ValueError("unrecognized decimation type: {0}".format(dec_mode))
-    return wrap(wf).array_replaced(res,wrapped=False)
+    return wrap(wf).array_replaced(res,wrapped=False) if res.ndim<3 else res
 decimate=general_utils.try_method_wrapper(_decimate,method_name="decimate")
 column.IDataColumn.decimate=_decimate
 table.DataTable.add_columnwise_function(decimate,alias="decimate",collection_type="table",column_arg_name="column")
@@ -319,6 +319,37 @@ def binning_average(wf, width=1, axis=0, mode="drop"):
     Equivalent to :func:`decimate` with ``dec_mode=='bin'``.
     """
     return decimate(wf,width,"mean",axis=axis,mode=mode)
+
+def decimate_full(wf, dec_mode="skip", axis=0):
+    """
+    Completely decimate the data along a given axis
+    
+    Args:
+        wf: Data.
+        dec_mode (str):
+            Decimation mode. Can be
+                - ``'skip'`` - just leave every n'th point while completely omitting everything else;
+                - ``'bin'`` or ``'mean'`` - do a binning average;
+                - ``'min'`` - leave min point;
+                - ``'max'`` - leave max point;
+                - ``'median'`` - leave median point (works as a median filter).
+        axis (int): Axis along which to perform the decimation.
+    """
+    wf=np.asarray(wf)
+    if dec_mode=="bin" or dec_mode=="mean":
+        return np.mean(wf,axis=axis)
+    elif dec_mode=="min":
+        return np.min(wf,axis=axis)
+    elif dec_mode=="max":
+        return np.max(wf,axis=axis)
+    elif dec_mode=="median":
+        return np.median(wf,axis=axis)
+    elif dec_mode=="skip":
+        slices=[slice(s) for s in np.shape(wf)]
+        slices[axis]=0
+        return wf[slices]
+    else:
+        raise ValueError("unrecognized decimation type: {0}".format(dec_mode))
 
 
 def decimate_datasets(wfs, dec_mode="mean"):
