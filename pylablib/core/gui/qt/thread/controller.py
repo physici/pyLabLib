@@ -61,7 +61,13 @@ class QThreadControllerThread(QtCore.QThread):
             self.controller.request_stop() # signal controller to stop
     def quit_sync(self):
         self._stop_request.emit()
-            
+
+
+def remote_call(func):
+    @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
+    def rem_func(self, *args, **kwargs):
+        return self.call_in_thread_sync(func,args=(self,)+args,kwargs=kwargs,sync=True,same_thread_shortcut=True)
+    return rem_func
 
 class QThreadController(QtCore.QObject):
     def __init__(self, name=None, kind="loop", signal_pool=None):

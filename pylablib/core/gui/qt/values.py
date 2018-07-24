@@ -111,18 +111,12 @@ class ISingleValueHandler(IValueHandler):
     def __init__(self, widget):
         IValueHandler.__init__(self,widget)
     def get_single_value(self):
-        for g in self.getters:
-            if hasattr(self.widget,g):
-                return getattr(self.widget,g)()
         raise ValueError("can't find default getter for widget {}".format(self.widget))
     def get_value(self, name=None):
         if name:
             raise KeyError("no value with name {}".format(name))
         return self.get_single_value()
     def set_single_value(self, value):
-        for s in self.setters:
-            if hasattr(self.widget,s):
-                return getattr(self.widget,s)(value)
         raise ValueError("can't find default setter for widget {}".format(self.widget))
     def set_value(self, value, name=None):
         if name:
@@ -149,20 +143,20 @@ class LabelValueHandler(ISingleValueHandler):
         return str(self.widget.text())
     def set_single_value(self, value):
         return self.widget.setText(str(value))
-class BoolValueHandler(ISingleValueHandler):
+class IBoolValueHandler(ISingleValueHandler):
     def __init__(self, widget, labels=("Off","On")):
         ISingleValueHandler.__init__(self,widget)
         self.labels=labels
     def repr_single_value(self, value):
         return self.labels[value]
-class CheckboxValueHandler(BoolValueHandler):
+class CheckboxValueHandler(IBoolValueHandler):
     def get_single_value(self):
         return self.widget.isChecked()
     def set_single_value(self, value):
         return self.widget.setChecked(value)
     def value_changed_signal(self):
         return self.widget.stateChanged
-class PushButtonValueHandler(BoolValueHandler):
+class PushButtonValueHandler(IBoolValueHandler):
     def get_single_value(self):
         return self.widget.isChecked()
     def set_single_value(self, value):
@@ -172,8 +166,8 @@ class PushButtonValueHandler(BoolValueHandler):
     def repr_single_value(self, value):
         if not self.widget.isCheckable():
             return ""
-        return BoolValueHandler.repr_single_value(self,value)
-class ToolButtonValueHandler(BoolValueHandler):
+        return IBoolValueHandler.repr_single_value(self,value)
+class ToolButtonValueHandler(IBoolValueHandler):
     def get_single_value(self):
         return self.widget.isChecked()
     def set_single_value(self, value):
@@ -183,7 +177,7 @@ class ToolButtonValueHandler(BoolValueHandler):
     def repr_single_value(self, value):
         if not self.widget.isCheckable():
             return ""
-        return BoolValueHandler.repr_single_value(self,value)
+        return IBoolValueHandler.repr_single_value(self,value)
 class ComboBoxValueHandler(ISingleValueHandler):
     def get_single_value(self):
         return self.widget.currentIndex()

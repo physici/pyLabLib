@@ -5,10 +5,10 @@ from PyQt5 import QtCore
 
 
 class ScriptThread(controller.QThreadController):
-    def __init__(self, name=None, args=None, kwargs=None, signal_pool=None):
+    def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
         controller.QThreadController.__init__(self,name=name,kind="run",signal_pool=signal_pool)
-        self.args=args or []
-        self.kwargs=kwargs or {}
+        self.setupargs=setupargs or []
+        self.setupkwargs=setupkwargs or {}
         self._monitor_signal.connect(self._on_monitor_signal)
         self._monitored_signals={}
 
@@ -19,18 +19,18 @@ class ScriptThread(controller.QThreadController):
         pass
     def process_signal(self, src, tag, value):
         return False
-    def run_script(self, *args, **kwargs):
+    def run_script(self):
         pass
     def finalize_script(self):
         pass
 
     def on_start(self):
-        self.setup_script(*self.args,**self.kwargs)
+        self.setup_script(*self.setupargs,**self.setupkwargs)
     def on_finish(self):
-        self.finalize_script(*self.args,**self.kwargs)
+        self.finalize_script()
 
     def run(self):
-        self.run_script(*self.args,**self.kwargs)
+        self.run_script()
 
     _monitor_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")
