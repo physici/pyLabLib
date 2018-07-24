@@ -9,7 +9,7 @@ from ..utils.py3 import textstring
 
 from . import indexing
 from . import column
-from .utils import get_shape, as_array
+from .datatable_utils import get_shape, as_array
 
 import numpy as np
 

@@ -7,7 +7,7 @@ import numpy as np
 from ..utils import numclass, strdump#@UnresolvedImport
 from ..utils import iterator as iterator_utils #@UnresolvedImport
 from . import indexing
-from .utils import as_array
+from .datatable_utils import as_array
 
 _depends_local=["..utils.numclass","..utils.strdump"]
 
