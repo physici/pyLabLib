@@ -22,7 +22,7 @@ else:
     def as_str(data):
         return data if isinstance(data,str) else data.decode()
     def as_bytes(data):
-        return data if isinstance(data,bytes) else data.encode("utf-8")
+        return data if isinstance(data,bytes) else (data.encode("utf-8") if isinstance(data,str) else bytes(data))
     as_builtin_bytes=as_bytes
 
 def as_datatype(data, datatype):

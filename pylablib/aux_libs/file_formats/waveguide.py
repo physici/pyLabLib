@@ -123,7 +123,7 @@ class CamReader(object):
         else:
             if idx<len(self.frame_offsets):
                 return self._read_frame_at(self.frame_offsets[idx])
-            next_idx=len(self.frame_offsets)
+            next_idx=len(self.frame_offsets)-1
             offset=self.frame_offsets[-1]
             with open(self.path,"rb") as f:
                 f.seek(offset)
@@ -168,6 +168,7 @@ class CamReader(object):
         except StopIteration:
             raise IndexError("index {} is out of range".format(idx))
     def get_data(self, idx):
+        """Get a single frame at the given index (only non-negative indices are supported)"""
         return self[idx]
     def __iter__(self):
         return self.iterrange()
@@ -193,6 +194,9 @@ class CamReader(object):
                     break
         except StopIteration:
             pass
+    def read_all(self):
+        """Read all available frames"""
+        return list(self.iterrange())
 
 
 def save_cam(frames, path, append=True):
