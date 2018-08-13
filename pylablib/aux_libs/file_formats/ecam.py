@@ -1,83 +1,142 @@
 from ...core.utils import py3, general, funcargparse
 from ...core.devio import data_format
+from ...core.fileio import binio
 
 import numpy as np
 import numpy.random
 
-import time, collections, os.path
+import time, collections, os.path, zlib, pickle, contextlib
 
 
 def gen_uid():
     uid_arr=numpy.random.randint(0,256,size=8,dtype="u1")
     return py3.as_bytes(uid_arr)
 
-current_version=0x01
-valid_magic=b"eCM"
-valid_versions=[0x01]
-
-def read_int(f, dtype):
-    return int(np.fromfile(f,dtype,count=1)[0])
-def read_float(f, dtype):
-    return float(np.fromfile(f,dtype,count=1)[0])
 
 class ECamFrame(object):
-    def __init__(self, data, uid="new", timestamp="new"):
+    def __init__(self, data, uid="new", timestamp="new", **kwargs):
         object.__init__(self)
         self.data=data
         self.uid=gen_uid() if uid=="new" else uid
         self.timestamp=time.time() if timestamp=="new" else timestamp
+        self.blocks=kwargs
     
+    def __getitem__(self, key):
+        return self.blocks[key]
+    def __setitem__(self, key, value):
+        self.blocks[key]=value
+
     def update_timestamp(self, timestamp=None):
         self.timestamp=timestamp or time.time()
 
     def uid_to_int(self):
-        return read_int("<f8",self.uid) if self.uid else None
+        return int(np.frombuffer(self.uid,"<u8")[0]) if self.uid else None
     def uid_to_hex(self):
         return "".join(["{:02x}".format(d) for d in self.uid]) if self.uid else None
+
+
+
+
+
+
+current_version=0x01
+valid_magic=b"eCM"
+valid_versions=[0x01]
+default_pickle_proto=3
+
+
+@contextlib.contextmanager
+def size_prepend(f, dtype, added=0):
+    spos=f.tell()
+    binio.write_num(0,f,dtype)
+    bpos=f.tell()
+    yield
+    epos=f.tell()
+    f.seek(spos)
+    binio.write_num(epos-bpos+added,f,dtype)
+    f.seek(epos)
 
 
 class ECamFormatError(IOError):
     pass
 
 
-THeader=collections.namedtuple("THeader",["header_size","image_bytes","shape","dtype","stype","version","uid","timestamp"])
-stypes={0x00:"none",0x01:"raw"}
+TBlock=collections.namedtuple("TBlock",["btype","value"])
+THeader=collections.namedtuple("THeader",["header_size","image_bytes","shape","dtype","stype","version","uid","timestamp","blocks"])
+stypes={0x00:"none",0x01:"raw",0x10:"zlib"}
 stypes_inv=general.invert_dict(stypes)
-dtypes={0x00:"<i1",0x01:"<i2",0x02:"<i4",0x03:"<i8",0x10:"<u1",0x11:"<u2",0x12:"<u4",0x13:"<u8",
-        0x20:">i1",0x21:">i2",0x22:">i4",0x23:">i8",0x30:">u1",0x31:">u2",0x32:">u4",0x33:">u8",
-        0x80:">f4",0x81:">f8",0xa0:"<f4",0xa1:"<f8"}
+dtypes=general.merge_dicts(binio.fdtypes,binio.idtypes)
 dtypes_inv=general.invert_dict(dtypes)
+btypes={0x00:"none",0x01:"skip",0x10:"cam_params",0x20:"pickle"}
+btypes_inv=general.invert_dict(btypes)
+
+cam_params={0x01:("name","sp<u2"),0x02:("model","sp<u2"),0x03:("id","sp<u2"),0x10:("exposure","<f8"),0x20:("roi",("<u4",)*4)}
+cam_params_inv=general.invert_dict(cam_params,kmap=lambda x: x[0])
 
 class ECamFormatter(object):
-    def __init__(self, stype="raw", dtype=None, shape=(None,None), save_magic=True):
+    def __init__(self, stype="raw", dtype=None, shape=(None,None)):
         object.__init__(self)
-        self.save_magic=save_magic
         self.stype=stype
         self.dtype=dtype
         self.shape=shape
     
     def _build_frame(self, header, data):
-        return ECamFrame(data,header.uid,header.timestamp)
-    def _read_header(self, f, full=True):
+        blocks={}
+        for btype,bvalue in header.blocks:
+            if btypes[btype]=="pickle":
+                name,val=bvalue
+                blocks.setdefault("pickle",{})[name]=val
+            elif btypes[btype]=="cam_params":
+                blocks["cam_params"]=bvalue
+        return ECamFrame(data,header.uid,header.timestamp,**blocks)
+    def _read_block(self, f, btype, size):
+        if btype not in btypes:
+            raise ECamFormatError("bad file format: unknown block type 0x{:04x}".format(btype))
+        btype=btypes[btype]
+        if btype=="skip":
+            f.seek(size,1)
+            value=size
+        elif btype=="pickle":
+            ipos=f.tell()
+            parsize=binio.read_num(f,"<u2")
+            f.seek(parsize)
+            name=binio.read_str(f,"sp<u4")
+            header_size=(f.tell()-ipos)
+            if size>=header_size:
+                svalue=f.read(size-header_size)
+                value=(name,pickle.loads(svalue))
+            else:
+                raise ECamFormatError("error reading block: block size {} is too small".format(size))
+        elif btype=="cam_params":
+            value={}
+            epos=f.tell()+size
+            while f.tell()<epos:
+                pid=binio.read_num(f,"u1")
+                if pid not in cam_params:
+                    raise ECamFormatError("error reading block: unknown camera param id 0x{:02x}".format(pid))
+                name,dtype=cam_params[pid]
+                value[name]=binio.read_val(f,dtype)
+        return value
+    def _read_header(self, f):
         try:
-            header_size=read_int(f,"<u4")
+            header_size=binio.read_num(f,"<u4")
         except IndexError:
             raise StopIteration
         if header_size<12 or (header_size<44 and header_size not in {12,24,26,28,32,40}):
             raise ECamFormatError("bad file format: header size is {}".format(header_size))
-        image_bytes=read_int(f,"<u8")
+        image_bytes=binio.read_num(f,"<u8")
         if header_size>12:
-            shape=tuple([read_int(f,"<u4") for _ in range(3)])
+            shape=binio.read_val(f,("<u4","<u4","<u4"))
         else:
             shape=self.shape
         if shape[2]==0:
             shape=shape[:2]
         if (None not in self.shape) and shape!=self.shape:
             raise ValueError("data shape {} doesn't agree with the formatter shape {}".format(shape,self.shape))
-        dtype=read_int(f,"<u2") if header_size>24 else self.dtype
-        stype=read_int(f,"<u2") if header_size>26 else self.stype
+        dtype=binio.read_num(f,"<u2") if header_size>24 else self.dtype
+        stype=binio.read_num(f,"<u2") if header_size>26 else self.stype
         if header_size>28:
-            version=read_int(f,"u1")
+            version=binio.read_num(f,"u1")
             if version not in valid_versions:
                 raise ECamFormatError("bad file format: unsupported version 0x{:02x}".format(version))
             magic=f.read(3)
@@ -86,34 +145,66 @@ class ECamFormatter(object):
         else:
             version=None
         uid=f.read(8) if header_size>32 else None
-        timestamp=read_float(f,"<f8") if header_size>40 else None
-        if header_size>48:
-            f.seek(header_size-48,1)
-        return THeader(header_size,image_bytes,shape,dtype,stype,version,uid,timestamp)
+        timestamp=binio.read_num(f,"<f8") if header_size>40 else None
+        read_bytes=48
+        blocks=[]
+        while header_size>read_bytes:
+            if read_bytes+2>header_size:
+                raise ECamFormatError("bad file format: not enough data for a block type")
+            btype=binio.read_num(f,"<u2")
+            if btype==0x00:
+                f.seek(header_size-(read_bytes+2))
+                read_bytes=header_size
+                break
+            if read_bytes+6>header_size:
+                raise ECamFormatError("bad file format: not enough data for a block size")
+            bsize=binio.read_num(f,"<u4")
+            bvalue=self._read_block(f,btype,bsize)
+            blocks.append(TBlock(btype,bvalue))
+            read_bytes+=(6+bsize)
+        return THeader(header_size,image_bytes,shape,dtype,stype,version,uid,timestamp,blocks)
+    def _check_data_size(self, df, shape, data_bytes):
+        nelem=int(np.prod(shape,dtype="u8"))
+        if df.size*nelem!=data_bytes:
+            shape_str="x".join([str(s) for s in shape])
+            raise ECamFormatError("bad file format: mismatched frame byte size: expect {}x{}={}, got {}".format(
+                shape_str,df.size,nelem*df.size,data_bytes))
+    def _read_data(self, f, header):
+        if header.stype is None:
+            raise ECamFormatError("bad file format: not enough header data to read image")
+        if header.stype not in stypes:
+            raise ECamFormatError("bad file format: unknown storage type 0x{:04x}".format(header.stype))
+        stype=stypes[header.stype]
+        if stype=="none":
+            f.seek(header.image_bytes,1)
+            return None
+        if (None in header.shape) or header.dtype is None:
+            raise ECamFormatError("bad file format: not enough header data to read image")
+        if header.dtype not in dtypes:
+            raise ECamFormatError("bad file format: unknown data type 0x{:04x}".format(header.dtype))
+        dtype=dtypes[header.dtype]
+        df=data_format.DataFormat.from_desc(dtype)
+        nelem=int(np.prod(header.shape,dtype="u8"))
+        if stype=="raw":
+            self._check_data_size(df,header.shape,header.image_bytes)
+            img=np.fromfile(f,dtype=df.to_desc(),count=nelem)
+            if len(img)!=nelem:
+                raise ECamFormatError("bad file format: expected {} elements, found {}".format(nelem,len(img)))
+            img=img.reshape(header.shape)
+        elif stype=="zlib":
+            comp_data=f.read(header.image_bytes)
+            raw_data=zlib.decompress(comp_data)
+            self._check_data_size(df,header.shape,len(raw_data))
+            img=np.fromstring(raw_data,dtype=df.to_desc(),count=nelem).reshape(header.shape)
+        return img
     def skip_frame(self, f):
-        header=self._read_header(f,full=False)
+        header=self._read_header(f)
         f.seek(header.image_bytes,1)
         return header.header_size,header.image_bytes
     def read_frame(self, f, return_format="frame"):
         funcargparse.check_parameter_range(return_format,"return_format",{"frame","image","raw"})
         header=self._read_header(f)
-        if (None in header.shape) or header.stype is None or header.dtype is None:
-            raise ECamFormatError("bad file format: not enough header data to read image")
-        if header.stype not in stypes:
-            raise ECamFormatError("bad file format: unknown storage type 0x{:04x}".format(header.stype))
-        if header.dtype not in dtypes:
-            raise ECamFormatError("bad file format: unknown data type 0x{:04x}".format(header.stype))
-        if header.stype==stypes_inv["raw"]:
-            df=data_format.DataFormat.from_desc(dtypes[header.dtype])
-            nelem=int(np.prod(header.shape,dtype="u8"))
-            if df.size*nelem!=header.image_bytes:
-                shape_str="x".join([str(s) for s in header.shape])
-                raise ECamFormatError("bad file format: mismatched frame byte size: expect {}x{}={}, got {}".format(
-                    shape_str,df.size,nelem*df.size,header.image_bytes))
-            img=np.fromfile(f,dtype=df.to_desc(),count=nelem)
-            if len(img)!=nelem:
-                raise ECamFormatError("bad file format: expected {} elements, found {}".format(nelem,len(img)))
-            img=img.reshape(header.shape)
+        img=self._read_data(f,header)
         if return_format=="frame":
             return self._build_frame(header,img)
         elif return_format=="image":
@@ -127,66 +218,103 @@ class ECamFormatter(object):
             data=np.asarray(frame.data)
             uid=frame.uid
             timestamp=frame.timestamp
+            fblocks=frame.blocks
         else:
             data=np.asarray(frame)
             uid,timestamp=None,None
+            fblocks={}
         if self.dtype is not None:
             data=data.astype(self.dtype)
         if (None not in self.shape) and data.shape!=self.shape:
             raise ValueError("data shape {} doesn't agree with the formatter shape {}".format(data.shape,self.shape))
-        hsize=48
-        if timestamp is None:
-            hsize=40
-        if uid is None:
-            hsize=32
-            if not self.save_magic:
-                hsize=28
         if data.ndim not in [2,3]:
             raise ValueError("can only save 2D and 3D arrays")
         df=data_format.DataFormat.from_desc(str(data.dtype))
-        dsize=int(np.prod(data.shape,dtype="u8"))*df.size
-        header=THeader(hsize,dsize,data.shape,dtypes_inv[str(df.to_desc())],stypes_inv["raw"],current_version,uid,timestamp)
+        dtype=df.to_desc()
+        shape=data.shape
+        if self.stype=="none":
+            dsize=int(np.prod(data.shape,dtype="u8"))*df.size
+            data=None
+        elif self.stype=="raw":
+            data=data.astype(dtype=dtype)
+            dsize=int(np.prod(data.shape,dtype="u8"))*df.size
+        elif self.stype=="zlib":
+            raw_str=data.astype(dtype=dtype).tostring()
+            data=zlib.compress(raw_str,level=1)
+            dsize=len(data)
+        else:
+            raise ValueError("unrecognized storage type: {}".format(self.stype))
+        blocks=[]
+        for k,v in fblocks.items():
+            if k=="pickle":
+                btype=btypes_inv["pickle"]
+                for pn,pv in v.items():
+                    bvalue=(pn,pv)
+                    blocks.append(TBlock(btype,bvalue))
+            elif k=="cam_params":
+                btype=btypes_inv["cam_params"]
+                blocks.append(TBlock(btype,v))
+        header=THeader(-1,dsize,shape,dtypes_inv[dtype],stypes_inv[self.stype],current_version,uid,timestamp,blocks)
         return header,data
+    def _write_block(self, f, btype, bvalue):
+        btype=btypes[btype]
+        if btype=="skip":
+            f.write(b"\x00"*bvalue)
+        elif btype=="pickle":
+            pn,pv=bvalue
+            binio.write_num(0,f,"<u2")
+            binio.write_num(default_pickle_proto,f,"<u2")
+            binio.write_str(pn,f,"sp<u4")
+            pickle.dump(pv,f,protocol=default_pickle_proto)
+        elif btype=="cam_params":
+            for pid,(pn,dtype) in cam_params.items():
+                if pn in bvalue:
+                    binio.write_num(pid,f,"u1")
+                    v=bvalue[pn]
+                    binio.write_val(v,f,dtype)
     def _write_header(self, header, f):
-        np.asarray(header.header_size).astype("<u4").tofile(f)
-        np.asarray(header.image_bytes).astype("<u8").tofile(f)
-        if None not in header.shape:
-            shape=header.shape+(0,)*(3-len(header.shape))
-            np.asarray(shape,dtype="u4").astype("<u4").tofile(f)
-        else:
-            return
-        if header.dtype is not None:
-            np.asarray(header.dtype).astype("<u2").tofile(f)
-        else:
-            return
-        if header.stype is not None:
-            np.asarray(header.stype).astype("<u2").tofile(f)
-        else:
-            return
-        if header.header_size>28:
-            np.asarray(header.version).astype("u1").tofile(f)
+        with size_prepend(f,"<u4",4):
+            binio.write_num(header.image_bytes,f,"<u8")
+            if None not in header.shape:
+                shape=header.shape+(0,)*(3-len(header.shape))
+                np.asarray(shape,dtype="u4").astype("<u4").tofile(f)
+            else:
+                return
+            if header.dtype is not None:
+                binio.write_num(header.dtype,f,"<u2")
+            else:
+                return
+            if header.stype is not None:
+                binio.write_num(header.stype,f,"<u2")
+            else:
+                return
+            binio.write_num(header.version,f,"u1")
             f.write(valid_magic)
+            if header.uid is not None:
+                f.write(header.uid)
+            else:
+                return
+            if header.timestamp is not None:
+                binio.write_num(header.timestamp,f,"<f8")
+            else:
+                return
+            for btype,bvalue in header.blocks:
+                binio.write_num(btype,f,"<u2")
+                with size_prepend(f,"<u4"):
+                    self._write_block(f,btype,bvalue)
+    def _write_image(self, header, data, f):
+        if data is None:
+            f.write("\x00"*header.image_bytes)
+        elif isinstance(data,bytes):
+            f.write(data)
+        elif isinstance(data,np.ndarray):
+            data.tofile(f)
         else:
-            return
-        if header.uid is not None:
-            f.write(header.uid)
-        else:
-            return
-        if header.timestamp is not None:
-            np.asarray(header.timestamp).astype("<f8").tofile(f)
-        else:
-            return
+            raise ValueError("don't know how to write data {}".format(data))
     def write_frame(self, frame, f):
         header,data=self._format_frame(frame)
         self._write_header(header,f)
-        if (None in header.shape) or header.stype is None or header.dtype is None:
-            raise ECamFormatError("bad header format: not enough header data to write image")
-        if header.stype not in stypes:
-            raise ECamFormatError("bad header format: unknown storage type 0x{:04x}".format(header.stype))
-        if header.dtype not in dtypes:
-            raise ECamFormatError("bad header format: unknown data type 0x{:04x}".format(header.stype))
-        if header.stype==stypes_inv["raw"]:
-            data.astype(dtype=dtypes[header.dtype]).tofile(f)
+        self._write_image(header,data,f)
         return header.header_size,header.image_bytes
 
 
@@ -197,9 +325,10 @@ def save_ecam(frames, path, append=True, formatter=None):
     If ``append==False``, clear the file before writing the frames.
     `formatter` specifies :class:`ECamFormatter` instance for frame saving.
     """
-    mode="ab" if append else "wb"
+    mode="r+b" if (append and os.path.exists(path)) else "wb"
     formatter=formatter or ECamFormatter()
     with open(path,mode) as f:
+        f.seek(0,2)
         for fr in frames:
             formatter.write_frame(fr,f)
 

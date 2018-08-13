@@ -171,11 +171,13 @@ def to_pairs_list(d, default=None):
         else:
             res.append((e,default))
     return res
-def invert_dict(d):
+def invert_dict(d, kmap=None):
     """
     Invert dictionary (switch keys and values).
+
+    If `kmap` is supplied, it's a function mapping dictionary values into inverted dictionary keys (identity by default).
     """
-    return dict([(v,k) for (k,v) in viewitems(d)])
+    return dict([(kmap(v),k) for (k,v) in viewitems(d)]) if kmap else dict([(v,k) for (k,v) in viewitems(d)])
 
 ### List routines ###
 def flatten_list(l):
