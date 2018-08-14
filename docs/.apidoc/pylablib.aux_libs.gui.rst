@@ -19,6 +19,14 @@ pylablib.aux\_libs.gui.device\_thread module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.gui.gui\_contoller module
+--------------------------------------------
+
+.. automodule:: pylablib.aux_libs.gui.gui_contoller
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.gui.helpers module
 -------------------------------------
 

@@ -18,7 +18,7 @@ class ECamFrame(object):
     A data frame for .ecam format.
 
     Args:
-        data: frame data (usually 2D or 3D numpy array)
+        data: frame data (numpy array with between 1 and 4 dimensions)
         uid(bytes): 8-byte unique ID of the frame (by default, generate a new random ID).
         timetamps(float): frame timestamp (by default, use current time)
         **kwargs: additional frame blocks (values and meaning depend on the block type, and can be expanded later)
@@ -240,7 +240,7 @@ class ECamFormatter(object):
         Read next frame starting at the current position within the file `f`.
         
         `return_format` is the format for return data. Can be ``"frame"`` (return :class:`ECamFrame` object with all metadata),
-            ``"image"`` (return only image array), or ``"raw"`` (return tuple ``(header, image)`` with raw data).
+        ``"image"`` (return only image array), or ``"raw"`` (return tuple ``(header, image)`` with raw data).
         """
         funcargparse.check_parameter_range(return_format,"return_format",{"frame","image","raw"})
         header=self._read_header(f)

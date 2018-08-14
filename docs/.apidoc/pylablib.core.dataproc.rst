@@ -60,6 +60,14 @@ pylablib.core.dataproc.iir\_transform\_setup module
     :undoc-members:
     :show-inheritance:
 
+pylablib.core.dataproc.image module
+-----------------------------------
+
+.. automodule:: pylablib.core.dataproc.image
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.core.dataproc.interpolate module
 -----------------------------------------
 

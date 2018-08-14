@@ -76,10 +76,26 @@ pylablib.aux\_libs.devices.Cryomagnetics module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.devices.DCAM module
+--------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.DCAM
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.devices.DCAM\_lib module
 -------------------------------------------
 
 .. automodule:: pylablib.aux_libs.devices.DCAM_lib
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pylablib.aux\_libs.devices.DCAM\_lib\_const module
+--------------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.DCAM_lib_const
     :members:
     :undoc-members:
     :show-inheritance:

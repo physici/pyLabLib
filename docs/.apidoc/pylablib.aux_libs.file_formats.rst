@@ -4,6 +4,14 @@ pylablib.aux\_libs.file\_formats package
 Submodules
 ----------
 
+pylablib.aux\_libs.file\_formats.ecam module
+--------------------------------------------
+
+.. automodule:: pylablib.aux_libs.file_formats.ecam
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.file\_formats.waveguide module
 -------------------------------------------------
 

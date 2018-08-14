@@ -1,3 +1,5 @@
+"""Binary files input/output"""
+
 
 from ..utils import general, py3
 import numpy as np
@@ -34,6 +36,11 @@ alltypes=general.merge_dicts(fdtypes,idtypes,sdtypes,pkdtypes)
 alltypes_inv=general.invert_dict(alltypes)
 
 def write_num(x, f, dtype):
+    """
+    Write a number `x` into file `f`.
+
+    `dtype` is the textual representation of data type (numpy-style).
+    """
     if dtype[0] not in "<>":
         dtype=default_byteorder+dtype
     if dtype in idtypes_inv:
@@ -43,6 +50,16 @@ def write_num(x, f, dtype):
     else:
         raise ValueError("unrecognzied dtype: {}".format(dtype))
 def write_str(s, f, dtype, strict=False):
+    """
+    Write a string `s` into a file `f`.
+
+    `dtype` is the textual representation of data type. Can be ``"s"`` (simply translate into bytes and write),
+    ``"sp"+sdtype`` (e.g., ``"sp<u2"``), where the string is prepended by its length written using ``sdtype`` format,
+    or ``"s"+len`` (e.g., ``"s16"``), where ``len`` is the textual representation of string length (written data is equivalent to ``"s"`` format).
+
+    If ``strict==True``, raise error if string length is incompatible with the format
+    (too long for a given ``"sp"``-type prefix, or doesn't agree with ``"s"``-type length).
+    """
     s=py3.as_bytes(s)
     if dtype=="s":
         f.write(s)
@@ -60,6 +77,13 @@ def write_str(s, f, dtype, strict=False):
     else:
         raise ValueError("unrecognzied dtype: {}".format(dtype))
 def write_pickle(v, f, dtype):
+    """
+    Write a value `v` into file `f` as a Python pickle object.
+
+    `dtype` is the textual representation of data type (numpy-style), and should be ``"pk"+proto+sdtype`` (e.g., ``"pk3<u2"``),
+    where ``proto`` is the textual representation of the pickle protocol,
+    and ``sdtype`` is the data type of the prepended string length (see ``"sp"+sdtype`` type in :func:`write_str`).
+    """
     if dtype.startswith("pk"):
         proto=int(dtype[2])
         sdtype=dtype[3:]
@@ -68,6 +92,12 @@ def write_pickle(v, f, dtype):
     else:
         raise ValueError("unrecognzied dtype: {}".format(dtype))
 def write_val(v, f, dtype):
+    """
+    Write an arbitrary value `v` into file `f` using the supplied `dtype`.
+
+    Storage type depends on `dtype`: can be string (see :func:`write_str`), number (see :func:`write_num`), or pickled value (see :func:`write_pickle`).
+    In addition, `dtype` can be a tuple of dtypes with length equal to the length of `v`, in which case the values in `v` are written sequentially.
+    """
     if isinstance(dtype,py3.textstring):
         if dtype.startswith("s"):
             write_str(v,f,dtype)
@@ -82,6 +112,11 @@ def write_val(v, f, dtype):
             write_val(el,f,dt)
 
 def read_num(f, dtype):
+    """
+    Read a number from file `f`.
+
+    `dtype` is the textual representation of data type (numpy-style).
+    """
     if dtype[0] not in "<>":
         dtype=default_byteorder+dtype
     if dtype in idtypes_inv:
@@ -91,6 +126,13 @@ def read_num(f, dtype):
     else:
         raise ValueError("unrecognzied dtype: {}".format(dtype))
 def read_str(f, dtype):
+    """
+    Read a string from file `f`.
+
+    `dtype` is the textual representation of data type.
+    Can be ``"sp"+sdtype`` (e.g., ``"sp<u2"``), where the string is prepended by its length written using ``sdtype`` format,
+    or ``"s"+len`` (e.g., ``"s16"``), where ``len`` is the textual representation of string length (i.e., read ``len`` bytes and translate the result into string).
+    """
     if dtype.startswith("sp"):
         sl=read_num(f,dtype[2:])
         return py3.as_str(f.read(sl))
@@ -100,6 +142,13 @@ def read_str(f, dtype):
     else:
         raise ValueError("unrecognzied dtype: {}".format(dtype))
 def read_pickle(f, dtype):
+    """
+    Read a value from file `f` as a Python pickle object.
+
+    `dtype` is the textual representation of data type (numpy-style), and should be ``"pk"+proto+sdtype`` (e.g., ``"pk3<u2"``),
+    where ``proto`` is the textual representation of the pickle protocol (ignored, added for compatibility with :func:`write_pickle`),
+    and ``sdtype`` is the data type of the prepended string length (see ``"sp"+sdtype`` type in :func:`write_str`).
+    """
     if dtype.startswith("pk"):
         sdtype=dtype[3:]
         v=read_str(f,"sp"+sdtype)
@@ -107,6 +156,12 @@ def read_pickle(f, dtype):
     else:
         raise ValueError("unrecognzied dtype: {}".format(dtype))
 def read_val(f, dtype):
+    """
+    Read an arbitrary value from file `f` using the supplied `dtype`.
+
+    Storage type depends on `dtype`: can be string (see :func:`read_str`), number (see :func:`read_num`), or pickled value (see :func:`read_pickle`).
+    In addition, `dtype` can be a tuple of dtypes with length equal to the length of `v`, in which case the values in `v` are read sequentially.
+    """
     if isinstance(dtype,py3.textstring):
         if dtype.startswith("s"):
             return read_str(f,dtype)

@@ -12,6 +12,14 @@ pylablib.core.datatable.column module
     :undoc-members:
     :show-inheritance:
 
+pylablib.core.datatable.datatable\_utils module
+-----------------------------------------------
+
+.. automodule:: pylablib.core.datatable.datatable_utils
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.core.datatable.indexing module
 ---------------------------------------
 
@@ -32,14 +40,6 @@ pylablib.core.datatable.table\_storage module
 ---------------------------------------------
 
 .. automodule:: pylablib.core.datatable.table_storage
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-pylablib.core.datatable.utils module
-------------------------------------
-
-.. automodule:: pylablib.core.datatable.utils
     :members:
     :undoc-members:
     :show-inheritance:

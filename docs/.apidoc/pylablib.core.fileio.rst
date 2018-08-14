@@ -4,6 +4,14 @@ pylablib.core.fileio package
 Submodules
 ----------
 
+pylablib.core.fileio.binio module
+---------------------------------
+
+.. automodule:: pylablib.core.fileio.binio
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.core.fileio.datafile module
 ------------------------------------
 
