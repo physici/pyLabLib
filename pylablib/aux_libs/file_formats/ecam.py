@@ -14,6 +14,15 @@ def gen_uid():
 
 
 class ECamFrame(object):
+    """
+    A data frame for .ecam format.
+
+    Args:
+        data: frame data (usually 2D or 3D numpy array)
+        uid(bytes): 8-byte unique ID of the frame (by default, generate a new random ID).
+        timetamps(float): frame timestamp (by default, use current time)
+        **kwargs: additional frame blocks (values and meaning depend on the block type, and can be expanded later)
+    """
     def __init__(self, data, uid="new", timestamp="new", **kwargs):
         object.__init__(self)
         self.data=data
@@ -27,11 +36,14 @@ class ECamFrame(object):
         self.blocks[key]=value
 
     def update_timestamp(self, timestamp=None):
+        """Update the frame timestamp (by default, use current time)"""
         self.timestamp=timestamp or time.time()
 
     def uid_to_int(self):
+        """Return UID as an 8-byte integer"""
         return int(np.frombuffer(self.uid,"<u8")[0]) if self.uid else None
     def uid_to_hex(self):
+        """Return UID as a 16-symbol hex string"""
         return "".join(["{:02x}".format(d) for d in self.uid]) if self.uid else None
 
 
@@ -39,10 +51,22 @@ class ECamFrame(object):
 
 
 
-current_version=0x01
-valid_magic=b"eCM"
-valid_versions=[0x01]
+current_version=0x0001
+valid_magic=b"eCAM\x0f64\x0b"
+valid_versions=[0x0001]
 default_pickle_proto=3
+_header_fields=[("header_size",4),("image_bytes",8),("shape",12),("dtype",2),("stype",2),
+                ("version",2),("magic",8),("uid",8),("timestamp",8)]
+_hf_sizes=dict(_header_fields)
+def _gen_offsets(fields):
+    offsets={}
+    off=0
+    for n,s in fields:
+        offsets[n]=off
+        off+=s
+    offsets["__end__"]=off
+    return offsets
+_hf_offsets=_gen_offsets(_header_fields)
 
 
 @contextlib.contextmanager
@@ -74,6 +98,20 @@ cam_params={0x01:("name","sp<u2"),0x02:("model","sp<u2"),0x03:("id","sp<u2"),0x1
 cam_params_inv=general.invert_dict(cam_params,kmap=lambda x: x[0])
 
 class ECamFormatter(object):
+    """
+    Formatter for .ecam files.
+
+    Class responsible for writing and reading arbitrary ECam frames.
+
+    Args:
+        stype(str): storage type for the data. Can be ``"raw"`` (write as raw binary),
+            ``"zlib"`` (raw binary compressed using standard Python zlib module), or ``"none"`` (write zeros instead of data).
+            Used only for writing; in reading, all storage types are supported.
+        dtype: default data dtype. If suppled, any written data will be converted to this dtype,
+            and any read data will have this dtype by default (unless specified explicitly). Otherwise, use supplied data dtype when writing.
+        shape(tuple): default data shape (tuple of length 2 or 3). If suppled, any written and read data is supposed to have this shape
+            (also use this as default shape if none is provided in the file).
+    """
     def __init__(self, stype="raw", dtype=None, shape=(None,None)):
         object.__init__(self)
         self.stype=stype
@@ -99,7 +137,7 @@ class ECamFormatter(object):
         elif btype=="pickle":
             ipos=f.tell()
             parsize=binio.read_num(f,"<u2")
-            f.seek(parsize)
+            f.seek(parsize,1)
             name=binio.read_str(f,"sp<u4")
             header_size=(f.tell()-ipos)
             if size>=header_size:
@@ -122,31 +160,31 @@ class ECamFormatter(object):
             header_size=binio.read_num(f,"<u4")
         except IndexError:
             raise StopIteration
-        if header_size<12 or (header_size<44 and header_size not in {12,24,26,28,32,40}):
+        if header_size in {0,4} or (header_size<_hf_offsets["__end__"] and header_size not in _hf_offsets.values()):
             raise ECamFormatError("bad file format: header size is {}".format(header_size))
         image_bytes=binio.read_num(f,"<u8")
-        if header_size>12:
-            shape=binio.read_val(f,("<u4","<u4","<u4"))
+        if header_size>_hf_offsets["shape"]:
+            shape=binio.read_val(f,("<u4",)*3)
         else:
             shape=self.shape
         if shape[2]==0:
             shape=shape[:2]
         if (None not in self.shape) and shape!=self.shape:
             raise ValueError("data shape {} doesn't agree with the formatter shape {}".format(shape,self.shape))
-        dtype=binio.read_num(f,"<u2") if header_size>24 else self.dtype
-        stype=binio.read_num(f,"<u2") if header_size>26 else self.stype
-        if header_size>28:
-            version=binio.read_num(f,"u1")
+        dtype=binio.read_num(f,"<u2") if header_size>_hf_offsets["dtype"] else self.dtype
+        stype=binio.read_num(f,"<u2") if header_size>_hf_offsets["stype"] else self.stype
+        if header_size>_hf_offsets["magic"]:
+            version=binio.read_num(f,"<u2")
             if version not in valid_versions:
                 raise ECamFormatError("bad file format: unsupported version 0x{:02x}".format(version))
-            magic=f.read(3)
+            magic=f.read(8)
             if magic!=valid_magic:
                 raise ECamFormatError("bad file format: invalid magic {}".format(magic))
         else:
             version=None
-        uid=f.read(8) if header_size>32 else None
-        timestamp=binio.read_num(f,"<f8") if header_size>40 else None
-        read_bytes=48
+        uid=f.read(8) if header_size>_hf_offsets["uid"] else None
+        timestamp=binio.read_num(f,"<f8") if header_size>_hf_offsets["timestamp"] else None
+        read_bytes=_hf_offsets["__end__"]
         blocks=[]
         while header_size>read_bytes:
             if read_bytes+2>header_size:
@@ -198,10 +236,17 @@ class ECamFormatter(object):
             img=np.fromstring(raw_data,dtype=df.to_desc(),count=nelem).reshape(header.shape)
         return img
     def skip_frame(self, f):
+        """Skip next frame starting at the current position within the file `f`"""
         header=self._read_header(f)
         f.seek(header.image_bytes,1)
         return header.header_size,header.image_bytes
     def read_frame(self, f, return_format="frame"):
+        """
+        Read next frame starting at the current position within the file `f`.
+        
+        `return_format` is the format for return data. Can be ``"frame"`` (return :class:`ECamFrame` object with all metadata),
+            ``"image"`` (return only image array), or ``"raw"`` (return tuple ``(header, image)`` with raw data).
+        """
         funcargparse.check_parameter_range(return_format,"return_format",{"frame","image","raw"})
         header=self._read_header(f)
         img=self._read_data(f,header)
@@ -262,7 +307,7 @@ class ECamFormatter(object):
             f.write(b"\x00"*bvalue)
         elif btype=="pickle":
             pn,pv=bvalue
-            binio.write_num(0,f,"<u2")
+            binio.write_num(2,f,"<u2")
             binio.write_num(default_pickle_proto,f,"<u2")
             binio.write_str(pn,f,"sp<u4")
             pickle.dump(pv,f,protocol=default_pickle_proto)
@@ -288,7 +333,7 @@ class ECamFormatter(object):
                 binio.write_num(header.stype,f,"<u2")
             else:
                 return
-            binio.write_num(header.version,f,"u1")
+            binio.write_num(header.version,f,"<u2")
             f.write(valid_magic)
             if header.uid is not None:
                 f.write(header.uid)
@@ -312,6 +357,11 @@ class ECamFormatter(object):
         else:
             raise ValueError("don't know how to write data {}".format(data))
     def write_frame(self, frame, f):
+        """
+        Read the supplied `frame` starting at the current position within the file `f`.
+        
+        `frame` can be either :class:`ECamFrame` object, or a numpy array (in which case no metadata is saved).
+        """
         header,data=self._format_frame(frame)
         self._write_header(header,f)
         self._write_image(header,data,f)
@@ -455,3 +505,14 @@ class ECamReader(object):
     def read_all(self):
         """Read all available frames"""
         return list(self.iterrange())
+
+def load_ecam(path, return_format="frame"):
+    """
+    Read .ecam file.
+
+    Args:
+        path(str): path to .ecam file.
+        return_format(str): format for return data. Can be ``"frame"`` (return :class:`ECamFrame` object with all metadata),
+            ``"image"`` (return only image array), or ``"raw"`` (return tuple ``(header, image)`` with raw data).
+    """
+    return list(ECamReader(path,return_format=return_format).iterrange())

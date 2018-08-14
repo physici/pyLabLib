@@ -170,9 +170,10 @@ class TableAccumulator(object):
             data.append(col)
         return data
     def get_data_rows(self, channels=None, maxlen=None):
-        return zip(*self.get_data_columns(maxlen=maxlen))
-    def get_data_dict(self, maxlen=None):
-        return dict(zip(self.channels,self.get_data_columns(maxlen=maxlen)))
+        return zip(*self.get_data_columns(channels=channels,maxlen=maxlen))
+    def get_data_dict(self, channels=None, maxlen=None):
+        channels=channels or self.channels
+        return dict(zip(channels,self.get_data_columns(maxlen=maxlen)))
 
 
 class TableAccumulatorThread(controller.QTaskThread):
