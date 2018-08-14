@@ -2,6 +2,7 @@
 from ..utils import general, py3
 import numpy as np
 import pickle
+import contextlib
 
 
 
@@ -46,8 +47,12 @@ def write_str(s, f, dtype, strict=False):
     if dtype=="s":
         f.write(s)
     elif dtype.startswith("sp"):
-        write_num(len(s),f,dtype[2:])
-        f.write(s)
+        iinfo=np.iinfo(dtype[2:])
+        if strict and len(s)>iinfo.max:
+            raise ValueError("string length {} doesn't agree with length dtype {}".format(len(s),dtype[2:]))
+        slen=min(iinfo.max,len(s))
+        write_num(slen,f,dtype[2:])
+        f.write(s[:slen])
     elif dtype.startswith("s"):
         if strict and len(s)!=int(dtype[1:]):
             raise ValueError("string length {} doesn't agree with dtype {}".format(len(s),int(dtype[1:])))
@@ -111,3 +116,22 @@ def read_val(f, dtype):
             return read_num(f,dtype)
     if isinstance(dtype,tuple):
         return tuple([ read_val(f,dt) for dt in dtype ])
+
+
+@contextlib.contextmanager
+def size_prepend(f, dtype, added=0):
+    """
+    Context manager that prepends the data written inside the block with its size (after the writing is done).
+
+    `dtype` specifies size format; `added` is added to the size when saving.
+    Note that this method requires back-seeking, so it doesn't work if the file is opened in append (``"a"``) mode;
+    use ``"w"`` or ``"r+"`` mode instead.
+    """
+    spos=f.tell()
+    write_num(0,f,dtype)
+    bpos=f.tell()
+    yield
+    epos=f.tell()
+    f.seek(spos)
+    write_num(epos-bpos+added,f,dtype)
+    f.seek(epos)

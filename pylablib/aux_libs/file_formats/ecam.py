@@ -5,7 +5,7 @@ from ...core.fileio import binio
 import numpy as np
 import numpy.random
 
-import time, collections, os.path, zlib, pickle, contextlib
+import time, collections, os.path, zlib, pickle
 
 
 def gen_uid():
@@ -55,8 +55,8 @@ current_version=0x0001
 valid_magic=b"eCAM\x0f64\x0b"
 valid_versions=[0x0001]
 default_pickle_proto=3
-_header_fields=[("header_size",4),("image_bytes",8),("shape",12),("dtype",2),("stype",2),
-                ("version",2),("magic",8),("uid",8),("timestamp",8)]
+_header_fields=[("header_size",4),("image_bytes",8),("version",2),("magic",8),("shape",16),("dtype",2),("stype",2),
+                ("uid",8),("timestamp",8)]
 _hf_sizes=dict(_header_fields)
 def _gen_offsets(fields):
     offsets={}
@@ -68,34 +68,29 @@ def _gen_offsets(fields):
     return offsets
 _hf_offsets=_gen_offsets(_header_fields)
 
-
-@contextlib.contextmanager
-def size_prepend(f, dtype, added=0):
-    spos=f.tell()
-    binio.write_num(0,f,dtype)
-    bpos=f.tell()
-    yield
-    epos=f.tell()
-    f.seek(spos)
-    binio.write_num(epos-bpos+added,f,dtype)
-    f.seek(epos)
-
-
-class ECamFormatError(IOError):
-    pass
-
-
-TBlock=collections.namedtuple("TBlock",["btype","value"])
-THeader=collections.namedtuple("THeader",["header_size","image_bytes","shape","dtype","stype","version","uid","timestamp","blocks"])
+THeader=collections.namedtuple("THeader",["header_size","image_bytes","version","shape","dtype","stype","uid","timestamp","blocks"])
 stypes={0x00:"none",0x01:"raw",0x10:"zlib"}
 stypes_inv=general.invert_dict(stypes)
 dtypes=general.merge_dicts(binio.fdtypes,binio.idtypes)
 dtypes_inv=general.invert_dict(dtypes)
+
+TBlock=collections.namedtuple("TBlock",["btype","value"])
 btypes={0x00:"none",0x01:"skip",0x10:"cam_params",0x20:"pickle"}
 btypes_inv=general.invert_dict(btypes)
-
-cam_params={0x01:("name","sp<u2"),0x02:("model","sp<u2"),0x03:("id","sp<u2"),0x10:("exposure","<f8"),0x20:("roi",("<u4",)*4)}
+cam_params={0x01:("name","sp<u2"),0x02:("model","sp<u2"),0x03:("id","sp<u2"),
+            0x10:("exposure","<f8"),0x11:("frame_rate","<f8"),
+            0x20:("roi",("<u4",)*4),0x21:("binning",("<u2",)*2),0x22:("pixel_max","<u8"),0x23:("pixel_min","<i8"),
+            0x30:("acq_mode","sp<u1"),0x31:("read_mode","sp<u1"),0x32:("pixel_mode","sp<u1"),
+            0x38:("timing_mode","sp<u1"),0x39:("trigger_mode","sp<u1"),0x3a:("trigger_level","<f8"),
+            0x40:("buffer_size","<u4"),0x41:("buffer_filled","<u4"),
+            0x80:("status","sp<u2"),0x81:("acq_status","sp<u2")}
 cam_params_inv=general.invert_dict(cam_params,kmap=lambda x: x[0])
+
+
+
+class ECamFormatError(IOError):
+    """Generic ECam reading error"""
+    pass
 
 class ECamFormatter(object):
     """
@@ -163,25 +158,25 @@ class ECamFormatter(object):
         if header_size in {0,4} or (header_size<_hf_offsets["__end__"] and header_size not in _hf_offsets.values()):
             raise ECamFormatError("bad file format: header size is {}".format(header_size))
         image_bytes=binio.read_num(f,"<u8")
+        if header_size>_hf_offsets["version"]:
+            version=binio.read_num(f,"<u2")
+            if version not in valid_versions:
+                raise ECamFormatError("bad file format: unsupported version 0x{:02x}".format(version))
+        else:
+            version=None
+        if header_size>_hf_offsets["magic"]:
+            magic=f.read(8)
+            if magic!=valid_magic:
+                raise ECamFormatError("bad file format: invalid magic {}".format(magic))
         if header_size>_hf_offsets["shape"]:
-            shape=binio.read_val(f,("<u4",)*3)
+            shape=binio.read_val(f,("<u4",)*4)
         else:
             shape=self.shape
-        if shape[2]==0:
-            shape=shape[:2]
+        shape=tuple([s for s in shape if s!=0])
         if (None not in self.shape) and shape!=self.shape:
             raise ValueError("data shape {} doesn't agree with the formatter shape {}".format(shape,self.shape))
         dtype=binio.read_num(f,"<u2") if header_size>_hf_offsets["dtype"] else self.dtype
         stype=binio.read_num(f,"<u2") if header_size>_hf_offsets["stype"] else self.stype
-        if header_size>_hf_offsets["magic"]:
-            version=binio.read_num(f,"<u2")
-            if version not in valid_versions:
-                raise ECamFormatError("bad file format: unsupported version 0x{:02x}".format(version))
-            magic=f.read(8)
-            if magic!=valid_magic:
-                raise ECamFormatError("bad file format: invalid magic {}".format(magic))
-        else:
-            version=None
         uid=f.read(8) if header_size>_hf_offsets["uid"] else None
         timestamp=binio.read_num(f,"<f8") if header_size>_hf_offsets["timestamp"] else None
         read_bytes=_hf_offsets["__end__"]
@@ -200,7 +195,7 @@ class ECamFormatter(object):
             bvalue=self._read_block(f,btype,bsize)
             blocks.append(TBlock(btype,bvalue))
             read_bytes+=(6+bsize)
-        return THeader(header_size,image_bytes,shape,dtype,stype,version,uid,timestamp,blocks)
+        return THeader(header_size,image_bytes,version,shape,dtype,stype,uid,timestamp,blocks)
     def _check_data_size(self, df, shape, data_bytes):
         nelem=int(np.prod(shape,dtype="u8"))
         if df.size*nelem!=data_bytes:
@@ -272,8 +267,8 @@ class ECamFormatter(object):
             data=data.astype(self.dtype)
         if (None not in self.shape) and data.shape!=self.shape:
             raise ValueError("data shape {} doesn't agree with the formatter shape {}".format(data.shape,self.shape))
-        if data.ndim not in [2,3]:
-            raise ValueError("can only save 2D and 3D arrays")
+        if data.ndim not in [1,2,3,4]:
+            raise ValueError("can only save 1D, 2D, 3D, and 4D arrays; got {}D".format(data.ndim))
         df=data_format.DataFormat.from_desc(str(data.dtype))
         dtype=df.to_desc()
         shape=data.shape
@@ -299,7 +294,7 @@ class ECamFormatter(object):
             elif k=="cam_params":
                 btype=btypes_inv["cam_params"]
                 blocks.append(TBlock(btype,v))
-        header=THeader(-1,dsize,shape,dtypes_inv[dtype],stypes_inv[self.stype],current_version,uid,timestamp,blocks)
+        header=THeader(-1,dsize,current_version,shape,dtypes_inv[dtype],stypes_inv[self.stype],uid,timestamp,blocks)
         return header,data
     def _write_block(self, f, btype, bvalue):
         btype=btypes[btype]
@@ -318,10 +313,12 @@ class ECamFormatter(object):
                     v=bvalue[pn]
                     binio.write_val(v,f,dtype)
     def _write_header(self, header, f):
-        with size_prepend(f,"<u4",4):
+        with binio.size_prepend(f,"<u4",4):
             binio.write_num(header.image_bytes,f,"<u8")
+            binio.write_num(header.version,f,"<u2")
+            f.write(valid_magic)
             if None not in header.shape:
-                shape=header.shape+(0,)*(3-len(header.shape))
+                shape=header.shape+(0,)*(4-len(header.shape))
                 np.asarray(shape,dtype="u4").astype("<u4").tofile(f)
             else:
                 return
@@ -333,8 +330,6 @@ class ECamFormatter(object):
                 binio.write_num(header.stype,f,"<u2")
             else:
                 return
-            binio.write_num(header.version,f,"<u2")
-            f.write(valid_magic)
             if header.uid is not None:
                 f.write(header.uid)
             else:
@@ -345,7 +340,7 @@ class ECamFormatter(object):
                 return
             for btype,bvalue in header.blocks:
                 binio.write_num(btype,f,"<u2")
-                with size_prepend(f,"<u4"):
+                with binio.size_prepend(f,"<u4"):
                     self._write_block(f,btype,bvalue)
     def _write_image(self, header, data, f):
         if data is None:
@@ -368,6 +363,9 @@ class ECamFormatter(object):
         return header.header_size,header.image_bytes
 
 
+
+
+
 def save_ecam(frames, path, append=True, formatter=None):
     """
     Save `frames` into a .ecam datafile.
@@ -381,6 +379,18 @@ def save_ecam(frames, path, append=True, formatter=None):
         f.seek(0,2)
         for fr in frames:
             formatter.write_frame(fr,f)
+
+def save_ecam_single(frame, path, append=True, **kwargs):
+    """
+    Save a single `frame` into a .ecam datafile.
+
+    If ``append==False``, clear the file before writing the frames.
+    ``**kwargs`` specify parameters passed to the :class:`ECamFormatter` constructor for the saving formatter.
+    """
+    formatter=ECamFormatter(**kwargs)
+    save_ecam([frame],path,append=append,formatter=formatter)
+
+
 
 
 
