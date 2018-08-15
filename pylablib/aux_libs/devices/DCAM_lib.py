@@ -241,11 +241,11 @@ class DCAMLib(object):
             return cstruct.to_struct()
         self.dcamdev_getcapability=wrapper(lib.dcamdev_getcapability, [HDCAM, DCAMDEV_CAPABILITY], ["hdcam", None], addargs=["domain","kind"], rvprep=[dcamdev_getcapability_prep], rvconv=[lambda s, *args: CDCAMDEV_CAPABILITY(s).capflag])
 
-        def dcamdev_outstring_prep(_, iString):
+        def dcamdev_getstring_prep(_, iString):
             cstruct=CDCAMDEV_STRING()
             cstruct.iString=iString
             return cstruct.to_struct()
-        self.dcamdev_getstring=wrapper(lib.dcamdev_getstring, [HDCAM, DCAMDEV_STRING], ["hdcam", None], addargs=["iString"], rvprep=[dcamdev_outstring_prep], rvconv=[lambda s, *args: ctypes.string_at(CDCAMDEV_STRING(s).text)])
+        self.dcamdev_getstring=wrapper(lib.dcamdev_getstring, [HDCAM, DCAMDEV_STRING], ["hdcam", None], addargs=["iString"], rvprep=[dcamdev_getstring_prep], rvconv=[lambda s, *args: ctypes.string_at(CDCAMDEV_STRING(s).text)])
         
         def dcamprop_getattr_prep(_, iProp):
             cstruct=CDCAMPROP_ATTR()
