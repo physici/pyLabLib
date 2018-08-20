@@ -125,8 +125,8 @@ def fullsplit(path, ignore_empty=True):
         path,name=os.path.split(path)
         if name!="" or not ignore_empty:
             names.append(name)
-        if path=="" or path[-1]=="\\":
-            if path!="\\"*len(path):
+        if path=="" or path[-1] in "\\/":
+            if not all([e in "\\/" for e in path]):
                 names.append(path)
             break
     return names[::-1]

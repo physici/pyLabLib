@@ -27,7 +27,6 @@ class LogFile(object):
     def _write_line(self, path, line, header=""):
         if os.path.exists(path):
             with open(path,"a") as f:
-                f.seek(0,2)
                 f.write("\n"+line)
         else:
             file_utils.ensure_dir(os.path.split(path)[0])
