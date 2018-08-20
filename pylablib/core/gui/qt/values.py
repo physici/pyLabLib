@@ -226,6 +226,8 @@ class ValuesTable(object):
     def add_handler(self, name, handler):
         self.handlers[name]=handler
         return handler
+    def remove_handler(self, name):
+        del self.handlers[name]
     def add_widget(self, name, widget):
         return self.add_handler(name,get_default_value_handler(widget))
     def add_table(self, name, table):
@@ -384,6 +386,8 @@ class IndicatorValuesTable(ValuesTable):
             self.indicator_handlers[name,ind_name]=handler
             return handler
         return None
+    def remove_indicator_handler(self, name):
+        del self.indicator_handlers[name]
     def add_widget_indicator(self, name, widget, label=None):
         return self.add_indicator_handler(name,get_default_indicator_handler(widget,label))
     def add_label_indicator(self, name, label, repr_func=None):

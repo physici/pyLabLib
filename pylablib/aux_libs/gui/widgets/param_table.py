@@ -1,6 +1,6 @@
 from ....core.gui.qt.widgets import edit, label as widget_label
 from ....core.gui.qt.thread import threadprop
-from ....core.gui.qt import values as values_module
+from ....core.gui.qt import values as values_module, utils
 from ....core.utils import py3, dictionary
 
 from PyQt5 import QtCore, QtWidgets
@@ -197,6 +197,20 @@ class ParamTable(QtWidgets.QWidget):
         for name in self.params:
             value=self.get_param(name)
             self.set_indicator(name,value)
+
+    def clear(self):
+        if self.display_table:
+            for name in self.params:
+                path=(self.display_table_root,name)
+                self.display_table.remove_handler(path)
+                self.display_table.remove_indicator_handler(path)
+        self.params={}
+        utils.clean_layout(self.formLayout,delete_layout=True)
+        self.formLayout = QtWidgets.QGridLayout(self)
+        self.formLayout.setSizeConstraint(QtWidgets.QLayout.SetDefaultConstraint)
+        self.formLayout.setContentsMargins(5,5,5,5)
+        self.formLayout.setObjectName(_fromUtf8("formLayout"))
+
     
     def __getitem__(self, name):
         return self.params[name].widget

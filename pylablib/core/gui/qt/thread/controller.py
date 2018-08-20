@@ -69,6 +69,16 @@ def remote_call(func):
         return self.call_in_thread_sync(func,args=(self,)+args,kwargs=kwargs,sync=True,same_thread_shortcut=True)
     return rem_func
 
+def call_in_thread(thread_name):
+    def wrapper(func):
+        @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
+        def rem_func(*args, **kwargs):
+            thread=get_controller(thread_name)
+            return thread.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=True,same_thread_shortcut=True)
+        return rem_func
+    return wrapper
+call_in_gui_thread=call_in_thread("gui")
+
 class QThreadController(QtCore.QObject):
     def __init__(self, name=None, kind="loop", signal_pool=None):
         QtCore.QObject.__init__(self)
@@ -624,13 +634,25 @@ def stop_controller(name=None, code=0, sync=True, require_controller=False):
         controller.stop(code=code)
         if sync:
             controller.sync_exec("stop")
+        return controller
     except threadprop.NoControllerThreadError:
         if require_controller:
             raise
-def stop_all_controllers(sync=True):
+def stop_all_controllers(sync=True, concurrent=True):
     global _running_threads_stopping
     with _running_threads_lock:
         _running_threads_stopping=True
         names=list(_running_threads.keys())
-    for n in names:
-        stop_controller(n,sync=sync)
+    if concurrent and sync:
+        current_ctl=get_controller().name
+        ctls=[]
+        for n in names:
+            if n!=current_ctl:
+                ctls.append(stop_controller(n,sync=False))
+        for ctl in ctls:
+            if ctl:
+                ctl.sync_exec("stop")
+        stop_controller(current_ctl,sync=True)
+    else:
+        for n in names:
+            stop_controller(n,sync=sync)

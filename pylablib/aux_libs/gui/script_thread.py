@@ -1,36 +1,62 @@
-from ...core.gui.qt.thread import controller,signal_pool
+from ...core.gui.qt.thread import controller,signal_pool,synchronizing
 from ...core.utils import general
 
 from PyQt5 import QtCore
 
 
-class ScriptThread(controller.QThreadController):
+
+class ScriptStopException(Exception):
+    """Exception for stopping script execution"""
+
+class ScriptThread(controller.QTaskThread):
     def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
-        controller.QThreadController.__init__(self,name=name,kind="run",signal_pool=signal_pool)
-        self.setupargs=setupargs or []
-        self.setupkwargs=setupkwargs or {}
+        controller.QTaskThread.__init__(self,name=name,setupargs=setupargs,setupkwargs=setupkwargs,signal_pool=signal_pool)
         self._monitor_signal.connect(self._on_monitor_signal)
         self._monitored_signals={}
+        self.running=False
+        self.stop_request=False
+        self.add_command("start_script",self._start_script)
 
     def process_message(self, tag, value):
+        if tag=="control.start":
+            self.c.start_script()
+            if self.running:
+                self.stop_request=True
+        if tag=="control.stop":
+            self.stop_request=True
+        return False
+    def process_signal(self, src, tag, value):
         return False
 
     def setup_script(self, *args, **kwargs):
         pass
-    def process_signal(self, src, tag, value):
-        return False
+    def finalize_script(self):
+        self.interrupt_script()
     def run_script(self):
         pass
-    def finalize_script(self):
+    def interrupt_script(self):
         pass
+    def check_stop(self):
+        if self.stop_request:
+            self.stop_request=False
+            raise ScriptStopException()
 
-    def on_start(self):
-        self.setup_script(*self.setupargs,**self.setupkwargs)
-    def on_finish(self):
+
+
+    def setup_task(self, *args, **kwargs):
+        self.setup_script(*args,**kwargs)
+    def finalize_task(self):
         self.finalize_script()
 
-    def run(self):
-        self.run_script()
+    def _start_script(self):
+        self.running=True
+        try:
+            self.run_script()
+        except ScriptStopException:
+            pass
+        finally:
+            self.interrupt_script()
+        self.running=False
 
     _monitor_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")
@@ -71,3 +97,9 @@ class ScriptThread(controller.QThreadController):
         if self.new_monitored_signals_number(mon):
             return self._monitored_signals[mon][1].pop(0)
         return None
+
+
+    def start_execution(self):
+        self.send_message("control.start",None)
+    def stop_execution(self):
+        self.send_message("control.stop",None)
