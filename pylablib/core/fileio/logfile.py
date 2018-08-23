@@ -24,18 +24,18 @@ class LogFile(object):
     def _get_timestamp_line(self, timestamp):
         return "{:.3f}".format(timestamp)
     
-    def _write_line(self, path, line, header=""):
+    def _write_lines(self, path, lines, header=""):
         if os.path.exists(path):
             with open(path,"a") as f:
-                f.write("\n"+line)
+                f.write("\n"+"\n".join(lines))
         else:
             file_utils.ensure_dir(os.path.split(path)[0])
             with open(path,"a") as f:
                 if header:
                     f.write(header+"\n")
-                f.write(line)
+                f.write("\n"+"\n".join(lines))
                 
-    def write_line(self, line, header="", add_timestamp=True):
+    def write_lines(self, lines, header="", add_timestamp=True):
         """
         Write a single line into the file.
         
@@ -48,9 +48,9 @@ class LogFile(object):
         """
         timestamp=time.time()
         if add_timestamp:
-            line=self._get_timestamp_line(timestamp)+self.sep+line
-        path=self._get_path(line,header,timestamp)
-        self._write_line(path,line,header)
+            lines=[self._get_timestamp_line(timestamp)+self.sep+line for line in lines]
+        path=self._get_path(lines[0],header,timestamp)
+        self._write_lines(path,lines,header)
     def write_dataline(self, data, columns=None, fmt=None, add_timestamp=True):
         """
         Write a single data line into the file. 
@@ -90,7 +90,9 @@ class LogFile(object):
         fmt=fmt or self.default_fmt
         if fmt is None:
             fmt=[None]*datalen
+        lines=[]
         for row in data:
             row=[string.to_string(v,location="entry") if f is None else ("{:"+f+"}").format(v) for f,v in zip(fmt,row)]
             line=self.sep.join(row)
-            self.write_line(line,header,add_timestamp=add_timestamp)
+            lines.append(line)
+        self.write_lines(lines,header,add_timestamp=add_timestamp)

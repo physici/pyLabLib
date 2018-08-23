@@ -16,23 +16,28 @@ class M2Error(RuntimeError):
     """
     pass
 class M2ICE(IDevice):
-    def __init__(self, addr, port, timeout=3., start_link=True, use_websocket=True):
+    def __init__(self, addr, port, timeout=3., start_link=True, use_websocket=True, only_websocket=False):
         IDevice.__init__(self)
         self.tx_id=1
         self.conn=(addr,port)
         self.timeout=timeout
-        self.open()
-        if start_link:
-            self.start_link()
+        self.socket=None
+        if not only_websocket:
+            self.open()
+            if start_link:
+                self.start_link()
         self._last_status={}
         self.use_websocket=use_websocket
 
     def open(self):
+        self.close()
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen",timeout=self.timeout)
         self.socket.connect(*self.conn)
         self._last_status={}
     def close(self):
-        self.socket.close()
+        if self.socket is not None:
+            self.socket.close()
+            self.socket=None
     def is_opened(self):
         return self.socket.is_connected()
 
@@ -135,11 +140,12 @@ class M2ICE(IDevice):
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def _wait_for_websocket_status(self, ws, present_key=None, nmax=20):
+        full_data={}
         for _ in range(nmax):
             data=ws.recv()
-            data=json.loads(data)
+            full_data.update(json.loads(data))
             if present_key is None or present_key in data:
-                return data
+                return full_data
     def _read_websocket_status(self, present_key=None, nmax=20):
         if self.use_websocket:
             ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
@@ -151,7 +157,7 @@ class M2ICE(IDevice):
                 ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
-    def _read_muli_websocket_status(self, n):
+    def _read_multi_websocket_status(self, n):
         if self.use_websocket:
             ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
             try:
@@ -200,7 +206,7 @@ class M2ICE(IDevice):
                 reply[k]=reply[k][0]
         return reply
     def get_full_web_status(self):
-        return self._read_websocket_status() if self.use_websocket else None
+        return self._read_websocket_status(present_key="boot_files") if self.use_websocket else None
     def _as_web_status(self, status):
         if status=="auto":
             status="new" if self.use_websocket else None
@@ -232,6 +238,8 @@ class M2ICE(IDevice):
             self.wait_for_report("set_wave_m",timeout=timeout)
     def check_tuning_report(self):
         return self.check_report("set_wave_m")
+    def wait_for_tuning(self, timeout=None):
+        self.wait_for_report("set_wave_m",timeout=timeout)
     def get_tuning_status(self):
         status=self.get_full_tuning_status()["status"][0]
         return ["idle","nolink","tuning","locked"][status]
@@ -269,12 +277,16 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("tune_etalon")
     def lock_etalon(self, sync=True):
+        if self.get_etalon_lock_status()=="on":
+            return
         _,reply=self.query("etalon_lock",{"operation":"on"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't lock etalon")
         if sync:
             self.wait_for_report("etalon_lock")
     def unlock_etalon(self, sync=True):
+        if self.get_etalon_lock_status()=="off":
+            return
         self.unlock_reference_cavity(sync=True)
         _,reply=self.query("etalon_lock",{"operation":"off"},report=True)
         if reply["status"][0]==1:
@@ -382,7 +394,7 @@ class M2ICE(IDevice):
             elif reply["operation"][0]==1:
                 status["status"]="scanning"
             status["range"]=c/(reply["start"][0]/1E9),c/(reply["stop"][0]/1E9)
-            status["current"]=c/(reply["current"][0]/1E9)
+            status["current"]=c/(reply["current"][0]/1E9) if reply["current"][0] else 0
         elif reply["status"][0]==2:
             raise M2Error("can't stop TeraScan: TeraScan not available")
         web_status=self._as_web_status(web_status)
@@ -400,8 +412,18 @@ class M2ICE(IDevice):
     def _check_fast_scan_type(self, scan_type):
         if scan_type not in self._fast_scan_types:
             raise M2Error("unknown fast scan type: {}".format(scan_type))
-    def start_fast_scan(self, scan_type, width, time, sync=False):
+    def start_fast_scan(self, scan_type, width, time, sync=False, setup_locks=True):
         self._check_fast_scan_type(scan_type)
+        if setup_locks:
+            if scan_type.startswith("cavity"):
+                self.lock_etalon()
+                self.lock_reference_cavity()
+            elif scan_type.startswith("resonator"):
+                self.lock_etalon()
+                self.unlock_reference_cavity()
+            elif scan_type.startswith("etalon"):
+                self.unlock_reference_cavity()
+                self.unlock_etalon()
         _,reply=self.query("fast_scan_start",{"scan":scan_type,"width":[width/1E9],"time":[time]})
         if reply["status"][0]==1:
             raise M2Error("can't start fast scan: width too great for the current tuning position")
