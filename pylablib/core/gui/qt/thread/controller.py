@@ -20,6 +20,8 @@ _running_threads_notifier=synchronizing.QMultiThreadNotifier()
 _running_threads_stopping=False
 
 
+_exception_print_lock=threading.Lock()
+
 def exsafe(func):
     """Decorator that intercepts exceptions raised by `func` and stops the execution in a controlled manner (quitting the main thread)"""
     @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
@@ -27,12 +29,13 @@ def exsafe(func):
         try:
             return func(*args,**kwargs)
         except:
-            try:
-                ctl_name=get_controller(wait=False).name
-                print("Exception raised in thread '{}' executing function '{}':".format(ctl_name,func.__name__))
-            except threadprop.NoControllerThreadError:
-                print("Exception raised in uncontroled thread executing function '{}':".format(func.__name__))
-            traceback.print_exc()
+            with _exception_print_lock:
+                try:
+                    ctl_name=get_controller(wait=False).name
+                    print("Exception raised in thread '{}' executing function '{}':".format(ctl_name,func.__name__))
+                except threadprop.NoControllerThreadError:
+                    print("Exception raised in uncontroled thread executing function '{}':".format(func.__name__))
+                traceback.print_exc()
             try:
                 stop_controller("gui",code=1,sync=False)
             except threadprop.NoControllerThreadError:
@@ -134,8 +137,8 @@ class QThreadController(QtCore.QObject):
         self._messaged.connect(self._get_message)
         self._interrupt_called.connect(self._on_call_in_thread)
         if self.kind=="main":
-            threadprop.get_app().aboutToQuit.connect(self._on_finish_event,type=QtCore.Qt.QueuedConnection)
-            threadprop.get_app().lastWindowClosed.connect(self._on_last_window_closed)
+            threadprop.get_app().aboutToQuit.connect(self._on_finish_event,type=QtCore.Qt.DirectConnection)
+            threadprop.get_app().lastWindowClosed.connect(self._on_last_window_closed,type=QtCore.Qt.DirectConnection)
             self._recv_started_event.connect(self._on_start_event,type=QtCore.Qt.QueuedConnection) # invoke delayed start event (call in the main loop)
             self._recv_started_event.emit()
         else:
@@ -195,15 +198,16 @@ class QThreadController(QtCore.QObject):
         self._stop_requested=False
         self.finished.emit()
         try:
-            # self.check_messages()
+            self.check_messages()
             self.on_finish()
+            self.check_messages()
         finally:
             self._running=False
             for uid in self._signal_pool_uids:
                 self._signal_pool.unsubscribe(uid)
-            self.notify_exec("stop")
             if self.kind=="main":
                 stop_all_controllers(stop_self=False)
+            self.notify_exec("stop")
             unregister_controller(self)
             self._stop_requested=is_stopped
             self.thread.quit() # stop event loop (no regular messages processed after this call, although loop is run manually in the thread finalizing procedure)
@@ -533,7 +537,7 @@ class QMultiRepeatingThreadController(QThreadController):
                     self.change_job_period(name,p)
             except StopIteration:
                 self.stop_batch_job(name)
-        self.add_job(name,do_step,period)
+        self.add_job(name,do_step,period,initial_call=False)
     def batch_job_running(self, name):
         if name not in self.batch_jobs:
             raise ValueError("job {} doesn't exists".format(name))
@@ -554,23 +558,28 @@ class QMultiRepeatingThreadController(QThreadController):
     def _get_next_job(self, ct):
         if not self._jobs_list:
             return None,None
-        idx=None
+        name=None
         left=None
-        for i,n in enumerate(self._jobs_list):
+        for n in self._jobs_list:
             t=self.timers[n]
             l=t.time_left(ct)
             if l==0:
-                idx,left=i,0
+                name,left=n,0
                 break
             elif (left is None) or (l<left):
-                idx=i
-                left=l
-        n=self._jobs_list.pop(idx)
-        self._jobs_list.append(n)
-        return n,left
+                name,left=n,l
+        return name,left
+    def _acknowledge_job(self, name):
+        try:
+            idx=self._jobs_list.index(name)
+            self._jobs_list.pop(idx)
+            self._jobs_list.append(name)
+            self.timers[name].acknowledge(nmin=1)
+        except ValueError:
+            pass
     def check_commands(self):
         while self.new_messages_number("control.execute"):
-            self.pop_message("control.execute")
+            call=self.pop_message("control.execute")
             call()
     
     def on_start(self):
@@ -583,17 +592,21 @@ class QMultiRepeatingThreadController(QThreadController):
             if name is None:
                 self.sleep(self._new_jobs_check_period)
             else:
+                run_job=True
                 if (self._last_sync_time is None) or (self._last_sync_time+self.sync_period<=ct):
                     self._last_sync_time=ct
-                    if to:
-                        self.sleep(to)
-                    else:
+                    if not to:
                         self.check_messages()
-                elif to:
-                    time.sleep(to)
-                job=self.jobs[name]
-                self.timers[name].acknowledge(nmin=1)
-                job(*self.args,**self.kwargs)
+                if to:
+                    if to>self._new_jobs_check_period:
+                        run_job=False
+                        self.sleep(self._new_jobs_check_period)
+                    else:
+                        self.sleep(to)
+                if run_job:
+                    self._acknowledge_job(name)
+                    job=self.jobs[name]
+                    job(*self.args,**self.kwargs)
             self.check_commands()
     def on_finish(self):
         for n in self.batch_jobs:
@@ -699,7 +712,10 @@ class QTaskThread(QMultiRepeatingThreadController):
     def wait_for_variable(self, name, pred, timeout=None):
         if not hasattr(pred,"__call__"):
             v=pred
-            pred=lambda x: x==v
+            if isinstance(pred,(tuple,list,set,dict)):
+                pred=lambda x: x in v
+            else:
+                pred=lambda x: x==v
         ctl=threadprop.current_controller()
         with self._params_exp_lock:
             self._params_exp.setdefault(name,[]).append(ctl)

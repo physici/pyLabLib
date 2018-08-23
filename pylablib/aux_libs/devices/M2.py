@@ -308,6 +308,8 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("fine_tune_cavity")
     def lock_reference_cavity(self, sync=True):
+        if self.get_reference_cavity_lock_status()=="on":
+            return
         self.lock_etalon(sync=True)
         _,reply=self.query("cavity_lock",{"operation":"on"},report=True)
         if reply["status"][0]==1:
@@ -315,6 +317,8 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("cavity_lock")
     def unlock_reference_cavity(self, sync=True):
+        if self.get_reference_cavity_lock_status()=="off":
+            return
         _,reply=self.query("cavity_lock",{"operation":"off"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't unlock reference cavity")
@@ -369,8 +373,7 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("scan_stitch_op")
     def check_terascan_report(self):
-        self.update_reports()
-        return self.get_last_report("scan_stitch_op")
+        return self.check_report("scan_stitch_op")
     def stop_terascan(self, scan_type, sync=False):
         self._check_terascan_type(scan_type)
         _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"stop"},report=True)
@@ -424,7 +427,7 @@ class M2ICE(IDevice):
             elif scan_type.startswith("etalon"):
                 self.unlock_reference_cavity()
                 self.unlock_etalon()
-        _,reply=self.query("fast_scan_start",{"scan":scan_type,"width":[width/1E9],"time":[time]})
+        _,reply=self.query("fast_scan_start",{"scan":scan_type,"width":[width/1E9],"time":[time]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't start fast scan: width too great for the current tuning position")
         elif reply["status"][0]==2:
@@ -437,6 +440,8 @@ class M2ICE(IDevice):
             raise M2Error("can't start fast scan: time >10000 seconds")
         if sync:
             self.wait_for_report("fast_scan_start")
+    def check_fast_scan_report(self):
+        return self.check_report("fast_scan_start")
     def stop_fast_scan(self, scan_type, return_to_start=True, sync=False):
         self._check_fast_scan_type(scan_type)
         _,reply=self.query("fast_scan_stop" if return_to_start else "fast_scan_stop_nr",{"scan":scan_type})
@@ -464,6 +469,8 @@ class M2ICE(IDevice):
             raise M2Error("can't poll fast scan: ERC not fitted")
         elif reply["status"][0]==4:
             raise M2Error("can't poll fast scan: invalid scan type")
+        else:
+            raise M2Error("can't determine fast scan status: {}".format(reply["status"][0]))
         status["value"]=reply["tuner_value"][0]
         return status
 
@@ -484,30 +491,31 @@ class M2ICE(IDevice):
         attempts=0
         while True:
             operating=False
-            for scan_type in ["medium","fine","line"]:
-                stat=self.get_terascan_status(scan_type)
-                if stat["status"]!="stopped":
-                    operating=True
-                    self.stop_terascan(scan_type)
-                    time.sleep(0.5)
-                    if attempts>3:
-                        self.stop_scan_web(scan_type)
-                    if attempts>6:
-                        rate=self._default_terascan_rates[scan_type]
-                        self.setup_terascan(scan_type,(stat["current"],stat["current"]+rate*10),rate)
-                        self.start_terascan(scan_type)
-                        time.sleep(1.)
-                        self.stop_terascan(scan_type)
-            for scan_type in self._fast_scan_types:
-                try:
-                    if self.get_fast_scan_status(scan_type)["status"]!="stopped":
+            if not (self.use_websocket and self.get_full_web_status()["scan_status"]==0):
+                for scan_type in ["medium","fine","line"]:
+                    stat=self.get_terascan_status(scan_type)
+                    if stat["status"]!="stopped":
                         operating=True
-                        self.stop_fast_scan(scan_type)
+                        self.stop_terascan(scan_type)
                         time.sleep(0.5)
                         if attempts>3:
                             self.stop_scan_web(scan_type)
-                except M2Error:
-                    pass
+                        if attempts>6:
+                            rate=self._default_terascan_rates[scan_type]
+                            self.setup_terascan(scan_type,(stat["current"],stat["current"]+rate*10),rate)
+                            self.start_terascan(scan_type)
+                            time.sleep(1.)
+                            self.stop_terascan(scan_type)
+                for scan_type in self._fast_scan_types:
+                    try:
+                        if self.get_fast_scan_status(scan_type)["status"]!="stopped":
+                            operating=True
+                            self.stop_fast_scan(scan_type)
+                            time.sleep(0.5)
+                            if attempts>3:
+                                self.stop_scan_web(scan_type)
+                    except M2Error:
+                        pass
             if self.get_tuning_status()=="tuning":
                 operating=True
                 self.stop_tuning()
@@ -515,6 +523,7 @@ class M2ICE(IDevice):
                 operating=True
                 self.stop_tuning_table()
             if (not repeated) or (not operating):
-                return
+                break
             time.sleep(0.1)
             attempts+=1
+        return operating
