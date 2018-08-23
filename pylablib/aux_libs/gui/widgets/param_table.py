@@ -53,7 +53,7 @@ class ParamTable(QtWidgets.QWidget):
         changed_signal=params.value_handler.value_changed_signal()
         if changed_signal:
             changed_signal.connect(lambda value: self.value_changed.emit(name,value))
-    def add_simple_widget(self, name, widget, label=None, value_handler=None):
+    def add_simple_widget(self, name, widget, label=None, value_handler=None, add_indicator=None):
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
         row=self.formLayout.rowCount()
@@ -65,7 +65,9 @@ class ParamTable(QtWidgets.QWidget):
         else:
             wlabel=None
         value_handler=value_handler or values_module.get_default_value_handler(widget)
-        if self.add_indicator:
+        if add_indicator is None:
+            add_indicator=self.add_indicator
+        if add_indicator:
             windicator=QtWidgets.QLabel(self)
             windicator.setObjectName(_fromUtf8("{}__indicator".format(name)))
             self.formLayout.addWidget(windicator,row,2)
@@ -73,9 +75,9 @@ class ParamTable(QtWidgets.QWidget):
         else:
             indicator_handler=None
         if wlabel is None:
-            self.formLayout.addWidget(widget,row,0,1,2)
+            self.formLayout.addWidget(widget,row,0,1,2 if add_indicator else 3)
         else:
-            self.formLayout.addWidget(widget,row,1)
+            self.formLayout.addWidget(widget,row,1,1,1 if add_indicator else 2)
         self._add_widget(name,self.ParamRow(widget,wlabel,value_handler,indicator_handler))
         return widget
 
@@ -94,19 +96,19 @@ class ParamTable(QtWidgets.QWidget):
         self._add_widget(name,self.ParamRow(widget,None,value_handler,indicator_handler))
         return widget
 
-    def add_button(self, name, caption, checkable=False, value=False, label=None):
+    def add_button(self, name, caption, checkable=False, value=False, label=None, add_indicator=None):
         widget=QtWidgets.QPushButton(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(name))
         widget.setCheckable(checkable)
         widget.setChecked(value)
-        return self.add_simple_widget(name,widget,label=label)
-    def add_check_box(self, name, caption, value=False, label=None):
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
+    def add_check_box(self, name, caption, value=False, label=None, add_indicator=None):
         widget=QtWidgets.QCheckBox(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(name))
         widget.setChecked(value)
-        return self.add_simple_widget(name,widget,label=label)
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
     def add_text_label(self, name, value=None, label=None):
         widget=QtWidgets.QLabel(self)
         widget.setObjectName(_fromUtf8(name))
@@ -117,28 +119,28 @@ class ParamTable(QtWidgets.QWidget):
         widget=widget_label.LVNumLabel(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(name))
         return self.add_simple_widget(name,widget,label=label)
-    def add_text_edit(self, name, value=None, label=None):
+    def add_text_edit(self, name, value=None, label=None, add_indicator=None):
         widget=edit.LVTextEdit(self,value=value)
         widget.setObjectName(_fromUtf8(name))
-        return self.add_simple_widget(name,widget,label=label)
-    def add_num_edit(self, name, value=None, limiter=None, formatter=None, label=None):
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
+    def add_num_edit(self, name, value=None, limiter=None, formatter=None, label=None, add_indicator=None):
         widget=edit.LVNumEdit(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(name))
-        return self.add_simple_widget(name,widget,label=label)
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
     def add_progress_bar(self, name, value=None, label=None):
         widget=QtWidgets.QProgressBar(self)
         widget.setObjectName(_fromUtf8(name))
         if value is not None:
             widget.setValue(value)
         return self.add_simple_widget(name,widget,label=label)
-    def add_combo_box(self, name, value=None, options=None, label=None):
+    def add_combo_box(self, name, value=None, options=None, label=None, add_indicator=None):
         widget=QtWidgets.QComboBox(self)
         widget.setObjectName(_fromUtf8(name))
         if options is not None:
             widget.addItems(options)
         if value is not None:
             widget.setCurrentIndex(value)
-        return self.add_simple_widget(name,widget,label=label)
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
 
     def add_spacer(self, height):
         spacer=QtWidgets.QSpacerItem(1,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Expanding)

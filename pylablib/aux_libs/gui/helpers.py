@@ -18,8 +18,8 @@ class StreamFormerThread(controller.QThreadController):
         self._row_lock=threading.RLock()
         self._row_cnt=0
         self.block_period=1
-        self.new_block_done.connect(self._on_new_block_slot,type=QtCore.Qt.QueuedConnection)
-        self.new_row_done.connect(self._add_new_row,type=QtCore.Qt.QueuedConnection)
+        self._new_block_done.connect(self._on_new_block_slot,type=QtCore.Qt.QueuedConnection)
+        self._new_row_done.connect(self._add_new_row,type=QtCore.Qt.QueuedConnection)
         self.setupargs=setupargs or []
         self.setupkwargs=setupkwargs or {}
 
@@ -27,7 +27,7 @@ class StreamFormerThread(controller.QThreadController):
         pass
     def on_new_row(self, row):
         return row
-    new_block_done=QtCore.pyqtSignal()
+    _new_block_done=QtCore.pyqtSignal()
     @controller.exsafeSlot()
     def _on_new_block_slot(self):
         self.on_new_block()
@@ -78,8 +78,8 @@ class StreamFormerThread(controller.QThreadController):
         for _,ch in viewitems(self.channels):
             if ch.required and not ch.data:
                 return
-        self.new_row_done.emit()
-    new_row_done=QtCore.pyqtSignal()
+        self._new_row_done.emit()
+    _new_row_done=QtCore.pyqtSignal()
     @controller.exsafeSlot()
     def _add_new_row(self):
         with self._channel_lock:
@@ -94,7 +94,7 @@ class StreamFormerThread(controller.QThreadController):
             self._row_cnt+=1
             if self.block_period and self._row_cnt>=self.block_period:
                 self._row_cnt=0
-                self.new_block_done.emit()
+                self._new_block_done.emit()
 
 
 
@@ -170,7 +170,7 @@ class TableAccumulator(object):
             data.append(col)
         return data
     def get_data_rows(self, channels=None, maxlen=None):
-        return zip(*self.get_data_columns(channels=channels,maxlen=maxlen))
+        return list(zip(*self.get_data_columns(channels=channels,maxlen=maxlen)))
     def get_data_dict(self, channels=None, maxlen=None):
         channels=channels or self.channels
         return dict(zip(channels,self.get_data_columns(maxlen=maxlen)))

@@ -2,7 +2,7 @@ from . import threadprop
 from ....mthread import notifier
 from ....utils import general
 
-import  threading
+import threading, time
 
 
 class QThreadNotifier(notifier.ISkippableNotifier):
@@ -89,3 +89,33 @@ class QSyncCall(object):
         return self.synchronizer.wait(timeout)
     def done(self):
         return self.synchronizer.done_wait()
+
+
+
+
+class SignalSynchronizer(object):
+    def __init__(self, func, limit_queue=1, limit_period=0, dest_controller=None):
+        dest_controller=dest_controller or threadprop.current_controller()
+        def call(*args):
+            dest_controller.call_in_thread_callback(func,args,callback=self._call_done)
+        self.call=call
+        self.limit_queue=limit_queue
+        self.queue_size=0
+        self.limit_period=limit_period
+        self.last_call_time=None
+        self.lock=threading.Lock()
+    def _call_done(self, _):
+        with self.lock:
+            self.queue_size-=1
+            
+    def __call__(self, src, tag, value):
+        with self.lock:
+            if self.limit_queue and self.queue_size>=self.limit_queue:
+                return
+            if self.limit_period:
+                t=time.time()
+                if (self.last_call_time is not None) and (self.last_call_time+self.limit_period>t):
+                    return
+                self.last_call_time=t
+            self.queue_size+=1
+        self.call(src,tag,value)
