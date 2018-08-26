@@ -150,6 +150,14 @@ class Dictionary(object):
         else:
             raise ValueError("{0} isn't a tree".format(source))
     @staticmethod
+    def _is_empty(source):
+        if isinstance(source, Dictionary):
+            return not source._data
+        elif Dictionary._is_branch(source):
+            return not source
+        else:
+            return False
+    @staticmethod
     def is_dictionary(obj, generic=True):
         """
         Determine if the object is a dictionary.
@@ -244,6 +252,10 @@ class Dictionary(object):
                     - ``'normalize'`` -- copy while normalizing all the keys according to the current rules.
         """
         funcargparse.check_parameter_range(branch_option,"branch_option",{"attach","copy","normalize"})
+        if self._is_empty(value):
+            if force:
+                self.del_entry(path)
+            return self
         path=self._normalize_path(path)
         if path==[]:
             raise KeyError("can't reassign root")

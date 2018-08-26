@@ -637,9 +637,9 @@ class QTaskThread(QMultiRepeatingThreadController):
     def process_signal(self, src, tag, value):
         pass
     def process_command(self, name, *args, **kwargs):
-        self.process_named_command(name,*args,**kwargs)
+        return self.process_named_command(name,*args,**kwargs)
     def process_query(self, name, *args, **kwargs):
-        self.process_named_command(name,*args,**kwargs)
+        return self.process_named_command(name,*args,**kwargs)
     def process_interrupt(self, *args, **kwargs):
         pass
     def finalize_task(self):
@@ -662,7 +662,7 @@ class QTaskThread(QMultiRepeatingThreadController):
 
     def process_named_command(self, name, *args, **kwargs):
         if name in self._commands:
-            self._commands[name](*args,**kwargs)
+            return self._commands[name](*args,**kwargs)
         else:
             raise KeyError("unrecognized command {}".format(name))
 

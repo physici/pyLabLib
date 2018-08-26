@@ -204,7 +204,7 @@ class NIDAQ(IDevice):
     def setup_clock(self, rate, src=None):
         if self.ai_task.ai_channels:
             if src==self.clk_src:
-                self.ai_task.timing.samp_clk_rate=self.rate
+                self.ai_task.timing.samp_clk_rate=rate
             else:
                 if src:
                     src=self._build_channel_name(src)
@@ -248,13 +248,13 @@ class NIDAQ(IDevice):
             ais=self.ai_task.read(n,timeout=timeout)
             if len(self.ai_task.ai_channels)==1:
                 ais=[ais]
-            cis=[np.array(self.ci_tasks[ci][0].read(n)) for ci in self.ci_names]
+            cis=[np.array(self.ci_tasks[ci][0].read(n),dtype="u4") for ci in self.ci_names]
             for i,ci in enumerate(self.ci_names):
                 if self.ci_tasks[ci][2]!="acc":
                     last_cnt=cis[i][-1]
                     cis[i][1:]-=cis[i][:-1]
-                    cis[i][0]-=self.ci_counters[ci]
-                    self.ci_counters[ci]=last_cnt
+                    cis[i][0]=(int(cis[i][0])-self.ci_counters[ci])%int(2**32)
+                    self.ci_counters[ci]=int(last_cnt)
                     if self.ci_tasks[ci][2]=="rate":
                         cis[i]=cis[i]*self.rate
             return np.column_stack(ais+cis)
