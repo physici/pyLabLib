@@ -267,8 +267,8 @@ class Fitter(object):
         bound_func=self.func.bind_namelist(self.xarg_name,**params_dict)
         return_val=params_dict,bound_func
         if return_stderr:
-            p_names=list(fit_parameters.keys())
-            props=[fit_parameters[name] for name in p_names]
+            p_names=list(params_dict.keys())
+            props=[params_dict[name] for name in p_names]
             init_p=self._pack_parameters(props)
             unpacker=self._build_unpacker(props)
             stderr=dict(zip(p_names,unpacker([0]*len(init_p))))

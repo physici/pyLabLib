@@ -1013,6 +1013,42 @@ class PrefixTree(Dictionary):
             else:
                 pfxs.append( (s_path[:cut_pos] if return_path else data) )
         return pfxs
+
+
+
+def combine_dictionaries(dicts, func, select="all", pass_missing=False):
+    """
+    Combine several dictionaries element-wise (only for leafs) using a given function.
+
+    Args:
+        dicts(iterable): list of dictionaries (:class:`Dictionary` or ``dict``) to be combined
+        func(callable): combination function. Takes a single argument, which is a list of elements to be combined.
+        select(str): determins which keys are selected for the resulting dictionary.
+            Can be either ``"all"`` (only keep keys which are present in all the dictionaries), or ``"any"`` (keep keys which are present in at least one dictionary).
+            Only keys that point to leafs count; if a key points to a non-leaf branch in some dictionary, it is considered absent from this dictionary.
+        pass_missing(bool): if ``select=="any"``, this parameter determines whether missing elemnts will be passed to `func` as ``None``, or omitted entirely.
+    """
+    funcargparse.check_parameter_range(select,"select",["all","any"])
+    if not dicts:
+        return Dictionary()
+    dicts=[as_dictionary(d) for d in dicts]
+    paths=set(dicts[0].paths())
+    if select=="all":
+        paths=set([p for p in paths if all([d.has_entry(p,kind="leaf") for d in dicts]) ])
+    else:
+        for d in dicts:
+            paths.update(d.paths())
+    result=dicts[0]._make_similar_dict()
+    for p in paths:
+        if select=="any" and pass_missing:
+            values=[d[p] for d in dicts if d.has_entry(p,"leaf")]
+        else:
+            values=[(d[p] if d.has_entry(p,"leaf") else None) for d in dicts]
+        joined_value=func(values)
+        result[p]=joined_value
+    return result
+
+
     
     
 
@@ -1139,7 +1175,7 @@ class ItemAccessor(object):
             self.branch=src._norm_name(branch)+src.path_separator
         def __getitem__(self, name): return self.src.__getitem__(self.branch+self.src._norm_name(name))
         def __setitem__(self, name, value):  return self.src.__setitem__(self.branch+self.src._norm_name(name),value)
-        def __delitem__(self, name, value):  return self.src.__delitem__(self.branch+self.src._norm_name(name))
+        def __delitem__(self, name):  return self.src.__delitem__(self.branch+self.src._norm_name(name))
     def __getitem__(self, name):
         name=self._norm_name(name)
         try:

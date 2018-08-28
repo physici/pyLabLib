@@ -226,6 +226,8 @@ class Range(object):
     """
     def __init__(self, start=None, stop=None):
         object.__init__(self)
+        if isinstance(start,(list,tuple)):
+            start,stop=start
         self._rng=[start,stop]
         self._reorder()
     

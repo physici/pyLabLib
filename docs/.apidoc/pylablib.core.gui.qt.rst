@@ -12,6 +12,14 @@ Subpackages
 Submodules
 ----------
 
+pylablib.core.gui.qt.utils module
+---------------------------------
+
+.. automodule:: pylablib.core.gui.qt.utils
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.core.gui.qt.values module
 ----------------------------------
 
