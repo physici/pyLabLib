@@ -20,7 +20,7 @@ class TPG261(backend.IBackendWrapper):
         conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",9600))
         instr=backend.SerialDeviceBackend(conn,term_write="",term_read="\r\n")
         backend.IBackendWrapper.__init__(self,instr)
-        self._add_status_node("pressure",self.get_pressure,err=(PfeifferError,))
+        self._add_status_node("pressure",self.get_pressure,ignore_error=(PfeifferError,))
         self._add_status_node("channel_status",self.get_channel_status)
     
     def comm(self, msg):

@@ -35,11 +35,11 @@ class PerformaxStage(IDevice):
         self.ignore_limit_errors()
         self._add_full_info_node("device_id",self.get_device_id)
         self._add_settings_node("ignore_limit_errors",self.is_ignoring_limit_errors,self.ignore_limit_errors)
-        self._add_status_node("positions",self.get_position(ax),mux=("XYZU",)])
+        self._add_status_node("positions",self.get_position,mux=("XYZU",))
         self._add_settings_node("global_speed",self.get_speed,self.set_speed)
         self._add_settings_node("axis_speed",self.get_axis_speed,self.set_axis_speed,mux=("XYZU",0))
         self._add_status_node("axis_status",self.get_status,mux=("XYZU",0))
-        self._add_status_node("moving",self.is_moving)
+        self._add_status_node("moving",self.is_moving,mux=("XYZU",0))
 
     def open(self):
         """Open the connection to the stage"""
@@ -72,7 +72,7 @@ class PerformaxStage(IDevice):
         for n in range(5):
             if not self.dll.fnPerformaxComGetProductString(self.idx,self.rbuff,n):
                 raise ArcusError("can't get info for the device with index {}".format(self.idx))
-            devs.append(self.rbuff.value)
+            devs.append(py3.as_str(self.rbuff.value))
         return devs
     def query(self, comm):
         """Send a query to the stage and return the reply"""
@@ -192,7 +192,7 @@ class PerformaxStage(IDevice):
     def get_status(self, axis):
         """Get the axis status as a set of string descriptors"""
         statn=self.get_status_n(axis)
-        return set([ k for k in self._status_bits if self._status_bits[k]&statn ])
+        return [ k for k in self._status_bits if self._status_bits[k]&statn ]
     def is_moving(self, axis):
         """Check if a given axis is moving"""
         return bool(self.get_status_n(axis)&0x007)

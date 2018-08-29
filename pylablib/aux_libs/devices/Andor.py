@@ -62,10 +62,10 @@ class AndorCamera(IDevice):
         self._add_settings_node("acq_parameters/fast_kinetics",lambda:self.acq_params["fast_kinetics"],self.setup_fast_kinetic_mode)
         self._add_settings_node("acq_parameters/cont",lambda:self.acq_params["cont"],self.setup_cont_mode)
         self._add_settings_node("acq_mode",lambda:self.acq_mode,self.set_acquisition_mode)
-        self._add_status_node("acq_status",lambda:self.get_status)
+        self._add_status_node("acq_status",self.get_status)
         self._add_settings_node("frame_transfer",lambda:self.frame_transfer_mode,self.enable_frame_transfer_mode)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
-        self._add_status_node("timings",self.get_timings)
+        self._add_status_node("timings",lambda: tuple(self.get_timings()))
         self._add_status_node("readout_time",self.get_readout_time)
         self._add_settings_node("read_parameters/single_track",lambda:self.read_params["single_track"],self.setup_single_track_mode)
         self._add_settings_node("read_parameters/multi_track",lambda:self.read_params["multi_track"],self.setup_multi_track_mode)
@@ -138,7 +138,7 @@ class AndorCamera(IDevice):
         elif kind=="feat":
             opt=self.capabilities.Features
         else:
-            raise AndorLibError("unknown option kind: {}".format(kind))
+            raise AndorError("unknown option kind: {}".format(kind))
         return option in opt
     def _check_option(self, kind, option):
         has_option=self._has_option(kind,option)

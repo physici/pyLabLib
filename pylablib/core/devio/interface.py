@@ -40,7 +40,7 @@ class IDevice(object):
                 for a,ch in zip(args,choices):
                     margs=list(a) if (multiarg and isinstance(a,tuple)) else [a]
                     margs.insert(arg_pos,ch)
-                    res.append(func(*margs))
+                    res.append(func(tuple(margs)))
                 return res
             else:
                 return [func(ch) for ch in choices]

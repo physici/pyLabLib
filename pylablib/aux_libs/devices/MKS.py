@@ -15,7 +15,7 @@ class MKS9xx(backend.IBackendWrapper):
         instr=backend.SerialDeviceBackend(conn,timeout=timeout,term_write="",term_read="")
         backend.IBackendWrapper.__init__(self,instr)
         self.dev_addr=dev_addr
-        self._add_status_node("pressure",self.get_pressure,err=(self.instr.Error,))
+        self._add_status_node("pressure",self.get_pressure,ignore_error=(self.instr.Error,))
     
     def query(self, reg):
         """Send a query to the device and return the reply"""

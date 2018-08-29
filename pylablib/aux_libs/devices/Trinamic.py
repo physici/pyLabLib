@@ -23,7 +23,7 @@ class TMCM1100(backend.IBackendWrapper):
         instr=backend.SerialDeviceBackend(conn,term_write="",term_read="",timeout=3.)
         backend.IBackendWrapper.__init__(self,instr)
         self._add_status_node("position",self.get_position)
-        self._add_setting_node("speed",self.get_speed,self.set_speed)
+        self._add_settings_node("speed",self.get_speed,self.set_speed)
         self._add_status_node("current_speed",self.get_current_speed)
         self._add_status_node("moving",self.is_moving)
     
