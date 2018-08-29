@@ -19,12 +19,16 @@ class LM500(SCPI.SCPIDevice):
         SCPI.SCPIDevice.__init__(self,conn,backend="serial")
         self.instr.term_read="\n"
         self.instr.term_write="\n"
-        self._add_settings_node("interval",self.get_interval,self.set_interval)
         try:
             self.write("ERROR 0")
             self.write("REMOTE")
         except self.instr.Error:
             self.close()
+        self._add_settings_node("interval",self.get_interval,self.set_interval)
+        self._add_status_node("level",self.get_level,mux=([1,2],))
+        self._add_status_node("fill_status",self.get_fill_status,mux=([1,2],))
+        self._add_settings_node("high_level",self.get_high_level,self.set_high_level,mux=([1,2],1))
+        self._add_settings_node("low_level",self.get_low_level,self.set_low_level,mux=([1,2],1))
 
     def close(self):
         """Close connection to the device"""

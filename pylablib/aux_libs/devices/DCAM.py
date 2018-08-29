@@ -19,8 +19,15 @@ def get_cameras_number():
     """Get number of connected Hamamatsu cameras"""
     lib.initlib()
     return lib.dcamapi_init()
+_open_cameras=0
+
+def restart_lib():
+    global _open_cameras
+    lib.dcamapi_uninit()
+    _open_cameras=0
 
 class DCAMCamera(IDevice):
+
     def __init__(self, idx=0):
         IDevice.__init__(self)
         lib.initlib()
@@ -32,23 +39,42 @@ class DCAMCamera(IDevice):
         self._default_nframes=100
         self.open()
         self._last_frame=None
+
+        self._add_full_info_node("model_data",lambda: tuple(self.get_model_data()))
+        self._add_status_node("properties",self.get_all_properties)
+        self._add_settings_node("trigger_mode",self.get_trigger_mode,self.set_trigger_mode)
+        self._add_settings_node("ext_trigger",self.get_ext_trigger_parameters,self.setup_ext_trigger)
+        self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
+        self._add_status_node("readout_time",self.get_readout_time)
+        self._add_status_node("ring_buffer_size",self.get_ring_buffer_size)
+        self._add_status_node("data_dimensions",self.get_data_dimensions)
+        self._add_full_info_node("detector_size",self.get_detector_size)
+        self._add_settings_node("roi",self.get_roi,self.set_roi)
+        self._add_status_node("acq_status",self.get_status)
+        self._add_status_node("transfer_info",self.get_transfer_info)
         
     def open(self):
         """Open connection to the camera"""
+        global _open_cameras
         ncams=get_cameras_number()
         if self.idx>=ncams:
             raise DCAMError("camera index {} is not available ({} cameras exist)".format(self.idx,ncams))
         try:
             self.handle=lib.dcamdev_open(self.idx)
+            _open_cameras+=1
             self.dcamwait=lib.dcamwait_open(self.handle)
             self._update_properties_list()
         except DCAMLibError:
             self.close()
     def close(self):
         """Close connection to the camera"""
+        global _open_cameras
         if self.handle:
             lib.dcamwait_close(self.dcamwait.hwait)
             lib.dcamdev_close(self.handle)
+            _open_cameras-=1
+            if not _open_cameras:
+                lib.dcamapi_uninit()
         self.handle=None
     def is_opened(self):
         """Check if the device is connected"""
@@ -101,6 +127,18 @@ class DCAMCamera(IDevice):
         props=[lib.dcamprop_getattr(self.handle,i) for i in ids]
         props=[self.Property(self.handle,name,idx,p.valuemin,p.valuemax,p.valuestep,p.valuedefault,p.iUnit) for (idx,name,p) in zip(ids,names,props)]
         return props
+    def get_all_properties(self):
+        props=self.list_properties()
+        result={}
+        for prop in props:    
+            name=py3.as_str(prop.name).lower().replace(" ","_")
+            result[name]={}
+            result[name]["value"]=prop.get_value()
+            try:
+                result[name]["text_value"]=prop.as_text()
+            except DCAMLibError:
+                pass
+        return result
     def _update_properties_list(self):
         props=self.list_properties()
         for p in props:
@@ -126,10 +164,27 @@ class DCAMCamera(IDevice):
         trigger_modes={"int":1,"ext":2,"software":3}
         funcargparse.check_parameter_range(mode,"mode",trigger_modes.keys())
         self.set_value("TRIGGER SOURCE",trigger_modes[mode])
+        return self.get_trigger_mode()
+    def get_trigger_mode(self):
+        """
+        Get trigger mode.
+
+        Can be ``"int"`` (internal), ``"ext"`` (external), or ``"software"`` (software trigger).
+        """
+        tm=int(self.get_value("TRIGGER SOURCE"))
+        if tm in {1,2,3}:
+            return ["int","ext","software"][tm-1]
+        else:
+            raise DCAMError("unknown trigger mode: {}".format(tm))
     def setup_ext_trigger(self, invert=False, delay=0.):
         """Setup external trigger (inversion and delay)"""
         self.set_value("TRIGGER POLARITY",2 if invert else 1)
         self.set_value("TRIGGER DELAY",delay)
+    def get_ext_trigger_parameters(self):
+        """Return external trigger parameters (inversion and delay)"""
+        invert=self.get_value("TRIGGER POLARITY")==2
+        delay=self.get_value("TRIGGER DELAY")
+        return invert,delay
     def send_software_trigger(self):
         """Send software trigger signal"""
         lib.dcamcap_firetrigger(self.handle)
@@ -192,8 +247,8 @@ class DCAMCamera(IDevice):
     def get_data_dimensions(self):
         """Get the current data dimension (taking ROI and binning into account)"""
         return (self.get_value("IMAGE HEIGHT"),self.get_value("IMAGE WIDTH"))
-    def get_sensor_size(self):
-        """Get the sensor size"""
+    def get_detector_size(self):
+        """Get the detector size"""
         return (self.properties["SUBARRAY VSIZE"].max,self.properties["SUBARRAY HSIZE"].max)
     def get_roi(self):
         """

@@ -31,6 +31,7 @@ class ANCDevice(backend_mod.IBackendWrapper):
         self._add_settings_node("voltages",self.get_all_voltages,self.set_all_voltages)
         self._add_settings_node("offsets",self.get_all_offsets,self.set_all_offsets)
         self._add_settings_node("frequencies",self.get_all_frequencies,self.set_all_frequencies)
+        self._add_status_node("voltage_output",self.get_all_outputs)
 
     def open(self):
         """Open the connection to the stage"""
@@ -131,6 +132,9 @@ class ANCDevice(backend_mod.IBackendWrapper):
     def get_all_offsets(self):
         """Get the list of all axes offset voltages"""
         return self._get_all_axes_data(self.get_offset)
+    def get_all_outputs(self):
+        """Get the list of all axes offset voltages"""
+        return self._get_all_axes_data(self.get_output)
     def get_all_frequencies(self):
         """Get the list of all axes step frequencies"""
         return self._get_all_axes_data(self.get_frequency)

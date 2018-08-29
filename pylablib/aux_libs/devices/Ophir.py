@@ -40,6 +40,15 @@ class VegaPowerMeter(OphirDevice):
     Args:
         conn: serial connection parameters (usually port or a tuple containing port and baudrate)
     """
+    def __init__(self, conn):
+        OphirDevice.__init__(self,conn)
+        self._add_status_node("power",self.get_power)
+        self._add_settings_node("wavelength",self.get_wavelength,self.set_wavelength)
+        self._add_status_node("wavelength_info",self.get_wavelength_info)
+        self._add_status_node("range_info",self.get_range_info)
+        self._add_settings_node("range_idx",self.get_range_idx,self.set_range_idx)
+        self._add_settings_node("filter_in",self.is_filter_in,self.set_filter)
+
     def get_power(self):
         """Get the current power readings"""
         power=self.query("$SP")

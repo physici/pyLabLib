@@ -31,6 +31,10 @@ class SCU3D(IDevice):
         self.axis_mapping=axis_mapping
         self.axis_dir=axis_dir
         self.open()
+        self._add_settings_node("axis_mapping",self.get_axis_mapping,self.set_axis_mapping)
+        self._add_settings_node("axis_dir",self.get_axis_dir,self.set_axis_dir)
+        self._add_status_node("axis_status",self.get_status,mux=("xyz",))
+        self._add_status_node("moving",self.is_moving,mux=("xyz",))
 
     def open(self):
         """Open the connection to the stage"""
@@ -81,6 +85,17 @@ class SCU3D(IDevice):
             else:
                 raise SmarActError("function {} raised unknown error: {}".format(func,status))
     
+    def get_axis_mapping(self):
+        return self.axis_mapping
+    def set_axis_mapping(self, mapping):
+        self.axis_mapping=mapping
+        return self.get_axis_mapping()
+    def get_axis_dir(self):
+        return self.axis_dir
+    def set_axis_dir(self, dir):
+        self.axis_dir=dir
+        return self.get_axis_dir()
+
     def _get_axis(self, axis):
         if axis in list(self.axis_mapping):
             return self.axis_mapping.find(axis)

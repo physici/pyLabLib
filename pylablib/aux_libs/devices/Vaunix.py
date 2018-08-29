@@ -142,7 +142,7 @@ class LMS(IVaunixDevice):
     def apply_settings(self, settings):
         if "power_on" in settings and not settings["power_on"]:
             self.set_output(False)
-        backend.IBackendWrapper.apply_settings(self,settings)
+        IVaunixDevice.apply_settings(self,settings)
         if "power_on" in settings and settings["power_on"]:
             self.set_output(True)
         return self.get_settings()

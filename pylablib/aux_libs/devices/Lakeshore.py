@@ -16,6 +16,9 @@ class Lakeshore218(SCPI.SCPIDevice):
     def __init__(self, conn):
         conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",9600,7,'E',1))
         SCPI.SCPIDevice.__init__(self,conn,backend="serial",term_write="\r\n",term_read="\r\n")
+        self._add_settings_node("enabled",self.is_enabled,self.set_enabled,mux=(range(8),0))
+        self._add_settings_node("sensor_type",self.get_sensor_type,self.set_sensor_type,mux=("AB",1))
+        self._add_status_node("temperature",self.get_all_temperatures)
     
     def is_enabled(self, channel):
         """Check if a given channel is enabled"""

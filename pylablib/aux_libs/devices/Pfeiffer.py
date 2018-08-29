@@ -20,6 +20,8 @@ class TPG261(backend.IBackendWrapper):
         conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",9600))
         instr=backend.SerialDeviceBackend(conn,term_write="",term_read="\r\n")
         backend.IBackendWrapper.__init__(self,instr)
+        self._add_status_node("pressure",self.get_pressure,err=(PfeifferError,))
+        self._add_status_node("channel_status",self.get_channel_status)
     
     def comm(self, msg):
         """Send a command to the device"""
@@ -38,6 +40,10 @@ class TPG261(backend.IBackendWrapper):
         return self.instr.readline()
         
     _pstats=["OK","underrange","overrange","sensor error","sensor off","no sensor","ID error"]
+    def get_channel_status(self, channel=1):
+        resp=self.query("PR{}".format(channel))
+        stat=resp.split(b",")[0].strip()
+        return self._pstats[int(stat)]
     def get_pressure(self, channel=1):
         """Get pressure at a given channel"""
         resp=self.query("PR{}".format(channel))

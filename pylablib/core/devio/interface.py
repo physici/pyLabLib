@@ -1,7 +1,7 @@
 ### Interface for a generic device class ###
  
 _info_node_kinds=["settings","status","full_info"]
- 
+
 class IDevice(object):
     """
     A base class for an instrument.
@@ -32,27 +32,51 @@ class IDevice(object):
         self.close()
         return False
      
- 
-    def _add_info_node(self, path, kind, getter=None, setter=None, ignore_error=()):
+    @staticmethod
+    def _multiplex_func(func, choices, arg_pos=0, multiarg=True):
+        def func_mux(args=None):
+            res=[]
+            if args:
+                for a,ch in zip(args,choices):
+                    margs=list(a) if (multiarg and isinstance(a,tuple)) else [a]
+                    margs.insert(arg_pos,ch)
+                    res.append(func(*margs))
+                return res
+            else:
+                return [func(ch) for ch in choices]
+        return func_mux
+    def _add_info_node(self, path, kind, getter=None, setter=None, ignore_error=(), mux=None, multiarg=True):
         """
-        Adds an info parameter
+        Adds an info parameter.
          
-        `kind` can be ``"settings"`` (device settings parameter), ``"status"`` (device status parameter) or ``"full_info"`` (full device info).
-        `getter`/`setter` are methods for getting/setting this parameter.
-        Can be ``None``, meaning that this parameter is ingored when executing :func:`get_settings`/:func:`apply_settings`.
+        Args:
+            path: parameter name.
+            kind(str): can be ``"settings"`` (device settings parameter), ``"status"`` (device status parameter) or ``"full_info"`` (full device info).
+            getter: methods for getting this parameter. Can be ``None``, meaning that this parameter is ingored when executing :meth:`get_settings`/:meth:`get_full_status`/:meth:`get_full_info`.
+            setter: methods for setting this parameter. Can be ``None``, meaning that this parameter is ingored when executing :meth:`apply_settings`.
+            ignore_error(tuple): is a list of exception classes; if raised during getter/setter call, they are ignored.
+            mux(tuple): 1- or 2-tuple with parameters for function multiplexing (calling several times and combining result in a list).
+                The first element is an iterable of argument values to be iterated over, the second argument is the position where this argument is inserted (by default, 0)
+            multiarg(bool): if ``True`` and the setter argument is a tuple, interpret it as a tuple of arguments and expand it; otherwise, keep it as a single tuple argument.
         """
         if kind not in self._info_nodes:
             raise ValueError("unrecognized info node kind: {}".format(kind))
         if not isinstance(ignore_error,tuple):
             ignore_error=(ignore_error,)
+        if multiarg and setter:
+            osetter=setter
+            setter=lambda v: osetter(*v) if isinstance(v,tuple) else osetter(v)
+        if mux:
+            getter=self._multiplex_func(getter,*mux[:2],multiarg=multiarg) if getter else None
+            setter=self._multiplex_func(setter,*mux[:2],multiarg=multiarg) if setter else None
         self._info_nodes[kind][path]=(getter,setter,ignore_error)
         self._info_nodes_order[kind].append(path)
-    def _add_full_info_node(self, path, getter=None, ignore_error=()):
-        return self._add_info_node(path,"full_info",getter=getter,ignore_error=ignore_error)
-    def _add_status_node(self, path, getter=None, ignore_error=()):
-        return self._add_info_node(path,"status",getter=getter,ignore_error=ignore_error)
-    def _add_settings_node(self, path, getter=None, setter=None, ignore_error=()):
-        return self._add_info_node(path,"settings",getter=getter,setter=setter,ignore_error=ignore_error)
+    def _add_full_info_node(self, path, getter=None, ignore_error=(), mux=None):
+        return self._add_info_node(path,"full_info",getter=getter,ignore_error=ignore_error,mux=mux)
+    def _add_status_node(self, path, getter=None, ignore_error=(), mux=None):
+        return self._add_info_node(path,"status",getter=getter,ignore_error=ignore_error,mux=mux)
+    def _add_settings_node(self, path, getter=None, setter=None, ignore_error=(), mux=None):
+        return self._add_info_node(path,"settings",getter=getter,setter=setter,ignore_error=ignore_error,mux=mux)
     def _get_info(self, kinds):
         """
         Get dict ``{name: value}`` containing all the device settings.

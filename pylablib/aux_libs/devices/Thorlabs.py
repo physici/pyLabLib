@@ -21,6 +21,7 @@ class PM100D(SCPI.SCPIDevice):
     """
     def __init__(self, addr):
         SCPI.SCPIDevice.__init__(self,addr)
+        self._add_status_node("power",self.get_power)
     
     def setup_power_measurement(self):
         """Switch the device into power measurement mode"""
@@ -127,6 +128,8 @@ class MDT69xA(ThorlabsInterface):
     """
     def __init__(self, conn):
         ThorlabsInterface.__init__(self,conn)
+        self._add_settings_node("voltage",self.get_voltage,self.set_voltage,mux=("xyz",1))
+        self._add_status_node("voltage_range",self.get_voltage_range)
 
     _id_comm="I"
     def get_voltage(self, channel="x"):

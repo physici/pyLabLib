@@ -33,6 +33,13 @@ class PerformaxStage(IDevice):
         self.set_absolute_mode()
         self.enable_all_outputs()
         self.ignore_limit_errors()
+        self._add_full_info_node("device_id",self.get_device_id)
+        self._add_settings_node("ignore_limit_errors",self.is_ignoring_limit_errors,self.ignore_limit_errors)
+        self._add_status_node("positions",self.get_position(ax),mux=("XYZU",)])
+        self._add_settings_node("global_speed",self.get_speed,self.set_speed)
+        self._add_settings_node("axis_speed",self.get_axis_speed,self.set_axis_speed,mux=("XYZU",0))
+        self._add_status_node("axis_status",self.get_status,mux=("XYZU",0))
+        self._add_status_node("moving",self.is_moving)
 
     def open(self):
         """Open the connection to the stage"""
@@ -82,7 +89,7 @@ class PerformaxStage(IDevice):
         return axis.upper()
 
     def set_absolute_mode(self):
-        """Set"""
+        """Set absolute motion mode"""
         self.query("ABS")
     def ignore_limit_errors(self, do_ignore=True):
         """

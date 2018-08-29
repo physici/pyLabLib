@@ -11,6 +11,8 @@ import re
 from ..utils import funcargparse, general, log, net, py3
 import contextlib
 
+_depends_local=[".interface"]
+
 
 ### Generic backend interface ###
 

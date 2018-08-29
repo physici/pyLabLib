@@ -37,6 +37,9 @@ class WS(IDevice):
         self.dll.SetExposureNum.argtypes=[ctypes.c_long,ctypes.c_long,ctypes.c_long]
         self.idx=idx
         self.open()
+        self._add_status_node("frequency",self.get_frequency)
+        self._add_settings_node("exposure_mode",self.get_exposure_mode,self.set_exposure_mode)
+        self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
 
     def open(self):
         self.dll.Instantiate(-1,0,0,0)

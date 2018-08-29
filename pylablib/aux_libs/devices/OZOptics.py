@@ -51,7 +51,7 @@ class TF100(OZOpticsDevice):
     def __init__(self, port_addr, timeout=20.):
         OZOpticsDevice.__init__(self,port_addr,timeout)
         self._add_settings_node("wavelength",self.get_wavelength,self.set_wavelength)
-        self._add_settings_node("wavelength_correction",self.get_wavelength_correction, lambda c: self.set_wavelength_correction(*c))
+        self._add_settings_node("wavelength_correction",self.get_wavelength_correction, self.set_wavelength_correction)
         self.wshift=0.
         self.wscale=1.
         self.set_wavelength_correction(24.75E-9,0.984643) # experimentally measured; redefine for different devices
@@ -85,6 +85,8 @@ class DD100(OZOpticsDevice):
     def __init__(self, port_addr, timeout=20.):
         OZOpticsDevice.__init__(self,port_addr,timeout)
         self._add_settings_node("attenuation",self.get_attenuation,self.set_attenuation)
+        self._add_full_info_node("max_attenuation",self.get_max_attenuation)
+        self._add_full_info_node("min_attenuation",self.get_min_attenuation)
     
     def home(self):
         return self.query("H",timeout=40.)
@@ -115,7 +117,7 @@ class EPC04(backend.IBackendWrapper):
     def __init__(self, port_addr, timeout=20.):
         instr=backend.SerialDeviceBackend((port_addr,9600),timeout=timeout,term_write="\r\n",connect_on_operation=True)
         backend.IBackendWrapper.__init__(self,instr)
-        self._add_settings_node("voltages",self.get_voltages,None)
+        self._add_settings_node("voltages",self.get_voltages,self.set_all_voltages)
         self._add_settings_node("mode",self.get_mode,self.set_mode)
         self._voltage_limts=(-5.,5.)
     
@@ -146,6 +148,10 @@ class EPC04(backend.IBackendWrapper):
         value=numerical.limit_to_range(value,*self._voltage_limts)
         self.query("V{:d},{:04d}".format(channel+1,int(value*1E3)))
         return self.get_voltages()[channel]
+    def set_all_voltages(self, value):
+        for ch,v in enumerate(value):
+            self.set_voltage(ch,v)
+        return self.get_voltages()
     def step_voltage(self, channel, step):
         v=self.get_voltages()[channel]
         return self.set_voltage(channel,v+step)
@@ -163,11 +169,3 @@ class EPC04(backend.IBackendWrapper):
     
     def save_preset(self):
         self.query("SAVE")
-        
-        
-    def apply_settings(self, settings):
-        backend.IBackendWrapper.apply_settings(self,settings)
-        if "voltages" in settings:
-            for ch,v in enumerate(settings["voltages"]):
-                self.set_voltage(ch,v)
-        return self.get_settings()
