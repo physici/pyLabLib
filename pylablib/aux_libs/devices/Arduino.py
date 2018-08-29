@@ -144,9 +144,30 @@ class DAQDevice(IArduinoDevice):
 class OpticalSwitchController(IArduinoDevice):
     def __init__(self, port_addr):
         IArduinoDevice.__init__(self,port_addr,timeout=3.)
+        self._add_settings_node("state",self.get_state,self.switch)
     
     def get_state(self):
         return bool(int(self.query("r",flush=True,flush_delay=0.1)))
     def switch(self, state):
         self.comm("s{}".format("1" if state else "0"),flush=True,flush_delay=0.1)
+        return self.get_state()
+        
+        
+
+
+        
+class RelaylSwitchController(IArduinoDevice):
+    """
+    Arduino controller for the remote-controlled BNC inverter board.
+    """
+    def __init__(self, port_addr):
+        IArduinoDevice.__init__(self,port_addr,timeout=3.)
+        self._add_settings_node("state",self.get_state,self.switch)
+    
+    def get_state(self):
+        """Get relay switch state"""
+        return bool(int(self.query("R?")))
+    def switch(self, state):
+        """Set relay switch state"""
+        self.comm("R{}".format("1" if state else "0"))
         return self.get_state()

@@ -339,7 +339,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
         else:
             reply=self._ask_retry(msg,delay,raw=(data_type=="raw"),timeout=timeout)
         return self._parse_msg(reply,data_type=data_type)
-    def flush(self, one_line=True):
+    def flush(self, one_line=False):
         """
         Flush the read buffer (read all the available data and return the number of bytes read).
         

@@ -50,6 +50,7 @@ class ThorlabsInterface(SCPI.SCPIDevice):
         self.instr.flush_read()
     
     def _instr_write(self, msg):
+        self.instr.flush_read()
         return self.instr.write(msg,read_echo=True)
     def _instr_read(self, raw=False):
         data=""
@@ -102,7 +103,7 @@ class FW(ThorlabsInterface):
         return self.ask("pcount?","int")
     def set_pcount(self, pcount):
         self.write("pcount={}".format(pcount))
-        self.pcount=self.get_pcpount()
+        self.pcount=self.get_pcount()
         return self.pcount
 
     def get_speed(self):
@@ -182,7 +183,7 @@ class KinesisDevice(backend.IBackendWrapper):
         Otherwise, show all devices (some of them might not be Thorlabs-related).
         """
         def _is_thorlabs_id(id):
-            return re.match(b"^\d{8}$",id[0]) is not None
+            return re.match(rb"^\d{8}$",id[0]) is not None
         ids=ft232.list_devices()
         if filter_ids:
             ids=[id for id in ids if _is_thorlabs_id(id)]
