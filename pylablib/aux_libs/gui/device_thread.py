@@ -6,6 +6,8 @@ class DeviceThread(controller.QTaskThread):
         self.device=None
         self.add_command("open_device",self.open_device)
         self.add_command("close_device",self.close_device)
+        self.add_command("get_settings",self.get_settings)
+        self.add_command("get_full_info",self.get_full_info)
         
     def finalize_task(self):
         self.close_device()
@@ -25,7 +27,13 @@ class DeviceThread(controller.QTaskThread):
         status_str="status/"+kind if kind else "status"
         self[status_str]=status
         if notify:
+            # self.send_signal("any",status_str,status)
             self.send_signal("any",status_str+"/"+status)
         if text:
             self.set_variable(status_str+"_text",text)
             self.send_signal("any",status_str+"_text",text)
+
+    def get_settings(self):
+        return self.device.get_settings() if self.device is not None else {}
+    def get_full_info(self):
+        return self.device.get_full_info() if self.device is not None else {}

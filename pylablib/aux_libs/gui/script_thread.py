@@ -52,6 +52,7 @@ class ScriptThread(controller.QTaskThread):
 
     def _start_script(self):
         self.running=True
+        self.stop_request=False
         try:
             self.run_script()
         except ScriptStopException:

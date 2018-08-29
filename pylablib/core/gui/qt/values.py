@@ -395,18 +395,18 @@ class IndicatorValuesTable(ValuesTable):
 
     def set_indicator(self, name, value, ind_name=None):
         path,subpath=self.indicator_handlers.get_max_prefix(name)
-        if path is None:
+        if path is None or (len(subpath)>0 and not self.indicator_handlers.has_entry(path,kind="leaf")):
             raise KeyError("missing handler {}".format(name))
         if len(subpath)>0:
             return self.indicator_handlers[path].set_indicator(subpath,value,ind_name=ind_name)
         if ind_name is None:
             for i in self.indicator_handlers[path].iternodes():
-               i.set_value(value) 
+                i.set_value(value) 
         else:
             return self.indicator_handlers[path][ind_name].set_value(value)
     def get_indicator(self, name, ind_name="__default__"):
         path,subpath=self.indicator_handlers.get_max_prefix(name)
-        if path is None:
+        if path is None or (len(subpath)>0 and not self.indicator_handlers.has_entry(path,kind="leaf")):
             raise KeyError("missing handler {}".format(name))
         if len(subpath)>0:
             return self.indicator_handlers[path].get_indicator(subpath,ind_name=ind_name)

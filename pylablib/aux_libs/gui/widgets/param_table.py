@@ -143,7 +143,7 @@ class ParamTable(QtWidgets.QWidget):
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
 
     def add_spacer(self, height):
-        spacer=QtWidgets.QSpacerItem(1,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Expanding)
+        spacer=QtWidgets.QSpacerItem(1,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Minimum)
         self.formLayout.addItem(spacer)
         return spacer
     def add_label(self, text):
