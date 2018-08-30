@@ -407,7 +407,7 @@ class QThreadController(QtCore.QObject):
         """
         Send a dummy message to the thread.
         
-        A cheap way to notify the thread that something happened (useful for, e.g., making thread leave :method:`wait_for_any_message` method).
+        A cheap way to notify the thread that something happened (useful for, e.g., making thread leave :meth:`wait_for_any_message` method).
         """
         self._messaged.emit(("poke",None,0,None))
     def running(self):
