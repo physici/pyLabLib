@@ -10,7 +10,7 @@ class EDFA_NP2000(backend.IBackendWrapper):
         instr=backend.SerialDeviceBackend((port_addr,19200),timeout=timeout,term_write="\n",connect_on_operation=True)
         backend.IBackendWrapper.__init__(self,instr)
         self._add_status_node("status",self.get_status)
-        self._add_settings_node("enabled",self.get_status()["on"],self.set_output)
+        self._add_settings_node("enabled",lambda: self.get_status()["on"],self.set_output)
     
     def _parse_response(self, comm, resp):
         resp=[s.strip() for s in resp.splitlines() if s.strip()]

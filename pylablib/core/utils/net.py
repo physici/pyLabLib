@@ -137,7 +137,7 @@ class ClientSocket(object):
         try:
             recvd=_wait_sock_func(sock_func,self.timeout,self.wait_callback)
         except socket.timeout:
-            raise SocketTimeout("timeout while receiving")
+            raise SocketTimeout("timeout while receiving") from None
         if len(recvd)==0:
             raise SocketError("connection closed while receiving")
         return recvd

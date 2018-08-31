@@ -16,7 +16,19 @@ class M2Error(RuntimeError):
     """
     pass
 class M2ICE(IDevice):
-    def __init__(self, addr, port, timeout=3., start_link=True, use_websocket=True, only_websocket=False):
+    """
+    M2 ICE device.
+
+    Args:
+        addr(str): IP address of the ICE device.
+        port(int): port of the ICE device.
+        timeout(float): default timeout of synchronous operations.
+        start_link(bool): if ``True``, initalize device link on creation.
+        use_websocket(bool): if ``True``, use websocket interface (same as used by the web interface) for additional functionality
+            (wavemeter connection, etalon value, improved operation stopping)
+        only_websocket(bool): if ``True``, only use websocket operations (raises error on most standard methods, mostly used to monitor status).
+    """
+    def __init__(self, addr, port, timeout=5., start_link=True, use_websocket=True, only_websocket=False):
         IDevice.__init__(self)
         self.tx_id=1
         self.conn=(addr,port)
@@ -28,6 +40,15 @@ class M2ICE(IDevice):
                 self.start_link()
         self._last_status={}
         self.use_websocket=use_websocket
+        self._add_status_node("web_status",self.get_full_web_status)
+        self._add_status_node("system_status",self.get_system_status)
+        self._add_settings_node("wavemeter_connected",self.is_wavelemeter_connected,lambda v: self.connect_wavemeter() if v else self.disconnect_wavemeter())
+        self._add_settings_node("etalon_lock",lambda: self.get_etalon_lock_status()=="on",
+                lambda v: self.lock_etalon() if v else self.unlock_etalon())
+        self._add_settings_node("reference_cavity_lock",lambda: self.get_reference_cavity_lock_status()=="on",
+                lambda v: self.lock_reference_cavity() if v else self.unlock_reference_cavity())
+        self._add_settings_node("wavemeter_lock",self.is_wavelemeter_lock_on,self.lock_wavemeter)
+
 
     def open(self):
         self.close()
@@ -72,17 +93,33 @@ class M2ICE(IDevice):
             raise M2Error(error_msg)
         return pmsg["op"],pmsg["parameters"]
     
+    _terascan_update_op="wavelength"
+    def _is_report_op(self, op):
+        return op.endswith("_f_r") or op==self._terascan_update_op
+    def _make_report_op(self, op):
+        return op if op==self._terascan_update_op else op+"_f_r"
+    def _parse_report_op(self, op):
+        return op if op==self._terascan_update_op else op[:-4]
     def _recv_reply(self, expected=None):
         while True:
             reply=net.recv_JSON(self.socket)
             preply=self._parse_reply(reply)
-            if preply[0].endswith("_f_r") and preply[0]!=expected:
-                self._last_status[preply[0][:-4]]=preply[1]
+            if self._is_report_op(preply[0]):
+                self._last_status[self._parse_report_op(preply[0])]=preply[1]
             else:
                 return preply
+            if preply[0]==expected:
+                return preply
     def flush(self):
+        """Flush read buffer"""
         self.socket.recv_all()
     def query(self, op, params, reply_op="auto", report=False):
+        """
+        Send a query using the standard device interface.
+
+        `reply_op` is the name of the reply operation (by default, its the operation name plus ``"_reply"``).
+        If ``report==True``, request completion report (doesn't apply to all operation).
+        """
         if report:
             params["report"]="finished"
             self._last_status[op]=None
@@ -95,6 +132,7 @@ class M2ICE(IDevice):
             raise M2Error("unexpected reply op: '{}' (expected '{}')".format(preply[0],reply_op))
         return preply
     def update_reports(self, timeout=0.):
+        """Check for fresh operation reports."""
         timeout=max(timeout,0.001)
         try:
             with self.socket.using_timeout(timeout):
@@ -103,19 +141,26 @@ class M2ICE(IDevice):
         except net.SocketTimeout:
             pass
     def get_last_report(self, op):
+        """Get the latest report for the given operation"""
         rep=self._last_status.get(op,None)
         if rep:
             return "fail" if rep["report"][0] else "success"
         return None
     def check_report(self, op):
+        """Check and return the latest report for the given operation"""
         self.update_reports()
         return self.get_last_report(op)
     def wait_for_report(self, op, error_msg=None, timeout=None):
+        """
+        Wait for a report for the given operation
+        
+        `error_msg` specifies the exception message if the report results in an error.
+        """
         with self.socket.using_timeout(timeout):
-            preport=self._recv_reply(expected=op+"_f_r")
-            if not preport[0].endswith("_f_r"):
+            preport=self._recv_reply(expected=self._make_report_op(op))
+            if not self._is_report_op(preport[0]):
                 raise M2Error("unexpected report op: '{}'".format(preport[0]))
-        if preport[1]["report"][0]!=0:
+        if "report" in preport[1] and preport[1]["report"][0]!=0:
             if error_msg is None:
                 error_msg="error on operation {}; error report {}".format(preport[0][:-4],preport[1])
             raise M2Error(error_msg)
@@ -123,6 +168,7 @@ class M2ICE(IDevice):
 
 
     def start_link(self):
+        """Initialize device link (called automatically on creation)."""
         reply=self.query("start_link",{"ip_address":self.socket.get_local_name()[0]})[1]
         if reply["status"]!="ok":
             raise M2Error("couldn't establish link: reply status '{}'".format(reply["status"]))
@@ -168,6 +214,7 @@ class M2ICE(IDevice):
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def connect_wavemeter(self, sync=True):
+        """Connect to the wavemeter (if ``sync==True``, wait until the connection is established)"""
         if not self.use_websocket:
             return
         if self.is_wavelemeter_connected():
@@ -178,6 +225,7 @@ class M2ICE(IDevice):
             while not self.is_wavelemeter_connected():
                 time.sleep(0.02)
     def disconnect_wavemeter(self, sync=True):
+        """Disconnect from the wavemeter (if ``sync==True``, wait until the connection is broken)"""
         if not self.use_websocket:
             return
         if not self.is_wavelemeter_connected():
@@ -196,16 +244,22 @@ class M2ICE(IDevice):
                         return
                     time.sleep(0.02)
     def is_wavelemeter_connected(self):
-        return self._read_websocket_status(present_key="wlm_fitted")["wlm_fitted"] if self.use_websocket else None
-        # return self.get_tuning_status()!="nolink"
+        """Check if the wavemeter is connected"""
+        return bool(self._read_websocket_status(present_key="wlm_fitted")["wlm_fitted"]) if self.use_websocket else None
 
     def get_system_status(self):
+        """Get the device system status"""
         _,reply=self.query("get_status",{})
         for k in reply:
             if isinstance(reply[k],list):
                 reply[k]=reply[k][0]
         return reply
     def get_full_web_status(self):
+        """
+        Get full websocket status.
+        
+        Return a large dictionary containing all the information available in the web interface.
+        """
         return self._read_websocket_status(present_key="boot_files") if self.use_websocket else None
     def _as_web_status(self, status):
         if status=="auto":
@@ -217,8 +271,10 @@ class M2ICE(IDevice):
         return status
     
     def get_full_tuning_status(self):
+        """Get full fine-tuning status (see M2 ICE manual for ``"poll_wave_m"`` command)"""
         return self.query("poll_wave_m",{})[1]
     def lock_wavemeter(self, lock=True, sync=True):
+        """Lock or unlock the laser to the wavemeter (if ``sync==True``, wait until the operation is complete)"""
         _,reply=self.query("lock_wave_m",{"operation":"on" if lock else "off"})
         if reply["status"][0]==1:
             raise M2Error("can't lock wavemeter: no wavemeter link")
@@ -226,9 +282,16 @@ class M2ICE(IDevice):
             while self.is_wavelemeter_lock_on()!=lock:
                 time.sleep(0.05)
     def is_wavelemeter_lock_on(self):
+        """Check if the laser is locked to the wavemeter"""
         return bool(self.get_full_tuning_status()["lock_status"][0])
 
     def tune_wavelength(self, wavelength, sync=True, timeout=None):
+        """
+        Fine-tune the wavelength.
+        
+        Only works if the wavemeter is connected.
+        If ``sync==True``, wait until the operation is complete (might take from several seconds up to several minutes).
+        """
         _,reply=self.query("set_wave_m",{"wavelength":[wavelength*1E9]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune wavelength: no wavemeter link")
@@ -237,20 +300,44 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("set_wave_m",timeout=timeout)
     def check_tuning_report(self):
+        """
+        Check wavelength fine-tuning report
+
+        Return ``"success"`` or ``"fail"`` if the operation is complete, or ``None`` if it is still in progress.
+        """
         return self.check_report("set_wave_m")
     def wait_for_tuning(self, timeout=None):
+        """Wait until wavelength fine-tuning is complete"""
         self.wait_for_report("set_wave_m",timeout=timeout)
     def get_tuning_status(self):
+        """
+        Get fine-tuning status.
+
+        Return either ``"idle"`` (no tuning or locking), ``"nolink"`` (no wavemeter link),
+        ``"tuning"`` (tuning in progress), or ``"locked"`` (tuned and locked to the wavemeter).
+        """
         status=self.get_full_tuning_status()["status"][0]
         return ["idle","nolink","tuning","locked"][status]
     def get_wavelength(self):
+        """
+        Get fine-tuned wavelength.
+        
+        Only works if the wavemeter is connected.
+        """
         return self.get_full_tuning_status()["current_wavelength"][0]*1E-9
     def stop_tuning(self):
+        """Stop fine wavelength tuning."""
         _,reply=self.query("stop_wave_m",{})
         if reply["status"][0]==1:
             raise M2Error("can't stop tuning: no wavemeter link")
 
     def tune_wavelength_table(self, wavelength, sync=True):
+        """
+        Coarse-tune the wavelength.
+        
+        Only works if the wavemeter is disconnected.
+        If ``sync==True``, wait until the operation is complete.
+        """
         _,reply=self.query("move_wave_t",{"wavelength":[wavelength*1E9]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune etalon: command failed")
@@ -259,16 +346,34 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("move_wave_t")
     def get_full_tuning_status_table(self):
+        """Get full coarse-tuning status (see M2 ICE manual for ``"poll_move_wave_t"`` command)"""
         return self.query("poll_move_wave_t",{})[1]
     def get_tuning_status_table(self):
+        """
+        Get coarse-tuning status.
+
+        Return either ``"done"`` (tuning is done), ``"tuning"`` (tuning in progress), or ``"fail"`` (tuning failed).
+        """
         status=self.get_full_tuning_status_table()["status"][0]
         return ["done","tuning","fail"][status]
     def get_wavelength_table(self):
+        """
+        Get course-tuned wavelength.
+        
+        Only works if the wavemeter is disconnected.
+        """
         return self.get_full_tuning_status_table()["current_wavelength"][0]*1E-9
     def stop_tuning_table(self):
-        _,reply=self.query("stop_move_wave_t",{})
+        """Stop coarse wavelength tuning."""
+        self.query("stop_move_wave_t",{})
 
     def tune_etalon(self, perc, sync=True):
+        """
+        Tune the etalon to `perc` percent.
+        
+        Only works if the wavemeter is disconnected.
+        If ``sync==True``, wait until the operation is complete.
+        """
         _,reply=self.query("tune_etalon",{"setting":[perc]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune etalon: {} is out of range".format(perc))
@@ -277,6 +382,9 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("tune_etalon")
     def lock_etalon(self, sync=True):
+        """
+        Lock the etalon (if ``sync==True``, wait until the operation is complete).
+        """
         if self.get_etalon_lock_status()=="on":
             return
         _,reply=self.query("etalon_lock",{"operation":"on"},report=True)
@@ -285,6 +393,9 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("etalon_lock")
     def unlock_etalon(self, sync=True):
+        """
+        Lock the etalon (if ``sync==True``, wait until the operation is complete).
+        """
         if self.get_etalon_lock_status()=="off":
             return
         self.unlock_reference_cavity(sync=True)
@@ -294,12 +405,25 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("etalon_lock")
     def get_etalon_lock_status(self):
+        """
+        Get etalon lock status.
+
+        Return either ``"off"`` (lock is off), ``"on"`` (lock is on), ``"debug"`` (lock in debug condition),
+        ``"errorr"`` (lock had an error), ``"search"`` (lock is searching), or ``"low"`` (lock is off due to low ouput).
+        """
         _,reply=self.query("etalon_lock_status",{})
         if reply["status"][0]==1:
             raise M2Error("can't get etalon status")
         return reply["condition"]
 
     def tune_reference_cavity(self, perc, fine=False, sync=True):
+        """
+        Tune the reference cavity to `perc` percent.
+        
+        If ``fine==True``, adjust fine tuning; otherwise, adjust coarse tuning.
+        Only works if the wavemeter is disconnected.
+        If ``sync==True``, wait until the operation is complete.
+        """
         _,reply=self.query("fine_tune_cavity" if fine else "tune_cavity",{"setting":[perc]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune reference cavity: {} is out of range".format(perc))
@@ -308,6 +432,11 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("fine_tune_cavity")
     def lock_reference_cavity(self, sync=True):
+        """
+        Lock the laser to the reference cavity.
+        
+        If ``sync==True``, wait until the operation is complete.
+        """
         if self.get_reference_cavity_lock_status()=="on":
             return
         self.lock_etalon(sync=True)
@@ -317,6 +446,11 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("cavity_lock")
     def unlock_reference_cavity(self, sync=True):
+        """
+        Unlock the laser from the reference cavity.
+        
+        If ``sync==True``, wait until the operation is complete.
+        """
         if self.get_reference_cavity_lock_status()=="off":
             return
         _,reply=self.query("cavity_lock",{"operation":"off"},report=True)
@@ -325,12 +459,25 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("cavity_lock")
     def get_reference_cavity_lock_status(self):
+        """
+        Get the reference cavity lock status.
+        
+        Return either ``"off"`` (lock is off), ``"on"`` (lock is on), ``"debug"`` (lock in debug condition),
+        ``"errorr"`` (lock had an error), ``"search"`` (lock is searching), or ``"low"`` (lock is off due to low ouput).
+        """
         _,reply=self.query("cavity_lock_status",{})
         if reply["status"][0]==1:
             raise M2Error("can't get etalon status")
         return reply["condition"]
 
     def tune_laser_resonator(self, perc, fine=False, sync=True):
+        """
+        Tune the laser cavity to `perc` percent.
+        
+        If ``fine==True``, adjust fine tuning; otherwise, adjust coarse tuning.
+        Only works if the wavemeter is disconnected.
+        If ``sync==True``, wait until the operation is complete.
+        """
         _,reply=self.query("fine_tune_resonator" if fine else "tune_resonator",{"setting":[perc]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't tune resonator: {} is out of range".format(perc))
@@ -345,8 +492,26 @@ class M2ICE(IDevice):
             raise M2Error("unknown TeraScan type: {}".format(scan_type))
         if scan_type=="coarse":
             raise M2Error("coarse scan is not currently available")
-    def setup_terascan(self, scan_type, scan_range, rate):
+    _terascan_rates=[50E3,100E3,200E3,500E3, 1E6,2E6,5E6,10E6,20E6,50E6,100E6,200E6,500E6, 1E9,2E9,5E9,10E9,15E9,20E9, 50E9, 100E9]
+    def _trunc_terascan_rate(self, rate):
+        for tr in self._terascan_rates[::-1]:
+            if rate>=tr:
+                return tr
+        return self._terascan_rates[0]
+    def setup_terascan(self, scan_type, scan_range, rate, trunc_rate=True):
+        """
+        Setup terascan.
+
+        Args:
+            scan_type(str): scan type. Can be ``"medium"`` (BRF+etalon, rate from 100 GHz/s to 1 GHz/s),
+                ``"fine"`` (all elements, rate from 20 GHz/s to 1 MHz/s), or ``"line"`` (all elements, rate from 20 GHz/s to 50 kHz/s).
+            scan_range(tuple): tuple ``(start,stop)`` with the scan range (in Hz).
+            rate(float): scan rate (in Hz/s).
+            trunc_rate(bool): if ``True``, truncate the scan rate to the nearest available rate (otherwise, incorrect rate would raise an error).
+        """
         self._check_terascan_type(scan_type)
+        if trunc_rate:
+            rate=self._trunc_terascan_rate(rate)
         if rate>=1E9:
             fact,units=1E9,"GHz/s"
         elif rate>=1E6:
@@ -363,18 +528,69 @@ class M2ICE(IDevice):
             raise M2Error("can't setup TeraScan: scan out of range")
         elif reply["status"][0]==4:
             raise M2Error("can't setup TeraScan: TeraScan not available")
-    def start_terascan(self, scan_type, sync=False):
+    def start_terascan(self, scan_type, sync=False, sync_done=False):
+        """
+        Start terascan.
+
+        Scan type can be ``"medium"`` (BRF+etalon, rate from 100 GHz/s to 1 GHz/s), ``"fine"`` (all elements, rate from 20 GHz/s to 1 MHz/s),
+        or ``"line"`` (all elements, rate from 20 GHz/s to 50 kHz/s).
+        If ``sync==True``, wait until the scan is set up (not until the whole scan is complete).
+        If ``sync_done==True``, wait until the whole scan is complete.
+        """
         self._check_terascan_type(scan_type)
+        if sync:
+            self.enable_terascan_updates()
         _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"start"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't start TeraScan: operation failed")
         elif reply["status"][0]==2:
             raise M2Error("can't start TeraScan: TeraScan not available")
         if sync:
+            self.wait_for_terascan_update()
+        if sync_done:
             self.wait_for_report("scan_stitch_op")
+    def enable_terascan_updates(self, enable=True, update_period=0):
+        """
+        Enable sending periodic terascan updates.
+
+        If enabled, laser will send updates in the beginning and in the end of every terascan segment.
+        If ``update_period!=0``, it will also send updates every ``update_period`` percents of the segment (this option doesn't seem to be working currently).
+        """
+        _,reply=self.query("scan_stitch_output",{"operation":("start" if enable else "stop"),"update":[update_period]})
+        if reply["status"][0]==1:
+            raise M2Error("can't setup TeraScan updates: operation failed")
+        if reply["status"][0]==2:
+            raise M2Error("can't setup TeraScan updates: incorrect update rate")
+        if reply["status"][0]==3:
+            raise M2Error("can't setup TeraScan: TeraScan not available")
+        self._last_status[self._terascan_update_op]=None
+    def check_terascan_update(self):
+        """
+        Check the latest terascn update.
+
+        Return ``None`` if none are available, or a dictionary ``{"wavelength":current_wavelength, "operation":op}``,
+        where ``op`` is ``"scanning"`` (scannign in progress), ``"stitching"`` (stitching in progress), ``"finished"`` (scan is finished), or ``"repeat"`` (segment is repeated).
+        """
+        self.update_reports()
+        rep=self._last_status.get(self._terascan_update_op,None)
+        return rep
+    def wait_for_terascan_update(self):
+        """Wait until a new terascan update is available"""
+        self.wait_for_report(self._terascan_update_op)
+        return self.check_terascan_update()
     def check_terascan_report(self):
+        """
+        Check report on terascan start.
+
+        Return ``"success"`` or ``"fail"`` if the operation is complete, or ``None`` if it is still in progress.
+        """
         return self.check_report("scan_stitch_op")
     def stop_terascan(self, scan_type, sync=False):
+        """
+        Stop terascan of the given type.
+        
+        If ``sync==True``, wait until the operation is complete.
+        """
         self._check_terascan_type(scan_type)
         _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"stop"},report=True)
         if reply["status"][0]==1:
@@ -385,6 +601,17 @@ class M2ICE(IDevice):
             self.wait_for_report("scan_stitch_op")
     _web_scan_status_str=['off','cont','single','flyback','on','fail']
     def get_terascan_status(self, scan_type, web_status="auto"):
+        """
+        Get status of a terascan of a given type.
+
+        Return dictionary with 4 items:
+            ``"current"``: current laser frequency
+            ``"range"``: tuple with the fill scan range
+            ``"status"``: can be ``"stopped"`` (scan is not in progress), ``"scanning"`` (scan is in progress),
+            or ``"stitching"`` (scan is in progress, but currently stitching)
+            ``"web"``: where scan is running in web interface (some failure modes stil report ``"scanning"`` through the usual interface);
+            only available if the laser web connection is on.
+        """
         self._check_terascan_type(scan_type)
         _,reply=self.query("scan_stitch_status",{"scan":scan_type})
         status={}
@@ -407,8 +634,7 @@ class M2ICE(IDevice):
             status["web"]=None
         return status
 
-    _fast_scan_types={"etalon_continuous","etalon_single",
-                "cavity_continuous","cavity_single","cavity_triangular",
+    _fast_scan_types={"cavity_continuous","cavity_single","cavity_triangular",
                 "resonator_continuous","resonator_single","resonator_ramp","resonator_triangular",
                 "ect_continuous","ecd_ramp",
                 "fringe_test"}
@@ -416,6 +642,18 @@ class M2ICE(IDevice):
         if scan_type not in self._fast_scan_types:
             raise M2Error("unknown fast scan type: {}".format(scan_type))
     def start_fast_scan(self, scan_type, width, time, sync=False, setup_locks=True):
+        """
+        Setup and start fast scan.
+
+        Args:
+            scan_type(str): scan type. Can be ``"cavity_continuous"``, ``"cavity_single"``, ``"cavity_triangular"``,
+                ``"resonator_continuous"``, ``"resonator_single"``, ``"resonator_ramp"``, ``"resonator_triangular"``,
+                ``"ect_continuous"``, ``"ecd_ramp"``, or ``"fringe_test"`` (see ICE manual for details)
+            width(float): scan width (in Hz).
+            time(float): scan time/period (in s).
+            sync(bool): if ``True``, wait until the scan is set up (not until the whole scan is complete).
+            setup_locks(bool): if ``True``, automatically setup etalon and reference cavity locks in the appropriate states.
+        """
         self._check_fast_scan_type(scan_type)
         if setup_locks:
             if scan_type.startswith("cavity"):
@@ -424,9 +662,6 @@ class M2ICE(IDevice):
             elif scan_type.startswith("resonator"):
                 self.lock_etalon()
                 self.unlock_reference_cavity()
-            elif scan_type.startswith("etalon"):
-                self.unlock_reference_cavity()
-                self.unlock_etalon()
         _,reply=self.query("fast_scan_start",{"scan":scan_type,"width":[width/1E9],"time":[time]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't start fast scan: width too great for the current tuning position")
@@ -441,8 +676,19 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("fast_scan_start")
     def check_fast_scan_report(self):
+        """
+        Check fast scan report.
+
+        Return ``"success"`` or ``"fail"`` if the operation is complete, or ``None`` if it is still in progress.
+        """
         return self.check_report("fast_scan_start")
     def stop_fast_scan(self, scan_type, return_to_start=True, sync=False):
+        """
+        Stop fast scan of the given type.
+        
+        If ``return_to_start==True``, return to the center frequency after stopping; otherwise, stay at the current instantaneous frequency.
+        If ``sync==True``, wait until the operation is complete.
+        """
         self._check_fast_scan_type(scan_type)
         _,reply=self.query("fast_scan_stop" if return_to_start else "fast_scan_stop_nr",{"scan":scan_type})
         if reply["status"][0]==1:
@@ -456,6 +702,13 @@ class M2ICE(IDevice):
         if sync:
             self.wait_for_report("fast_scan_stop")
     def get_fast_scan_status(self, scan_type):
+        """
+        Get status of a fast scan of a given type.
+
+        Return dictionary with 4 items:
+            ``"status"``: can be ``"stopped"`` (scan is not in progress), ``"scanning"`` (scan is in progress).
+            ``"value"``: current tuner value (in percent).
+        """
         self._check_fast_scan_type(scan_type)
         _,reply=self.query("fast_scan_poll",{"scan":scan_type})
         status={}
@@ -476,6 +729,11 @@ class M2ICE(IDevice):
 
 
     def stop_scan_web(self, scan_type):
+        """
+        Stop scan of the current type (terascan or fine scan) using web interface.
+
+        More reliable than native programming interface, but requires acitvated web interface.
+        """
         if not self.use_websocket:
             return
         try:
@@ -488,6 +746,13 @@ class M2ICE(IDevice):
         self._send_websocket_request('{{"message_type":"task_request","task":["{}"]}}'.format(scan_task))
     _default_terascan_rates={"line":10E6,"fine":100E6,"medium":5E9}
     def stop_all_operation(self, repeated=True):
+        """
+        Stop all laser operations (tuning and scanning).
+
+        More reliable than native programming interface, but requires acitvated web interface.
+        If ``repeated==True``, repeate trying to stop the operations until succeeded (more reliable, but takes more time).
+        Return ``True`` if the operation is success otherwise ``False``.
+        """
         attempts=0
         while True:
             operating=False
@@ -526,4 +791,4 @@ class M2ICE(IDevice):
                 break
             time.sleep(0.1)
             attempts+=1
-        return operating
+        return not operating

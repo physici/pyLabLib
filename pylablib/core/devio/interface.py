@@ -100,10 +100,10 @@ class IDevice(object):
         """Get dict ``{name: value}`` containing all the device settings."""
         return self._get_info(["settings"])
     def get_full_status(self):
-        """Get dict ``{name: value}`` containing all the device settings."""
+        """Get dict ``{name: value}`` containing the device status (including settings)."""
         return self._get_info(["settings","status"])
     def get_full_info(self):
-        """Get dict ``{name: value}`` containing all the device settings."""
+        """Get dict ``{name: value}`` containing full device information (including status and settings)."""
         return self._get_info(["settings","status","full_info"])
     def apply_settings(self, settings):
         """

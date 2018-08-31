@@ -399,7 +399,7 @@ class Dictionary(object):
         Args:
             ordered (bool): If ``True``, loop over keys in alphabetic order.
         """
-        return sorted(self._data) if ordered else self._data
+        return sorted(self._data) if ordered else list(self._data)
     iterkeys=viewkeys # for compatibility
     def __iter__(self):
         return self._data.__iter__()

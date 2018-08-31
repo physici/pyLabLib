@@ -142,10 +142,15 @@ except ImportError:
 class NIDAQ(IDevice):
     """
     National Instruments DAQ device.
+
+    Args:
+        dev_name(str): root device name.
+        rate(float): analog input sampling rate (can be adjusted later).
+        buffer_size(int): size of the input buffer.
     """
     _default_retry_delay=5.
     _default_retry_times=5
-    def __init__(self, dev_name, rate=1E4, buffer_size=1E5):
+    def __init__(self, dev_name="dev0", rate=1E4, buffer_size=1E5):
         IDevice.__init__(self)
         self.dev_name=dev_name.strip("/")
         self.rate=rate
@@ -160,6 +165,15 @@ class NIDAQ(IDevice):
         self.open()
         self._update_channel_names()
         self._running=False
+        self._add_full_info_node("device",lambda: self.dev_name)
+        self._add_settings_node("clock_cfg",self.get_clock_cfg,self.setup_clock)
+        self._add_status_node("input_channels",self.get_input_channels)
+        self._add_status_node("voltage_input_parameters",self.get_voltage_input_parameters)
+        self._add_status_node("counter_input_parameters",self.get_counter_input_parameters)
+        self._add_status_node("digital_output_parameters",self.get_digital_output_parameters)
+        self._add_status_node("digital_output_values",self.get_digital_outputs)
+        self._add_status_node("voltage_output_parameters",self.get_voltage_output_parameters)
+        self._add_status_node("voltage_output_values",self.get_voltage_outputs)
         
     def open(self):
         self.ai_task=nidaqmx.Task()
@@ -191,6 +205,11 @@ class NIDAQ(IDevice):
         if channel.startswith("dev") or self.dev_name is None:
             return "/"+channel
         return "/"+self.dev_name+"/"+channel
+    def _strip_channel_name(self, channel):
+        channel=channel.lower().strip("/")
+        if channel.startswith(self.dev_name.lower()):
+            return channel[len(self.dev_name):].strip("/")
+        return channel
     def _update_channel_names(self):
         self.ai_names=list(self.ai_channels.keys())
         self.ai_names.sort(key=lambda n: self.ai_channels[n][1])
@@ -202,15 +221,28 @@ class NIDAQ(IDevice):
         self.ao_names.sort(key=lambda n: self.ao_channels[n][1])
 
     def setup_clock(self, rate, src=None):
+        """
+        Setup analog input clock.
+
+        If ``src==None``, use internal clock with the given rate; otherwise use `src` terminal as a clock source
+        (in this case, `rate` should be higher than the expected source rate).
+        """
         if self.ai_task.ai_channels:
             if src==self.clk_src:
                 self.ai_task.timing.samp_clk_rate=rate
             else:
                 if src:
                     src=self._build_channel_name(src)
-                self.ai_task.timing.cfg_samp_clk_timing(rate,source=src,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
+                self.ai_task.timing.cfg_samp_clk_timing(rate,source=src or "",sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
         self.rate=rate
         self.clk_src=src
+    def get_clock_cfg(self):
+        """
+        Get analog input clock configuration.
+
+        Return tuple ``(rate, src)``.
+        """
+        return self.rate,self.clk_src
 
     _voltage_input_terms={  "default":nidaqmx.constants.TerminalConfiguration.DEFAULT,
                             "rse":nidaqmx.constants.TerminalConfiguration.RSE,
@@ -218,6 +250,16 @@ class NIDAQ(IDevice):
                             "diff":nidaqmx.constants.TerminalConfiguration.DIFFERENTIAL,
                             "pseudodiff":nidaqmx.constants.TerminalConfiguration.PSEUDODIFFERENTIAL}
     def add_voltage_input(self, name, channel, rng=(-10,10), term_config="default"):
+        """
+        Add analog voltage input.
+
+        Args:
+            name(str): channel name.
+            channel(str): terminal name (e.g., ``"ai0"``).
+            rng: voltage range
+            term_config: terminal confiugration. Can be ``"default"``, ``"rse"``, ``"nrse"``, ``"diff"`` and ``"pseudodiff"``
+                (see NIDAQ manual for details).
+        """
         channel=self._build_channel_name(channel)
         term_config=self._voltage_input_terms[term_config]
         self.ai_task.ai_channels.add_ai_voltage_chan(channel,name,terminal_config=term_config,min_val=rng[0],max_val=rng[1])
@@ -225,6 +267,20 @@ class NIDAQ(IDevice):
         self.ai_channels[name]=(channel,len(self.ai_task.ai_channels))
         self._update_channel_names()
     def add_counter_input(self, name, counter, terminal, clk_src="ai/SampleClock", max_rate=1E7, output_format="rate"):
+        """
+        Add counter input (value is related to the number of counts).
+
+        Args:
+            name(str): channel name.
+            counter(str): on-board counter name (e.g., ``"ctr0"``).
+            terminal(str): terminal name (e.g., ``"pfi0"``).
+            clk_src(str): source of the counter smpling clock. By default it is the analog input clock,
+                which requires at least one voltage input channel (could be dummy channel) to operate.
+            max_rate(float): maximal signal rate.
+            output_format(str): output format. Can be ``"acc"`` (return accumulated number of counts since the sampling start),
+                ``"diff"`` (return number of counts passed between the two consecutive sampling points; essentialy, a derivative of ``"acc"``),
+                or ``"rate"`` (return count rate based on the ``"diff"`` samples).
+        """
         funcargparse.check_parameter_range(output_format,"output_format",{"acc","diff","rate"})
         if name in self.ci_tasks:
             self.ci_tasks[name][0].close()
@@ -236,8 +292,39 @@ class NIDAQ(IDevice):
         task.timing.cfg_samp_clk_timing(max_rate,self._build_channel_name(clk_src),sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS)
         self.ci_tasks[name]=(task,len(self.ci_tasks),output_format)
         self._update_channel_names()
+    def get_input_channels(self):
+        """Get names of all input channels (voltage input and counter input)."""
+        return self.ai_names+self.ci_names
+    def get_voltage_input_parameters(self):
+        """Get parameters (names, channels, output ranges, and terminal configurations) of all analog voltage input channels."""
+        params=[]
+        for n in self.ai_names:
+            ch=[ch for ch in self.ai_task.ai_channels if ch.name==n][0]
+            term=self._strip_channel_name(ch.physical_channel.name)
+            rng=(ch.ai_min,ch.ai_max)
+            cfg=ch.ai_term_cfg.name.lower()
+            params.append((n,term,rng,cfg))
+        return params
+    def get_counter_input_parameters(self):
+        """Get parameters (names, counters, terminals, clock sources, and output formats) of all counter input channels."""
+        params=[]
+        for n in self.ci_names:
+            task=self.ci_tasks[n][0]
+            ch=task.ci_channels[0]
+            counter=self._strip_channel_name(ch.physical_channel.name)
+            term=self._strip_channel_name(ch.ci_count_edges_term)
+            clk_src=self._strip_channel_name(task.timing.samp_clk_src)
+            output_format=self.ci_tasks[n][2]
+            params.append((n,counter,term,clk_src,output_format))
+        return params
     
     def read(self, n=1, timeout=10.):
+        """
+        Read `n` samples. If the task is not running, automatically start before reading and stop after.
+
+        If ``n==-1``, read all available samples.
+        REturn numpy array of values arranged according to :meth:`get_input_channels` order.
+        """
         running=True
         if not self._running:
             running=False
@@ -261,9 +348,12 @@ class NIDAQ(IDevice):
         finally:
             if not running:
                 self.stop()
-    def get_input_channels(self):
-        return self.ai_names+self.ci_names
     def start(self, flush_read=0):
+        """
+        Start the sampling task.
+        
+        `flush_read` specifies number of samples to read and discard after start.
+        """
         for cit in self.ci_tasks:
             self.ci_tasks[cit][0].start()
             self.ci_counters[cit]=0
@@ -272,20 +362,30 @@ class NIDAQ(IDevice):
         if flush_read:
             self.read(flush_read)
     def stop(self):
+        """Stop the sampling task"""
         self.ai_task.stop()
         for cit in self.ci_tasks:
             self.ci_tasks[cit][0].stop()
             self.ci_counters[cit]=0
         self._running=False
     def is_running(self):
+        """Check if the task is running"""
         return not self._running
     def available_samples(self):
+        """Get number of available samples (return 0 if the task is not running)"""
         if not self._running:
             return 0
         return self.ai_task.in_stream.avail_samp_per_chan
     def get_buffer_size(self):
+        """Get the sampling buffer size"""
         return self.ai_task.in_stream.input_buf_size if len(self.ai_task.ai_channels) else 0
     def wait_for_sample(self, num=1, timeout=10., wait_time=0.001):
+        """
+        Wait until at least `num` samples are available.
+        
+        If they are not available immediately, loop while checking every `wait_time` interval until enough samples are accumulated.
+        Return the number of available samples if successful, or 0 if the execution timed out.
+        """
         if not self._running:
             return 0
         if self.available_samples()>=num:
@@ -298,11 +398,31 @@ class NIDAQ(IDevice):
         return 0
 
     def add_digital_output(self, name, channel):
+        """
+        Add digital output.
+
+        Args:
+            name(str): channel name.
+            channel(str): terminal name (e.g., ``"do0"``).
+        """
         channel=self._build_channel_name(channel)
         self.do_task.do_channels.add_do_chan(channel,name)
         self.do_channels[name]=(channel,len(self.do_task.do_channels))
         self._update_channel_names()
+    def get_digital_output_channels(self):
+        """Get names of all digital output channels."""
+        return self.do_names
+    def get_digital_output_parameters(self):
+        """Get parameters (names and channels) of all digital output channels."""
+        return [(n,self._strip_channel_name(self.do_channels[n][0])) for n in self.do_names]
     def set_digital_outputs(self, names, values):
+        """
+        Set values of one or several digital outputs.
+
+        Args:
+            names(str or [str]): name or list of names of outputs.
+            values: output value or list values.
+        """
         names=funcargparse.as_sequence(names,allowed_type="array")
         values=funcargparse.as_sequence(values,allowed_type="array")
         values_dict=dict(zip(names,values))
@@ -314,6 +434,16 @@ class NIDAQ(IDevice):
                 curr_vals[i]=bool(values_dict[ch.name])
         self.do_task.write(curr_vals)
     def get_digital_outputs(self, names=None):
+        """
+        Get values of one or several digital outputs.
+
+        Args:
+            names(str or [str] or None): name or list of names of outputs (``None`` means all outputs).
+
+        Return list of values ordered by `names` (or by :meth:`get_digital_output_channels` if ``names==None``).
+        """
+        if not self.do_names:
+            return []
         if names is None:
             names=self.do_names
         else:
@@ -326,27 +456,59 @@ class NIDAQ(IDevice):
             if ch.name in values_dict:
                 values_dict[ch.name]=curr_vals[i]
         return [values_dict[n] for n in names]
-    def get_digital_output_channels(self):
-        return self.do_names
 
     def add_voltage_output(self, name, channel, rng=(-10,10), initial_value=0.):
+        """
+        Add analog voltage output.
+
+        Args:
+            name(str): channel name.
+            channel(str): terminal name (e.g., ``"ao0"``).
+            rng: voltage range.
+            inital_value(float): inital output value (has to be initialized).
+        """
         channel=self._build_channel_name(channel)
         self.ao_task.ao_channels.add_ao_voltage_chan(channel,name,min_val=rng[0],max_val=rng[1])
-        self.ao_channels[name]=(channel,len(self.ao_task.ao_channels))
+        self.ao_channels[name]=(channel,len(self.ao_task.ao_channels),rng)
         self.ao_values[name]=initial_value
         self._update_channel_names()
         self.set_voltage_outputs([],[])
+    def get_voltage_output_channels(self):
+        """Get names of all analog voltage output channels."""
+        return self.ao_names
+    def get_voltage_output_parameters(self):
+        """Get parameters (names, channels and output ranges) of all analog voltage output channels."""
+        params=[]
+        for n in self.ao_names:
+            ch=[ch for ch in self.ao_task.ao_channels if ch.name==n][0]
+            term=self._strip_channel_name(ch.physical_channel.name)
+            rng=(ch.ao_min,ch.ao_max)
+            params.append((n,term,rng))
+        return params
     def set_voltage_outputs(self, names, values):
+        """
+        Set values of one or several analog voltage outputs.
+
+        Args:
+            names(str or [str]): name or list of names of outputs.
+            values: output value or list values.
+        """
         names=funcargparse.as_sequence(names,allowed_type="array")
         values=funcargparse.as_sequence(values,allowed_type="array")
         for n,v in zip(names,values):
             self.ao_values[n]=v
         self.ao_task.write([self.ao_values[ch.name] for ch in self.ao_task.ao_channels])
     def get_voltage_outputs(self, names=None):
+        """
+        Get values of one or several analog voltage outputs.
+
+        Args:
+            names(str or [str] or None): name or list of names of outputs (``None`` means all outputs).
+
+        Return list of values ordered by `names` (or by :meth:`get_voltage_output_channels` if ``names==None``).
+        """
         if names is None:
             names=self.ao_names
         else:
             names=funcargparse.as_sequence(names,allowed_type="array")
         return [self.ao_values[n] for n in names]
-    def get_voltage_output_channels(self):
-        return self.ao_names
