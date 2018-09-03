@@ -28,6 +28,8 @@ def exsafe(func):
     def safe_func(*args, **kwargs):
         try:
             return func(*args,**kwargs)
+        except threadprop.InterruptExceptionStop:
+            pass
         except:
             with _exception_print_lock:
                 try:
@@ -36,12 +38,16 @@ def exsafe(func):
                 except threadprop.NoControllerThreadError:
                     print("Exception raised in uncontroled thread executing function '{}':".format(func.__name__))
                 traceback.print_exc()
-            try:
-                stop_controller("gui",code=1,sync=False)
-            except threadprop.NoControllerThreadError:
-                print("Can't stop GUI thread; quitting the application")
                 sys.stdout.flush()
+            try:
+                stop_controller("gui",code=1,sync=False,require_controller=True)
+            except threadprop.NoControllerThreadError:
+                with _exception_print_lock:
+                    print("Can't stop GUI thread; quitting the application")
+                    sys.stdout.flush()
                 sys.exit(1)
+            except threadprop.InterruptExceptionStop:
+                pass
     return safe_func
 def exsafeSlot(*slargs, **slkwargs):
     """Wrapper around :func:`PyQt5.QtCore.pyqtSlot` which intercepts exceptions and stops the execution in a controlled manner"""
@@ -135,7 +141,7 @@ class QThreadController(QtCore.QObject):
         # set up signals
         self.moveToThread(self.thread)
         self._messaged.connect(self._get_message)
-        self._interrupt_called.connect(self._on_call_in_thread)
+        self._interrupt_called.connect(self._on_call_in_thread,QtCore.Qt.QueuedConnection)
         if self.kind=="main":
             threadprop.get_app().aboutToQuit.connect(self._on_finish_event,type=QtCore.Qt.DirectConnection)
             threadprop.get_app().lastWindowClosed.connect(self._on_last_window_closed,type=QtCore.Qt.DirectConnection)
@@ -397,12 +403,18 @@ class QThreadController(QtCore.QObject):
         """
         Stop the thread.
 
+        If called from the thread, stop immediately by raising a :exc:`InterruptExceptionStop` exception. Otherwise, schedule thread stop.
         If the thread kind is ``"main"``, stop the whole application with the given exit code. Otherwise, stop the thread.
         """
         if self.kind=="main":
-            self.call_in_thread_callback(lambda: threadprop.get_app().exit(code))
+            def exit_main():
+                threadprop.get_app().exit(code)
+                self.request_stop()
+            self.call_in_thread_callback(exit_main)
         else:
             self.thread.quit_sync()
+        if threadprop.current_controller() is self:
+            raise threadprop.InterruptExceptionStop
     def poke(self):
         """
         Send a dummy message to the thread.
@@ -631,6 +643,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         self._command_priorities={}
         self.c=self.CommandAccess(self,sync=False)
         self.q=self.CommandAccess(self,sync=True)
+        self.qs=self.CommandAccess(self,sync=True,safe=True)
 
     def setup_task(self, *args, **kwargs):
         pass
@@ -731,11 +744,12 @@ class QTaskThread(QMultiRepeatingThreadController):
                 self._params_exp[name].remove(ctl)
 
     class CommandAccess(object):
-        def __init__(self, parent, sync, timeout=None):
+        def __init__(self, parent, sync, timeout=None, safe=False):
             object.__init__(self)
             self.parent=parent
             self.sync=sync
             self.timeout=timeout
+            self.safe=safe
             self._calls={}
         def __getattr__(self, name):
             if name not in self._calls:
@@ -745,6 +759,8 @@ class QTaskThread(QMultiRepeatingThreadController):
                         return parent.query(name,*args,timeout=self.timeout,**kwargs)
                     else:
                         return parent.command(name,*args,**kwargs)
+                if self.safe:
+                    remcall=exsafe(remcall)
                 self._calls[name]=remcall
             return self._calls[name]
 

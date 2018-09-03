@@ -113,7 +113,7 @@ class ImageView(QtWidgets.QWidget):
         self.imgVLine.setPos(self.img.shape[0]/2)
         self.imgHLine.setPos(self.img.shape[1]/2)
     # Update image controls based on PyQtGraph image window
-    @QtCore.pyqtSlot()
+    @controller.exsafeSlot()
     def update_image_controls(self):
         params=self._get_params()
         levels=self.imageWindow.getHistogramWidget().getLevels()

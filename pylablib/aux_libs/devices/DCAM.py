@@ -246,21 +246,21 @@ class DCAMCamera(IDevice):
 
     def get_data_dimensions(self):
         """Get the current data dimension (taking ROI and binning into account)"""
-        return (self.get_value("IMAGE HEIGHT"),self.get_value("IMAGE WIDTH"))
+        return (int(self.get_value("IMAGE HEIGHT")),int(self.get_value("IMAGE WIDTH")))
     def get_detector_size(self):
         """Get the detector size"""
-        return (self.properties["SUBARRAY VSIZE"].max,self.properties["SUBARRAY HSIZE"].max)
+        return (int(self.properties["SUBARRAY VSIZE"].max),int(self.properties["SUBARRAY HSIZE"].max))
     def get_roi(self):
         """
         Get current ROI.
 
         Return tuple ``(hstart, hend, vstart, vend, bin)`` (binning is the same for both axes).
         """
-        hstart=self.get_value("SUBARRAY HPOS")
-        hend=hstart+self.get_value("SUBARRAY HSIZE")
-        vstart=self.get_value("SUBARRAY VPOS")
-        vend=vstart+self.get_value("SUBARRAY VSIZE")
-        bin=self.get_value("BINNING")
+        hstart=int(self.get_value("SUBARRAY HPOS"))
+        hend=hstart+int(self.get_value("SUBARRAY HSIZE"))
+        vstart=int(self.get_value("SUBARRAY VPOS"))
+        vend=vstart+int(self.get_value("SUBARRAY VSIZE"))
+        bin=int(self.get_value("BINNING"))
         return (hstart,hend,vstart,vend,bin)
     def set_roi(self, hstart=0, hend=None, vstart=0, vend=None, bin=1):
         """

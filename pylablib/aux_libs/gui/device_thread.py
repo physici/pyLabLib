@@ -27,8 +27,7 @@ class DeviceThread(controller.QTaskThread):
         status_str="status/"+kind if kind else "status"
         self[status_str]=status
         if notify:
-            # self.send_signal("any",status_str,status)
-            self.send_signal("any",status_str+"/"+status)
+            self.send_signal("any",status_str,status)
         if text:
             self.set_variable(status_str+"_text",text)
             self.send_signal("any",status_str+"_text",text)

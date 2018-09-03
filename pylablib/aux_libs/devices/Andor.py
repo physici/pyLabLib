@@ -40,10 +40,10 @@ class AndorCamera(IDevice):
         self.handle=None
         self.open()
         
-        self._settings_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
+        self._nodes_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
         self._add_full_info_node("model_data",lambda: tuple(self.get_model_data()))
         self._add_full_info_node("capabiliteies",lambda: tuple(self.get_capibilities()))
-        self._add_full_info_node("amp_modes",lambda: tuple(self.get_all_amp_modes()))
+        self._add_full_info_node("amp_modes",lambda: tuple(self.get_all_amp_modes()),ignore_error=AndorLibError)
         self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
         self._add_status_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
         self._add_status_node("temperature_status",self.get_temperature_status,ignore_error=AndorLibError)
@@ -51,7 +51,7 @@ class AndorCamera(IDevice):
         self._add_settings_node("channel",lambda:self.channel,lambda x:self.set_amp_mode(channel=x))
         self._add_settings_node("oamp",lambda:self.oamp,lambda x:self.set_amp_mode(oamp=x))
         self._add_settings_node("hsspeed",lambda:self.hsspeed,lambda x:self.set_amp_mode(hsspeed=x))
-        self._add_settings_node("preamp",lambda:self.preamp,lambda x:self.set_amp_mode(preamp=x))
+        self._add_settings_node("preamp",lambda:self.preamp,lambda x:self.set_amp_mode(preamp=x),ignore_error=AndorLibError)
         self._add_settings_node("vsspeed",lambda:self.vsspeed,self.set_vsspeed)
         self._add_settings_node("EMCCD_gain",lambda:self.EMCCD_gain,self.set_EMCCD_gain)
         self._add_settings_node("shutter",lambda:self.shutter_mode,self.set_shutter)
@@ -73,7 +73,7 @@ class AndorCamera(IDevice):
         self._add_settings_node("read_parameters/image",lambda:self.read_params["image"],self.setup_image_mode)
         self._add_settings_node("read_mode",lambda:self.read_mode,self.set_read_mode)
         self._add_status_node("data_dimensions",self.get_data_dimensions)
-        self._add_status_node("ring_buffer_size",self.get_ring_buffer_size)
+        self._add_status_node("ring_buffer_size",self.get_ring_buffer_size,ignore_error=AndorLibError)
         self._add_full_info_node("detector_size",self.get_detector_size)
 
     def _setup_default_settings(self):

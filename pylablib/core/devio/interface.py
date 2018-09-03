@@ -10,7 +10,7 @@ class IDevice(object):
     """
     def __init__(self):
         object.__init__(self)
-        self._settings_ignore_error={"get":(),"set":()}
+        self._nodes_ignore_error={"get":(),"set":()}
         self._info_nodes=dict([(ik,{}) for ik in _info_node_kinds])
         self._info_nodes_order=dict([(ik,[]) for ik in _info_node_kinds])
         self._add_full_info_node("cls",lambda: self.__class__.__name__)
@@ -77,11 +77,12 @@ class IDevice(object):
         return self._add_info_node(path,"status",getter=getter,ignore_error=ignore_error,mux=mux)
     def _add_settings_node(self, path, getter=None, setter=None, ignore_error=(), mux=None):
         return self._add_info_node(path,"settings",getter=getter,setter=setter,ignore_error=ignore_error,mux=mux)
-    def _get_info(self, kinds):
+    def _get_info(self, kinds, nodes=None):
         """
         Get dict ``{name: value}`` containing all the device settings.
          
         `kinds` is the list of info nodes kinds to be included in the info.
+        `nodes` specifies nodes to acquire.
         """
         for kind in kinds:
             if kind not in self._info_nodes:
@@ -89,22 +90,35 @@ class IDevice(object):
         info={}
         for kind in kinds:
             for k in self._info_nodes_order[kind]:
-                g,_,err=self._info_nodes[kind][k]
-                if g:
-                    try:
-                        info[k]=g()
-                    except err+self._settings_ignore_error["get"]:
-                        pass
+                if (nodes is None or k in nodes):
+                    g,_,err=self._info_nodes[kind][k]
+                    if g:
+                        try:
+                            info[k]=g()
+                        except err+self._nodes_ignore_error["get"]:
+                            pass
         return info
-    def get_settings(self):
-        """Get dict ``{name: value}`` containing all the device settings."""
-        return self._get_info(["settings"])
-    def get_full_status(self):
-        """Get dict ``{name: value}`` containing the device status (including settings)."""
-        return self._get_info(["settings","status"])
-    def get_full_info(self):
-        """Get dict ``{name: value}`` containing full device information (including status and settings)."""
-        return self._get_info(["settings","status","full_info"])
+    def get_settings(self, nodes=None):
+        """
+        Get dict ``{name: value}`` containing all the device settings.
+        
+        `nodes` specifies nodes to acquire.
+        """
+        return self._get_info(["settings"],nodes=nodes)
+    def get_full_status(self, nodes=None):
+        """
+        Get dict ``{name: value}`` containing the device status (including settings).
+        
+        `nodes` specifies nodes to acquire.
+        """
+        return self._get_info(["settings","status"],nodes=nodes)
+    def get_full_info(self, nodes=None):
+        """
+        Get dict ``{name: value}`` containing full device information (including status and settings).
+        
+        `nodes` specifies nodes to acquire.
+        """
+        return self._get_info(["settings","status","full_info"],nodes=nodes)
     def apply_settings(self, settings):
         """
         Apply the settings.
@@ -117,7 +131,7 @@ class IDevice(object):
             if s and (k in settings):
                 try:
                     s(settings[k])
-                except err+self._settings_ignore_error["set"]:
+                except err+self._nodes_ignore_error["set"]:
                     pass
     def __getitem__(self, key):
         """Get the value of a settings, status, or full info parameter."""

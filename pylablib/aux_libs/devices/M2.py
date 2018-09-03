@@ -1,4 +1,4 @@
-from ...core.utils import net
+from ...core.utils import net, general
 from ...core.devio.interface import IDevice
 
 import websocket
@@ -754,6 +754,7 @@ class M2ICE(IDevice):
         Return ``True`` if the operation is success otherwise ``False``.
         """
         attempts=0
+        ctd=general.Countdown(self.timeout or None)
         while True:
             operating=False
             if not (self.use_websocket and self.get_full_web_status()["scan_status"]==0):
@@ -791,4 +792,6 @@ class M2ICE(IDevice):
                 break
             time.sleep(0.1)
             attempts+=1
+            if (attempts>10 and ctd.passed()):
+                raise M2Error("coudn't stop all operations: timed out")
         return not operating
