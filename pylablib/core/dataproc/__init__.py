@@ -19,7 +19,7 @@ from . import callable as callable_func
 from .callable import to_callable, MultiplexedCallable, JoinedCallable
 
 from . import interpolate
-from .interpolate import interpolate1D, regular_grid_from_scatter, interpolate2D, interpolateND
+from .interpolate import interpolate1D_func, interpolate1D, interpolate2D, interpolateND, regular_grid_from_scatter, interpolate_trace
 
 from . import specfunc
 from .specfunc import get_kernel_func, get_window_func

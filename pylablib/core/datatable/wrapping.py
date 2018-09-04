@@ -3,7 +3,7 @@ Utilites for uniform treatment of DataTable and numpy array objects for function
 """
 
 from . import column
-from . import table as datatable
+from . import table as datatable, indexing
 from . import table_storage
 from ..utils import iterator as iterator_utils #@UnresolvedImport
 
@@ -451,6 +451,9 @@ class Array2DWrapper(I2DWrapper):
         def get_names(self):
             """Get column names (all names are ``None``)."""
             return [None]*self._storage.shape[1]
+        def get_index(self, idx):
+            """Get number index for a given column index"""
+            return (idx if idx>=0 else self._storage.shape[1]-idx)
     
     class TableAccessor(object):
         """
@@ -637,6 +640,10 @@ class Table2DWrapper(I2DWrapper):
         def get_names(self):
             """Get column names."""
             return self._storage.get_column_names()
+        def get_index(self, idx):
+            """Get number index for a given column index"""
+            idx=indexing.to_list_idx(idx,self.get_names()).idx
+            return (idx if idx>=0 else self._storage.shape[1]-idx)
     
     class TableAccessor(object):
         """
