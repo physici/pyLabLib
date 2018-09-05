@@ -264,13 +264,13 @@ class NIDAQ(IDevice):
         Add analog voltage input.
 
         Readout is synchronized to the system clock.
+        
         Args:
             name(str): channel name.
             channel(str): terminal name (e.g., ``"ai0"``).
             rng: voltage range
             term_config: terminal confiugration. Can be ``"default"``, ``"rse"`` (single-ended, referenced to AI SENSE input),
-                ``"nrse"`` (single-ended, referenced to AI GND), ``"diff"`` (differential) and ``"pseudodiff"``
-                (see NIDAQ manual for details).
+                ``"nrse"`` (single-ended, referenced to AI GND), ``"diff"`` (differential) and ``"pseudodiff"`` (see NIDAQ manual for details).
         """
         channel=self._build_channel_name(channel)
         term_config=self._voltage_input_terms[term_config]
@@ -283,6 +283,7 @@ class NIDAQ(IDevice):
         Add counter input (value is related to the number of counts).
 
         Readout is synchronized to the system clock.
+
         Args:
             name(str): channel name.
             counter(str): on-board counter name (e.g., ``"ctr0"``).

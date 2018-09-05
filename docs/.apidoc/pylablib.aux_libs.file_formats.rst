@@ -4,6 +4,14 @@ pylablib.aux\_libs.file\_formats package
 Submodules
 ----------
 
+pylablib.aux\_libs.file\_formats.cam module
+-------------------------------------------
+
+.. automodule:: pylablib.aux_libs.file_formats.cam
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.file\_formats.ecam module
 --------------------------------------------
 

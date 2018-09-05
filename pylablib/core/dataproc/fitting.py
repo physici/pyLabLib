@@ -141,7 +141,7 @@ class Fitter(object):
         unaccounted_names=set.difference(self.func.get_mandatory_args(),supplied_names)
         return unaccounted_names
     
-    def fit(self, x, y, fit_parameters=None, fixed_parameters=None, scale=None, limits=None, weight=1., return_stderr=False, return_residual=False, **kwargs):
+    def fit(self, x, y, fit_parameters=None, fixed_parameters=None, scale=None, limits=None, weight=1., parscore=None, return_stderr=False, return_residual=False, **kwargs):
         """
         Fit the data.
         
@@ -159,6 +159,8 @@ class Fitter(object):
                 each of which is either ``None`` (no bound for any sub-element) or has the same structure as the full parameter.
                 Note: for complex parameters limits must also be complex numbers (or ``None``), with re and im parts of the limits variable corresponding to the limits of the re and im part.
             weight: Can be an array-like object that determines the relative weight of y-points.
+            parscore(callable): parameter score function, whose value is added to the mean-square error (sum of all residuals squared) after applying weights.
+                Takes the same parameters as the fit function, only without the x-arguments. Can be used for, e.g., 'soft' fit parameter constraining.
             return_stderr (bool): If ``True``, append `stderr` to the output.
             return_residual: If not ``False``, append `residual` to the output.
             **kwargs: arguments passed to :func:`scipy.optimize.least_squares` function
@@ -216,11 +218,17 @@ class Fitter(object):
                 p_ibounds=[default if (b is None or np.isnan(b)) else b for b in p_ibounds]
                 p_bounds.append(p_ibounds)
             kwargs.setdefault("bounds",p_bounds)
+        if parscore:
+            parscore=callable.to_callable(parscore)
         def fit_func(fit_p):
             up=x+unpacker(fit_p)
             y_diff=(np.asarray(y-np.asarray(bound_func(*up)))*weight).flatten()
             if np.iscomplexobj(y_diff):
                 y_diff=np.concatenate((y_diff.real,y_diff.imag))
+            if parscore:
+                fitpar=dict(zip(p_names,up[len(x):]))
+                score=parscore(**fitpar)
+                y_diff=np.append(y_diff,score)
             return y_diff
         lsqres=scipy.optimize.least_squares(fit_func,init_p,**kwargs)
         res,jac,tot_err=lsqres.x,lsqres.jac,lsqres.fun
@@ -255,12 +263,19 @@ class Fitter(object):
         Args:
             fit_parameters (dict): Overrides the default `fit_parameters` of the fitter.
             fixed_parameters (dict): Overrides the default `fixed_parameters` of the fitter.
+            return_stderr (bool): If ``True``, append `stderr` to the output.
+            return_residual: If not ``False``, append `residual` to the output.
         
         Returns:
             tuple: ``(params, bound_func)``.
             
                 - `params`: a dictionary ``{name: value}`` of the parameters supplied to the function (both fit and fixed).
                 - `bound_func`: the fit function with all the parameters bound (i.e., it only requires x parameters).
+                - `stderr`: a dictionary ``{name: error}`` of standard deviation for fit parameters to the return parameters.
+                    Always zero, added for better compatiblity with :meth:`fit`.
+                - `residual`: either a full array of residuals ``func(x,**params)-y`` (if ``return_residual=='full'``) or
+                    a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``).
+                    Always zero, added for better compatiblity with :meth:`fit`.
         """
         fit_parameters=self._prepare_parameters(fit_parameters)
         params_dict=general_utils.merge_dicts(self.fit_parameters,fit_parameters,self.fixed_parameters,fixed_parameters)

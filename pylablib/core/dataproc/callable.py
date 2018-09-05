@@ -408,11 +408,11 @@ class MethodCallable(FunctionCallable):
                 raise TypeError("mandatory parameter not supplied: {0}".format(n))
         named_params=self._defaults.copy()
         named_params.update(self._apply_unalias_dict(params))
-        for n in named_params:
+        for n in list(named_params):
             if not self._is_func_arg(n):
                 if hasattr(self._obj,n):
                     setattr(self._obj,n,named_params.pop(n))
-                else:
+                elif not self._use_keywords:
                     named_params.pop(n)
         return self._func(**named_params)
     
