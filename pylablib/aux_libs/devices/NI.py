@@ -141,7 +141,10 @@ except ImportError:
 
 class NIDAQ(IDevice):
     """
-    National Instruments DAQ device.
+    National Instruments DAQ device interface (wrapper around nidaqmx library).
+
+    Simplified interface to NI DAQ devices.
+    Supports voltage, digital, and counter inputs (all synchronized to the same clock), and digital and voltage outputs (asynchronous).
 
     Args:
         dev_name(str): root device name.
@@ -159,6 +162,7 @@ class NIDAQ(IDevice):
         self.ai_channels={}
         self.ci_tasks={}
         self.ci_counters={}
+        self.di_channels={}
         self.do_channels={}
         self.ao_channels={}
         self.ao_values={}
@@ -170,6 +174,7 @@ class NIDAQ(IDevice):
         self._add_status_node("input_channels",self.get_input_channels)
         self._add_status_node("voltage_input_parameters",self.get_voltage_input_parameters)
         self._add_status_node("counter_input_parameters",self.get_counter_input_parameters)
+        self._add_status_node("digital_input_parameters",self.get_digital_input_parameters)
         self._add_status_node("digital_output_parameters",self.get_digital_output_parameters)
         self._add_status_node("digital_output_values",self.get_digital_outputs)
         self._add_status_node("voltage_output_parameters",self.get_voltage_output_parameters)
@@ -177,6 +182,7 @@ class NIDAQ(IDevice):
         
     def open(self):
         self.ai_task=nidaqmx.Task()
+        self.di_task=nidaqmx.Task()
         self.do_task=nidaqmx.Task()
         self.ao_task=nidaqmx.Task()
     def close(self):
@@ -187,6 +193,9 @@ class NIDAQ(IDevice):
         for t in self.ci_tasks.values():
             t[0].close()
         self.ci_tasks={}
+        if self.di_task is not None:
+            self.di_task.close()
+        self.di_task=None
         if self.do_task is not None:
             self.do_task.close()
         self.do_task=None
@@ -215,11 +224,18 @@ class NIDAQ(IDevice):
         self.ai_names.sort(key=lambda n: self.ai_channels[n][1])
         self.ci_names=list(self.ci_tasks.keys())
         self.ci_names.sort(key=lambda n: self.ci_tasks[n][1])
+        self.di_names=list(self.di_channels.keys())
+        self.di_names.sort(key=lambda n: self.di_channels[n][1])
         self.do_names=list(self.do_channels.keys())
         self.do_names.sort(key=lambda n: self.do_channels[n][1])
         self.ao_names=list(self.ao_channels.keys())
         self.ao_names.sort(key=lambda n: self.ao_channels[n][1])
 
+    def _cfg_clock(self):
+        if self.ai_task.ai_channels:
+            self.ai_task.timing.cfg_samp_clk_timing(self.rate,source=self.clk_src or "",sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
+        if self.di_task.ai_channels:
+            self.di_task.timing.cfg_samp_clk_timing(self.rate,source="ai/SampleClock",sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
     def setup_clock(self, rate, src=None):
         """
         Setup analog input clock.
@@ -227,15 +243,9 @@ class NIDAQ(IDevice):
         If ``src==None``, use internal clock with the given rate; otherwise use `src` terminal as a clock source
         (in this case, `rate` should be higher than the expected source rate).
         """
-        if self.ai_task.ai_channels:
-            if src==self.clk_src:
-                self.ai_task.timing.samp_clk_rate=rate
-            else:
-                if src:
-                    src=self._build_channel_name(src)
-                self.ai_task.timing.cfg_samp_clk_timing(rate,source=src or "",sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
         self.rate=rate
         self.clk_src=src
+        self._cfg_clock()
     def get_clock_cfg(self):
         """
         Get analog input clock configuration.
@@ -253,23 +263,26 @@ class NIDAQ(IDevice):
         """
         Add analog voltage input.
 
+        Readout is synchronized to the system clock.
         Args:
             name(str): channel name.
             channel(str): terminal name (e.g., ``"ai0"``).
             rng: voltage range
-            term_config: terminal confiugration. Can be ``"default"``, ``"rse"``, ``"nrse"``, ``"diff"`` and ``"pseudodiff"``
+            term_config: terminal confiugration. Can be ``"default"``, ``"rse"`` (single-ended, referenced to AI SENSE input),
+                ``"nrse"`` (single-ended, referenced to AI GND), ``"diff"`` (differential) and ``"pseudodiff"``
                 (see NIDAQ manual for details).
         """
         channel=self._build_channel_name(channel)
         term_config=self._voltage_input_terms[term_config]
         self.ai_task.ai_channels.add_ai_voltage_chan(channel,name,terminal_config=term_config,min_val=rng[0],max_val=rng[1])
-        self.ai_task.timing.cfg_samp_clk_timing(self.rate,source=self.clk_src,sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
+        self._cfg_clock()
         self.ai_channels[name]=(channel,len(self.ai_task.ai_channels))
         self._update_channel_names()
     def add_counter_input(self, name, counter, terminal, clk_src="ai/SampleClock", max_rate=1E7, output_format="rate"):
         """
         Add counter input (value is related to the number of counts).
 
+        Readout is synchronized to the system clock.
         Args:
             name(str): channel name.
             counter(str): on-board counter name (e.g., ``"ctr0"``).
@@ -289,12 +302,32 @@ class NIDAQ(IDevice):
         terminal=self._build_channel_name(terminal)
         task.ci_channels.add_ci_count_edges_chan(counter)
         task.ci_channels[0].ci_count_edges_term=terminal
-        task.timing.cfg_samp_clk_timing(max_rate,self._build_channel_name(clk_src),sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS)
+        task.timing.cfg_samp_clk_timing(max_rate,self._build_channel_name(clk_src),sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
         self.ci_tasks[name]=(task,len(self.ci_tasks),output_format)
         self._update_channel_names()
-    def get_input_channels(self):
-        """Get names of all input channels (voltage input and counter input)."""
-        return self.ai_names+self.ci_names
+    def add_digital_input(self, name, channel):
+        """
+        Add digital input.
+
+        Readout is synchronized to the system clock.
+        Args:
+            name(str): channel name.
+            channel(str): terminal name (e.g., ``"port0/line12"``).
+        """
+        channel=self._build_channel_name(channel)
+        self.di_task.di_channels.add_di_chan(channel,name)
+        self._cfg_clock()
+        self.di_channels[name]=(channel,len(self.di_task.di_channels))
+        self._update_channel_names()
+    def get_input_channels(self, include=("ai","ci","di")):
+        """
+        Get names of all input channels (voltage input and counter input).
+        
+        `include` specifies which channel types to include into the list
+        (``"ai"`` for voltage inputs, ``"ci"`` for counter inputs, ``"di"`` for digital inputs).
+        The channels order is always fixed: first voltage inputs, then counter inputs, then digital inputs.
+        """
+        return (self.ai_names if "ai" in include else [])+(self.ci_names if "ci" in include else [])+(self.di_names if "di" in include else [])
     def get_voltage_input_parameters(self):
         """Get parameters (names, channels, output ranges, and terminal configurations) of all analog voltage input channels."""
         params=[]
@@ -317,13 +350,18 @@ class NIDAQ(IDevice):
             output_format=self.ci_tasks[n][2]
             params.append((n,counter,term,clk_src,output_format))
         return params
+    def get_digital_input_parameters(self):
+        """Get parameters (names and channels) of all digital output channels."""
+        return [(n,self._strip_channel_name(self.di_channels[n][0])) for n in self.di_names]
     
-    def read(self, n=1, timeout=10.):
+    def read(self, n=1, timeout=10., include=("ai","ci","di")):
         """
         Read `n` samples. If the task is not running, automatically start before reading and stop after.
 
         If ``n==-1``, read all available samples.
-        REturn numpy array of values arranged according to :meth:`get_input_channels` order.
+        `include` specifies which channel types to include into the list
+        (``"ai"`` for voltage inputs, ``"ci"`` for counter inputs, ``"di"`` for digital inputs).
+        Return numpy array of values arranged according to :meth:`get_input_channels` order with the given `include` parameter.
         """
         running=True
         if not self._running:
@@ -336,15 +374,22 @@ class NIDAQ(IDevice):
             if len(self.ai_task.ai_channels)==1:
                 ais=[ais]
             cis=[np.array(self.ci_tasks[ci][0].read(n),dtype="u4") for ci in self.ci_names]
-            for i,ci in enumerate(self.ci_names):
-                if self.ci_tasks[ci][2]!="acc":
-                    last_cnt=cis[i][-1]
-                    cis[i][1:]-=cis[i][:-1]
-                    cis[i][0]=(int(cis[i][0])-self.ci_counters[ci])%int(2**32)
-                    self.ci_counters[ci]=int(last_cnt)
-                    if self.ci_tasks[ci][2]=="rate":
-                        cis[i]=cis[i]*self.rate
-            return np.column_stack(ais+cis)
+            if "ci" in include:
+                for i,ci in enumerate(self.ci_names):
+                    if self.ci_tasks[ci][2]!="acc":
+                        last_cnt=cis[i][-1]
+                        cis[i][1:]-=cis[i][:-1]
+                        cis[i][0]=(int(cis[i][0])-self.ci_counters[ci])%int(2**32)
+                        self.ci_counters[ci]=int(last_cnt)
+                        if self.ci_tasks[ci][2]=="rate":
+                            cis[i]=cis[i]*self.rate
+            if self.di_task.di_channels:
+                dis=self.di_task.read(n)
+                if len(self.di_task.di_channels)==1:
+                    dis=[dis]
+            else:
+                dis=[]
+            return np.column_stack((ais if "ai" in include else [])+(cis if "ci" in include else [])+(dis if "di" in include else []))
         finally:
             if not running:
                 self.stop()
@@ -364,6 +409,7 @@ class NIDAQ(IDevice):
     def stop(self):
         """Stop the sampling task"""
         self.ai_task.stop()
+        self.di_task.stop()
         for cit in self.ci_tasks:
             self.ci_tasks[cit][0].stop()
             self.ci_counters[cit]=0

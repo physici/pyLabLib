@@ -768,7 +768,8 @@ class M2ICE(IDevice):
                             self.stop_scan_web(scan_type)
                         if attempts>6:
                             rate=self._default_terascan_rates[scan_type]
-                            self.setup_terascan(scan_type,(stat["current"],stat["current"]+rate*10),rate)
+                            scan_center=stat["current"] or 400E12
+                            self.setup_terascan(scan_type,(scan_center,scan_center+rate*10),rate)
                             self.start_terascan(scan_type)
                             time.sleep(1.)
                             self.stop_terascan(scan_type)
