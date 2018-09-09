@@ -24,7 +24,7 @@ class OphirDevice(backend.IBackendWrapper):
             return py3.as_str(resp[1:].strip())
         raise RuntimeError("Command {} returned unrecognized response: {}".format(comm,resp))
     def query(self, comm):
-        """Send a query to the stage and return the reply"""
+        """Send a query to the device and parse the reply"""
         comm=comm.strip()
         with self.instr.single_op():
             self.instr.flush_read()
