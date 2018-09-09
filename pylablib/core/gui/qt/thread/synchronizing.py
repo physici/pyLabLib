@@ -29,6 +29,10 @@ class QThreadNotifier(notifier.ISkippableNotifier):
         return True
     def get_value(self):
         return self.value
+    def get_value_sync(self, timeout=None):
+        if not self.done_wait():
+            self.wait(timeout=timeout)
+        return self.get_value()
 
 
 class QMultiThreadNotifier(object):
@@ -56,14 +60,37 @@ class QMultiThreadNotifier(object):
         for n in notifiers:
             n.notify(cnt)
 
+
+class QThreadCallNotifier(QThreadNotifier):
+    def get_value_sync(self, timeout=None, default=None, error_on_fail=True, pass_exception=True):
+        res=QThreadNotifier.get_value_sync(self,timeout=timeout)
+        if res:
+            kind,value=res
+            if kind=="result":
+                return value
+            elif kind=="exception":
+                if pass_exception:
+                    raise value
+                else:
+                    return default
+            else:
+                if error_on_fail:
+                    raise threadprop.ThreadError("failed executing remote call")
+                return default
+        else:
+            if error_on_fail:
+                raise threadprop.TimeoutThreadError()
+            return default
+
 class QSyncCall(object):
-    def __init__(self, func, args=None, kwargs=None, pass_exception=True):
+    def __init__(self, func, args=None, kwargs=None, pass_exception=True, error_on_fail=True):
         object.__init__(self)
         self.func=func
         self.args=args or []
         self.kwargs=kwargs or {}
-        self.synchronizer=QThreadNotifier()
+        self.synchronizer=QThreadCallNotifier()
         self.pass_exception=pass_exception
+        self.error_on_fail=error_on_fail
     def __call__(self):
         try:
             res=("fail",None)
@@ -75,14 +102,7 @@ class QSyncCall(object):
             self.synchronizer.notify(res)
     def value(self, sync=True, timeout=None, default=None):
         if sync:
-            if self.synchronizer.wait(timeout):
-                kind,value=self.synchronizer.get_value()
-                if kind=="result":
-                    return value
-                elif kind=="exception" and self.pass_exception:
-                    raise value
-            else:
-                return default
+            return self.synchronizer.get_value_sync(timeout=timeout,default=default,error_on_fail=self.error_on_fail,pass_exception=self.pass_exception)
         else:
             return self.synchronizer
     def wait(self, timeout=None):

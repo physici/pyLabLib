@@ -15,14 +15,14 @@ class ScriptThread(controller.QTaskThread):
         controller.QTaskThread.__init__(self,name=name,setupargs=setupargs,setupkwargs=setupkwargs,signal_pool=signal_pool)
         self._monitor_signal.connect(self._on_monitor_signal)
         self._monitored_signals={}
-        self.running=False
+        self.executing=False
         self.stop_request=False
         self.add_command("start_script",self._start_script)
 
     def process_message(self, tag, value):
         if tag=="control.start":
             self.c.start_script()
-            if self.running:
+            if self.executing:
                 self.stop_request=True
         if tag=="control.stop":
             self.stop_request=True
@@ -51,7 +51,7 @@ class ScriptThread(controller.QTaskThread):
         self.finalize_script()
 
     def _start_script(self):
-        self.running=True
+        self.executing=True
         self.stop_request=False
         try:
             self.run_script()
@@ -59,7 +59,7 @@ class ScriptThread(controller.QTaskThread):
             pass
         finally:
             self.interrupt_script()
-        self.running=False
+            self.executing=False
 
     _monitor_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")

@@ -4,6 +4,7 @@ from . import signal_pool, threadprop, synchronizing
 from PyQt5 import QtCore
 
 import threading
+import contextlib
 import time
 import sys, traceback
 import heapq
@@ -22,32 +23,40 @@ _running_threads_stopping=False
 
 _exception_print_lock=threading.Lock()
 
-def exsafe(func):
-    """Decorator that intercepts exceptions raised by `func` and stops the execution in a controlled manner (quitting the main thread)"""
-    @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
-    def safe_func(*args, **kwargs):
+
+@contextlib.contextmanager
+def exint(error_msg_template="{}:"):
+    """Context that intercepts exceptions raised by `func` and stops the execution in a controlled manner (quitting the main thread)"""
+    try:
+        yield
+    except threadprop.InterruptExceptionStop:
+        pass
+    except:
+        with _exception_print_lock:
+            try:
+                ctl_name=get_controller(wait=False).name
+                print(error_msg_template.format("Exception raised in thread '{}'".format(ctl_name)))
+            except threadprop.NoControllerThreadError:
+                print(error_msg_template.format("Exception raised in uncontroled thread"))
+            traceback.print_exc()
+            sys.stdout.flush()
         try:
-            return func(*args,**kwargs)
+            stop_controller("gui",code=1,sync=False,require_controller=True)
+        except threadprop.NoControllerThreadError:
+            with _exception_print_lock:
+                print("Can't stop GUI thread; quitting the application")
+                sys.stdout.flush()
+            sys.exit(1)
         except threadprop.InterruptExceptionStop:
             pass
-        except:
-            with _exception_print_lock:
-                try:
-                    ctl_name=get_controller(wait=False).name
-                    print("Exception raised in thread '{}' executing function '{}':".format(ctl_name,func.__name__))
-                except threadprop.NoControllerThreadError:
-                    print("Exception raised in uncontroled thread executing function '{}':".format(func.__name__))
-                traceback.print_exc()
-                sys.stdout.flush()
-            try:
-                stop_controller("gui",code=1,sync=False,require_controller=True)
-            except threadprop.NoControllerThreadError:
-                with _exception_print_lock:
-                    print("Can't stop GUI thread; quitting the application")
-                    sys.stdout.flush()
-                sys.exit(1)
-            except threadprop.InterruptExceptionStop:
-                pass
+
+def exsafe(func):
+    """Decorator that intercepts exceptions raised by `func` and stops the execution in a controlled manner (quitting the main thread)"""
+    error_msg_template="{{}} executing function '{}':".format(func.__name__)
+    @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
+    def safe_func(*args, **kwargs):
+        with exint(error_msg_template=error_msg_template):
+            return func(*args,**kwargs)
     return safe_func
 def exsafeSlot(*slargs, **slkwargs):
     """Wrapper around :func:`PyQt5.QtCore.pyqtSlot` which intercepts exceptions and stops the execution in a controlled manner"""
@@ -66,11 +75,12 @@ class QThreadControllerThread(QtCore.QThread):
         self._stop_request.connect(self._do_quit)
         self._stop_requested=False
     def run(self):
-        try:
-            self.exec_() # main execution event loop
-        finally:
-            self.finalized.emit()
-            self.exec_() # finalizing event loop (exitted after finalizing event is processed)
+        with exint():
+            try:
+                self.exec_() # main execution event loop
+            finally:
+                self.finalized.emit()
+                self.exec_() # finalizing event loop (exitted after finalizing event is processed)
     @QtCore.pyqtSlot()
     def _do_quit(self):
         if self.isRunning() and not self._stop_requested:
@@ -359,20 +369,39 @@ class QThreadController(QtCore.QObject):
 
     ### Managing signal pool interaction ###
     def subscribe(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, id=None):
+        """
+        Subscribe synchronous callback to a signal.
+
+        See :func:`signal_pool.SignalPool.subscribe` for details.
+        By default, the subscribed destination is the thread's name.
+        """
         if self._signal_pool:
             uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,
                 limit_queue=limit_queue,limit_period=limit_period,dest_controller=self,id=id)
             self._signal_pool_uids.append(uid)
             return uid
     def subscribe_nonsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, id=None):
+        """
+        Subscribe asynchronous callback to a signal.
+
+        See :func:`signal_pool.SignalPool.subscribe_nonsync` for details.
+        By default, the subscribed destination is the thread's name.
+        """
         if self._signal_pool:
             uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,id=id)
             self._signal_pool_uids.append(uid)
             return uid
     def unsubscribe(self, id):
+        """Unsibscribe from a subscription with a given ID."""
         self._signal_pool_uids.pop(id)
         self._signal_pool.unsubscribe(id)
     def send_signal(self, dst="any", tag=None, value=None, src=None):
+        """
+        Send a signal to the signal pool.
+
+        See :func:`signal_pool.SignalPool.signal` for details.
+        By default, the signal source is the thread's name.
+        """
         self._signal_pool.signal(src or self.name,dst,tag,value)
 
 
@@ -475,10 +504,11 @@ class QThreadController(QtCore.QObject):
 
         If ``sync==True``, calling thread is blocked until the controlled thread executes the function, and the function result is returned
         (in essence, the fact that the function executes in a different thread is transparent).
-        Otherwise, exit call immediately, and return a synchronizer object which can be used to check if the call is done and obtain the result.
+        Otherwise, exit call immediately, and return a synchronizer object (:class:`synchronizing.QThreadCallNotifier`),
+        which can be used to check if the call is done (method `is_done`) and obtain the result (method :meth:`synchronizing.QThreadCallNotifier.get_value_sync`).
         If ``pass_exception==True`` and `func` raises and exception, re-raise it in the caller thread (applies only if ``sync==True``).
         If `tag` is supplied, send the call in a message with the given tag and priority; otherwise, use the interrupt call (generally, higher priority method).
-        If `same_thread_shortcut==True`` (default), the call is synchronous, and the caller thread is the same as the controlled thread, call the function directly.
+        If ``same_thread_shortcut==True`` (default), the call is synchronous, and the caller thread is the same as the controlled thread, call the function directly.
         """
         if same_thread_shortcut and sync and threadprop.current_controller() is self:
             return func(*(args or []),**(kwargs or {}))
@@ -547,8 +577,10 @@ class QMultiRepeatingThreadController(QThreadController):
                 p=next(gen)
                 if p is not None:
                     self.change_job_period(name,p)
+                return
             except StopIteration:
-                self.stop_batch_job(name)
+                pass
+            self.stop_batch_job(name)
         self.add_job(name,do_step,period,initial_call=False)
     def batch_job_running(self, name):
         if name not in self.batch_jobs:
@@ -706,7 +738,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         priority=self._command_priorities.get(name,0)
         return self.call_in_thread_sync(func,args=(name,)+tuple(args),kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute",priority=priority)
     def command(self, name, *args, **kwargs):
-        self._sync_call(self.process_command,name,args,kwargs,sync=False)
+        return self._sync_call(self.process_command,name,args,kwargs,sync=False)
     def query(self, name, *args, **kwargs):
         timeout=kwargs.pop("timeout",None)
         return self._sync_call(self.process_query,name,args,kwargs,sync=True,timeout=timeout)
@@ -817,6 +849,7 @@ def stop_controller(name=None, code=0, sync=True, require_controller=False):
         controller.stop(code=code)
         if sync:
             controller.sync_exec("stop")
+            controller.thread.wait()
         return controller
     except threadprop.NoControllerThreadError:
         if require_controller:
@@ -835,6 +868,7 @@ def stop_all_controllers(sync=True, concurrent=True, stop_self=True):
         for ctl in ctls:
             if ctl:
                 ctl.sync_exec("stop")
+                ctl.thread.wait()
     else:
         for n in names:
             if (n!=current_ctl):
