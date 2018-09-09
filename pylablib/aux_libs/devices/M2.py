@@ -84,7 +84,6 @@ class M2ICE(IDevice):
     def _parse_reply(self, msg):
         pmsg=self._parse_message(msg)
         if pmsg["op"]=="parse_fail":
-            print(pmsg)
             par=pmsg["parameters"]
             perror=par["protocol_error"][0]
             perror_desc="unknown" if perror>=len(self._parse_errors) else self._parse_errors[perror]

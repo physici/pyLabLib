@@ -150,12 +150,16 @@ class NIDAQ(IDevice):
         dev_name(str): root device name.
         rate(float): analog input sampling rate (can be adjusted later).
         buffer_size(int): size of the input buffer.
+        reset(int): if ``True``, reset the device upon connection.
     """
     _default_retry_delay=5.
     _default_retry_times=5
-    def __init__(self, dev_name="dev0", rate=1E4, buffer_size=1E5):
+    def __init__(self, dev_name="dev0", rate=1E2, buffer_size=1E5, reset=False):
         IDevice.__init__(self)
         self.dev_name=dev_name.strip("/")
+        self.dev=nidaqmx.system.Device(self.dev_name)
+        if reset:
+            self.dev.reset_device()
         self.rate=rate
         self.clk_src=None
         self.buffer_size=buffer_size
@@ -171,6 +175,7 @@ class NIDAQ(IDevice):
         self._running=False
         self._add_full_info_node("device",lambda: self.dev_name)
         self._add_settings_node("clock_cfg",self.get_clock_cfg,self.setup_clock)
+        self._add_settings_node("clock_export",self.get_export_clock_terminal,self.export_clock)
         self._add_status_node("input_channels",self.get_input_channels)
         self._add_status_node("voltage_input_parameters",self.get_voltage_input_parameters)
         self._add_status_node("counter_input_parameters",self.get_counter_input_parameters)
@@ -208,6 +213,11 @@ class NIDAQ(IDevice):
         self._update_channel_names()
     def is_opened(self):
         return self.ai_task is not None
+    def reset(self):
+        """Reset the device. All channels will be removed."""
+        self.close()
+        self.dev.reset_device()
+        self.open()
 
     def _build_channel_name(self, channel):
         channel=channel.lower().strip("/")
@@ -231,14 +241,17 @@ class NIDAQ(IDevice):
         self.ao_names=list(self.ao_channels.keys())
         self.ao_names.sort(key=lambda n: self.ao_channels[n][1])
 
-    def _cfg_clock(self):
+    def _cfg_clock(self, finite=None):
+        sample_mode=nidaqmx.constants.AcquisitionType.FINITE if finite else nidaqmx.constants.AcquisitionType.CONTINUOUS
+        samps_per_chan=finite if finite else int(self.buffer_size)
+        samps_per_chan=max(samps_per_chan,2)
         if self.ai_task.ai_channels:
-            self.ai_task.timing.cfg_samp_clk_timing(self.rate,source=self.clk_src or "",sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
+            self.ai_task.timing.cfg_samp_clk_timing(self.rate,source=self.clk_src or "",sample_mode=sample_mode,samps_per_chan=samps_per_chan)
         if self.di_task.ai_channels:
             self.di_task.timing.cfg_samp_clk_timing(self.rate,source="ai/SampleClock",sample_mode=nidaqmx.constants.AcquisitionType.CONTINUOUS,samps_per_chan=int(self.buffer_size))
     def setup_clock(self, rate, src=None):
         """
-        Setup analog input clock.
+        Setup analog input clock (which is the main system clock).
 
         If ``src==None``, use internal clock with the given rate; otherwise use `src` terminal as a clock source
         (in this case, `rate` should be higher than the expected source rate).
@@ -253,6 +266,18 @@ class NIDAQ(IDevice):
         Return tuple ``(rate, src)``.
         """
         return self.rate,self.clk_src
+    def export_clock(self, terminal):
+        """
+        Export system clock to the given terminal (``None`` to disconnect all terminals)
+        
+        Only terminal one can be acive at a time.
+         """
+        terminal=self._strip_channel_name(terminal or "")
+        self.ai_task.export_signals.export_signal(nidaqmx.constants.Signal.SAMPLE_CLOCK,terminal)
+    def get_export_clock_terminal(self):
+        """Return terminal which outputs system clock (``None`` if none is connected)."""
+        term=self.ai_task.export_signals.samp_clk_output_term
+        return self._strip_channel_name(term) if term else None
 
     _voltage_input_terms={  "default":nidaqmx.constants.TerminalConfiguration.DEFAULT,
                             "rse":nidaqmx.constants.TerminalConfiguration.RSE,
@@ -264,13 +289,13 @@ class NIDAQ(IDevice):
         Add analog voltage input.
 
         Readout is synchronized to the system clock.
-        
         Args:
             name(str): channel name.
             channel(str): terminal name (e.g., ``"ai0"``).
             rng: voltage range
             term_config: terminal confiugration. Can be ``"default"``, ``"rse"`` (single-ended, referenced to AI SENSE input),
-                ``"nrse"`` (single-ended, referenced to AI GND), ``"diff"`` (differential) and ``"pseudodiff"`` (see NIDAQ manual for details).
+                ``"nrse"`` (single-ended, referenced to AI GND), ``"diff"`` (differential) and ``"pseudodiff"``
+                (see NIDAQ manual for details).
         """
         channel=self._build_channel_name(channel)
         term_config=self._voltage_input_terms[term_config]
@@ -283,7 +308,6 @@ class NIDAQ(IDevice):
         Add counter input (value is related to the number of counts).
 
         Readout is synchronized to the system clock.
-
         Args:
             name(str): channel name.
             counter(str): on-board counter name (e.g., ``"ctr0"``).
@@ -367,7 +391,7 @@ class NIDAQ(IDevice):
         running=True
         if not self._running:
             running=False
-            self.start()
+            self.start(finite=n)
         try:
             if n==-1:
                 n=self.available_samples()
@@ -394,16 +418,20 @@ class NIDAQ(IDevice):
         finally:
             if not running:
                 self.stop()
-    def start(self, flush_read=0):
+    def start(self, flush_read=0, finite=None):
         """
         Start the sampling task.
         
         `flush_read` specifies number of samples to read and discard after start.
+        If `finite` is not ``None``, it specifies finite number of sample to acquire before stopping.
         """
         for cit in self.ci_tasks:
             self.ci_tasks[cit][0].start()
             self.ci_counters[cit]=0
+        self._cfg_clock(finite=finite)
         self.ai_task.start()
+        if self.di_task.di_channels:
+            self.di_task.start()
         self._running=True
         if flush_read:
             self.read(flush_read)
@@ -473,6 +501,10 @@ class NIDAQ(IDevice):
         names=funcargparse.as_sequence(names,allowed_type="array")
         values=funcargparse.as_sequence(values,allowed_type="array")
         values_dict=dict(zip(names,values))
+        ch_names=set([ch.name for ch in self.do_task.do_channels])
+        for n in names:
+            if n not in ch_names:
+                raise ValueError("channel '{}' doesn't exist".format(v))
         curr_vals=self.do_task.read()
         if len(self.do_task.do_channels)==1:
             curr_vals=[curr_vals]
@@ -542,6 +574,9 @@ class NIDAQ(IDevice):
         """
         names=funcargparse.as_sequence(names,allowed_type="array")
         values=funcargparse.as_sequence(values,allowed_type="array")
+        for n in names:
+            if n not in self.ao_values:
+                raise ValueError("channel '{}' doesn't exist".format(v))
         for n,v in zip(names,values):
             self.ao_values[n]=v
         self.ao_task.write([self.ao_values[ch.name] for ch in self.ao_task.ao_channels])

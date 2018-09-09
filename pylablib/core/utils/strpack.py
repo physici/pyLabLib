@@ -56,7 +56,7 @@ def bits2int(val, bo=">"):
 
 def pack_uint(val, l, bo=">"):
     """
-    Convert unsigned integer into a bytestring of length `l`.
+    Convert an unsigned integer into a bytestring of length `l`.
     
     Return ``bytes`` object in Py3 and ``builtins.bytes`` object in Py2.
     `bo` determines byte order: ``'>'`` is big-endian (MSB first), ``'<'`` is little-endian (LSB first).
@@ -67,6 +67,14 @@ def pack_uint(val, l, bo=">"):
         return struct.pack(fmt,val)
     bs=int2bytes(val,l,bo)
     return bytes(bs)
+def pack_int(val, l, bo=">"):
+    """
+    Convert a signed integer into a bytestring of length `l`.
+    
+    Return ``bytes`` object in Py3 and ``builtins.bytes`` object in Py2.
+    `bo` determines byte order: ``'>'`` is big-endian (MSB first), ``'<'`` is little-endian (LSB first).
+    """
+    return pack_uint(val%(1<<l*8),l,bo)
 def unpack_uint(msg, bo=">"):
     """
     Convert a bytestring into an unsigned integer.
@@ -78,3 +86,12 @@ def unpack_uint(msg, bo=">"):
         fmt=bo+struct_descriptors[fmt]
         return struct.unpack(fmt,msg)[0]
     return bytes2int(bytes(msg),bo)
+def unpack_int(msg, bo=">"):
+    """
+    Convert a bytestring into an signed integer.
+    
+    `bo` determines byte order: ``'>'`` is big-endian (MSB first), ``'<'`` is little-endian (LSB first).
+    """
+    val=unpack_uint(msg,bo)
+    maxint=1<<(len(msg)*8-1)
+    return ((val+maxint)%(maxint*2))-maxint

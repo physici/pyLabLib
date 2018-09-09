@@ -8,6 +8,7 @@ class DeviceThread(controller.QTaskThread):
         self.add_command("close_device",self.close_device)
         self.add_command("get_settings",self.get_settings)
         self.add_command("get_full_info",self.get_full_info)
+        self._full_info_job=False
         
     def finalize_task(self):
         self.close_device()
@@ -34,5 +35,15 @@ class DeviceThread(controller.QTaskThread):
 
     def get_settings(self):
         return self.device.get_settings() if self.device is not None else {}
+    
+    def setup_full_info_job(self, period=2.):
+        if not self._full_info_job:
+            self.add_job("update_full_info",self.update_full_info,period)
+            self._full_info_job=True 
+    def update_full_info(self):
+        self["full_info"]=self.device.get_full_info()
     def get_full_info(self):
-        return self.device.get_full_info() if self.device is not None else {}
+        if self.device:
+            return self["full_info"] if self._full_info_job else self.device.get_full_info()
+        else:
+            return {}
