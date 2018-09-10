@@ -158,6 +158,8 @@ class MDT69xA(ThorlabsInterface):
 
 
 
+class KinesisError(RuntimeError):
+    """Generic Kinesis device error."""
 
 class KinesisDevice(backend.IBackendWrapper):
     """
@@ -202,7 +204,7 @@ class KinesisDevice(backend.IBackendWrapper):
 
         For details, see APT communications protocol.
         """
-        msg=strpack.pack_uint(messageID,2,"<")+strpack.pack_uint(len(data),2)+strpack.pack_uint(dest,1)+strpack.pack_uint(source,1)
+        msg=strpack.pack_uint(messageID,2,"<")+strpack.pack_uint(len(data),2,"<")+strpack.pack_uint(dest|0x80,1)+strpack.pack_uint(source,1)
         self.instr.write(msg+data)
 
     CommNoData=collections.namedtuple("CommNoData",["messageID","param1","param2","source","dest"])
@@ -216,8 +218,8 @@ class KinesisDevice(backend.IBackendWrapper):
         messageID=strpack.unpack_uint(msg[0:2],"<")
         param1=strpack.unpack_uint(msg[2:3])
         param2=strpack.unpack_uint(msg[3:4])
-        source=strpack.unpack_uint(msg[4:5])
-        dest=strpack.unpack_uint(msg[5:6])
+        dest=strpack.unpack_uint(msg[4:5])
+        source=strpack.unpack_uint(msg[5:6])
         return self.CommNoData(messageID,param1,param2,source,dest)
     CommData=collections.namedtuple("CommData",["messageID","data","source","dest"])
     def recv_comm_data(self):
@@ -229,8 +231,8 @@ class KinesisDevice(backend.IBackendWrapper):
         msg=self.instr.read(6)
         messageID=strpack.unpack_uint(msg[0:2],"<")
         datalen=strpack.unpack_uint(msg[2:4],"<")
-        source=strpack.unpack_uint(msg[4:5])
-        dest=strpack.unpack_uint(msg[5:6])
+        dest=strpack.unpack_uint(msg[4:5])&0x7F
+        source=strpack.unpack_uint(msg[5:6])
         data=self.instr.read(datalen)
         return self.CommData(messageID,data,source,dest)
 
@@ -242,9 +244,7 @@ class KinesisDevice(backend.IBackendWrapper):
         self.send_comm_nodata(0x0005,dest=dest)
         data=self.recv_comm_data().data
         serial_no=strpack.unpack_uint(data[:4],"<")
-        model_no=data[4:12].decode()
-        while model_no[-1]==b"\x00":
-            model_no=model_no[:-1]
+        model_no=data[4:12].decode().strip("\x00")
         fw_ver="{}.{}.{}".format(strpack.unpack_uint(data[16:17]),strpack.unpack_uint(data[15:16]),strpack.unpack_uint(data[14:15]))
         hw_type=strpack.unpack_uint(data[12:14],"<")
         hw_ver=strpack.unpack_uint(data[78:80],"<")
@@ -285,3 +285,53 @@ class MFF(KinesisDevice):
         if status&0x2F0: # moving
             return None
         raise RuntimeError("error getting MF10x position: status {:08x}".format(status))
+
+
+class KDC101(KinesisDevice):
+    def __init__(self, conn):
+        KinesisDevice.__init__(self,conn)
+        # self._add_settings_node("position",self.get_position,self.set_position)
+    
+    def home(self, timeout=None):
+        self.send_comm_nodata(0x0443,1)
+        self.wait_for_home(timeout=timeout)
+    
+    def wait_for_home(self, timeout=None):
+        with self.instr.using_timeout(timeout):
+            # self.send_comm_nodata(0x0444,1)
+            self.recv_comm_nodata()
+
+    def get_position(self):
+        self.send_comm_nodata(0x0411,1)
+        msg=self.recv_comm_data()
+        print(msg)
+        data=msg.data
+        return strpack.unpack_int(data[2:6],"<")
+    def set_position_reference(self, position=0):
+        self.send_comm_data(0x0410,b"\x01\x00"+strpack.pack_int(position,4,"<"))
+        return self.get_position()
+    def move(self, steps=1):
+        self.send_comm_data(0x0448,b"\x01\x00"+strpack.pack_int(steps,4,"<"))
+    def move_to(self, position):
+        self.send_comm_data(0x0453,b"\x01\x00"+strpack.pack_int(position,4,"<"))
+    def jog(self, direction):
+        if not direction: # 0 or False also mean left
+            direction="-"
+        if direction in [1, True]:
+            direction="+"
+        if direction not in ["+","-"]:
+            raise KinesisError("unrecognized direction: {}".format(direction))
+        self.send_comm_nodata(0x0457,1,2 if direction=="+" else 1)
+    def wait_for_move(self, timeout=None):
+        with self.instr.using_timeout(timeout):
+            self.send_comm_nodata(0x0464,1)
+            return self.recv_comm_data()
+
+    def stop(self, immediate=False, sync=True):
+        self.send_comm_nodata(0x0465,1,1 if immediate else 2)
+        if sync:
+            self.wait_for_stop()
+    def wait_for_stop(self, timeout=None):
+        with self.instr.using_timeout(timeout):
+            self.send_comm_nodata(0x0466,1)
+            self.recv_comm_nodata()
