@@ -1,7 +1,8 @@
 from ...core.devio import SCPI, units, backend  #@UnresolvedImport
-from ...core.utils import strpack
+from ...core.utils import strpack, general, funcargparse
 
 import re
+import time
 try:
     import ft232
 except (ImportError,NameError,OSError):
@@ -160,6 +161,8 @@ class MDT69xA(ThorlabsInterface):
 
 class KinesisError(RuntimeError):
     """Generic Kinesis device error."""
+class KinesisTimeoutError(KinesisError):
+    """Kinesis timeout error."""
 
 class KinesisDevice(backend.IBackendWrapper):
     """
@@ -174,6 +177,7 @@ class KinesisDevice(backend.IBackendWrapper):
         conn=backend.FT232DeviceBackend.combine_conn(conn,(None,115200))
         instr=backend.FT232DeviceBackend(conn,term_write=b"",term_read=b"",timeout=timeout)
         backend.IBackendWrapper.__init__(self,instr)
+        self._add_full_info_node("device_info",lambda: tuple(self.get_info()))
 
     @staticmethod
     def list_devices(filter_ids=True):
@@ -208,33 +212,50 @@ class KinesisDevice(backend.IBackendWrapper):
         self.instr.write(msg+data)
 
     CommNoData=collections.namedtuple("CommNoData",["messageID","param1","param2","source","dest"])
+    CommData=collections.namedtuple("CommData",["messageID","data","source","dest"])
+    def recv_comm(self):
+        """
+        Receive a message.
+
+        Return either :cls:`CommNoData` or :cls:`CommData` depending on the message type
+        (fixed length with two parameters, or variable length with associated data).
+        For details, see APT communications protocol.
+        """
+        msg=self.instr.read(6)
+        messageID=strpack.unpack_uint(msg[0:2],"<")
+        source=strpack.unpack_uint(msg[5:6])
+        dest=strpack.unpack_uint(msg[4:5])
+        if dest&0x80:
+            dest=dest&0x7F
+            datalen=strpack.unpack_uint(msg[2:4],"<")    
+            data=self.instr.read(datalen)
+            return self.CommData(messageID,data,source,dest)
+        else:
+            param1=strpack.unpack_uint(msg[2:3])
+            param2=strpack.unpack_uint(msg[3:4])    
+            return self.CommNoData(messageID,param1,param2,source,dest)
     def recv_comm_nodata(self):
         """
-        Receive a message with no associated data.
+        Receive a fixed-length message with two parameters and no associated data.
 
+        If the next message is variable-length, raise error.
         For details, see APT communications protocol.
         """
-        msg=self.instr.read(6)
-        messageID=strpack.unpack_uint(msg[0:2],"<")
-        param1=strpack.unpack_uint(msg[2:3])
-        param2=strpack.unpack_uint(msg[3:4])
-        dest=strpack.unpack_uint(msg[4:5])
-        source=strpack.unpack_uint(msg[5:6])
-        return self.CommNoData(messageID,param1,param2,source,dest)
-    CommData=collections.namedtuple("CommData",["messageID","data","source","dest"])
+        msg=self.recv_comm()
+        if isinstance(msg,self.CommData):
+            raise KinesisError("expected fixed length message, got variable length: {}".format(msg))
+        return msg
     def recv_comm_data(self):
         """
-        Receive a message with associated data.
+        Receive a variable-length message with associated data.
 
+        If the next message is fixed-length, raise error.
         For details, see APT communications protocol.
         """
-        msg=self.instr.read(6)
-        messageID=strpack.unpack_uint(msg[0:2],"<")
-        datalen=strpack.unpack_uint(msg[2:4],"<")
-        dest=strpack.unpack_uint(msg[4:5])&0x7F
-        source=strpack.unpack_uint(msg[5:6])
-        data=self.instr.read(datalen)
-        return self.CommData(messageID,data,source,dest)
+        msg=self.recv_comm()
+        if isinstance(msg,self.CommNoData):
+            raise KinesisError("expected variable length message, got fixed length: {}".format(msg))
+        return msg
 
     DeviceInfo=collections.namedtuple("DeviceInfo",["serial_no","model_no","fw_ver","hw_type","hw_ver","mod_state","nchannels"])
     def get_info(self, dest=0x50):
@@ -262,6 +283,9 @@ class MFF(KinesisDevice):
     MFF (Motorized Filter Flip Mount) device.
 
     Implements FTDI chip connectivity via pyft232 (virtual serial interface).
+
+    Args:
+        conn: serial connection parameters (usually 8-digit device serial number).
     """
     def __init__(self, conn):
         KinesisDevice.__init__(self,conn)
@@ -288,50 +312,133 @@ class MFF(KinesisDevice):
 
 
 class KDC101(KinesisDevice):
+    """
+    Thorlabs KDC101 DC servo motor controller.
+
+    Implements FTDI chip connectivity via pyft232 (virtual serial interface).
+
+    Args:
+        conn: serial connection parameters (usually 8-digit device serial number).
+    """
     def __init__(self, conn):
         KinesisDevice.__init__(self,conn)
-        # self._add_settings_node("position",self.get_position,self.set_position)
-    
-    def home(self, timeout=None):
+        self._forward_pos=False
+        self._add_status_node("position",self.get_position)
+        self._add_status_node("status",self.get_status)
+
+    def get_status_n(self):
+        """
+        Get numerical status of the device.
+
+        For details, see APT communications protocol.
+        """
+        self.send_comm_nodata(0x0429,0x01)
+        data=self.recv_comm_data().data
+        return strpack.unpack_uint(data[2:6],"<")
+    status_bits=[(1<<0,"sw_fw_lim"),(1<<1,"sw_bk_lim"),
+                (1<<4,"moving_fw"),(1<<5,"moving_bk"),(1<<6,"jogging_fw"),(1<<7,"jogging_bk"),
+                (1<<9,"homing"),(1<<10,"homed"),(1<<12,"tracking"),(1<<13,"settled"),
+                (1<<14,"motion_error"),(1<<24,"current_limit"),(1<<31,"enabled")]
+    def get_status(self):
+        """
+        Get device status.
+
+        Return list of status strings, which can include ``"sw_fw_lim"`` (forward limit switch reached),``"sw_bk_lim"`` (backward limit switch reached),
+        ``"moving_fw"`` (moving forward), ``"moving_bk"`` (moving backward),
+        ``"homing"`` (homing), ``"homed"`` (homing done), ``"tracking"``, ``"settled"``,
+        ``"motion_error"`` (excessive position error), ``"current_limit"`` (motor current limit exceeded), or ``"enabled"`` (motor is enabled).
+        """
+        status_n=self.get_status_n()
+        return [s for (m,s) in self.status_bits if status_n&m]
+    def wait_for_status(self, status, enabled, timeout=None, period=0.05):
+        """
+        Wait until the given status (or list of status bits) is in the desired state.
+
+        `status` is a string or a list of strings describing the status bits to monitor; for possible values, see :meth:`get_status`.
+        If ``enabled==True``, wait until one of the given statuses is enabled; otherwise, wait until all given statuses are disabled.
+        `period` specifies status checking period (in s).
+        """
+        status=funcargparse.as_sequence(status)
+        for s in status:
+            funcargparse.check_parameter_range(s,"status",[s for _,s in self.status_bits])
+        ctd=general.Countdown(timeout)
+        while True:
+            curr_status=self.get_status()
+            if enabled and any([s in curr_status for s in status]):
+                return
+            if (not enabled) and all([s not in curr_status for s in status]):
+                return
+            if ctd.passed():
+                raise KinesisTimeoutError
+            time.sleep(0.05)
+
+    def home(self, sync=True, force=False, timeout=None):
+        """
+        Home the device.
+
+        If ``sync==True``, wait until homing is done (with the given timeout).
+        If ``force==False``, only home if the device isn't homed already.
+        """
+        if self.is_homed() and not force:
+            return
         self.send_comm_nodata(0x0443,1)
-        self.wait_for_home(timeout=timeout)
-    
+        if sync:
+            self.wait_for_home(timeout=timeout)
+    def is_homing(self):
+        """Check if homing is in progress"""
+        return "homing" in self.get_status()
+    def is_homed(self):
+        """Check if the device is homed"""
+        return "homed" in self.get_status()
     def wait_for_home(self, timeout=None):
-        with self.instr.using_timeout(timeout):
-            # self.send_comm_nodata(0x0444,1)
-            self.recv_comm_nodata()
+        """Wait until the device is homes"""
+        return self.wait_for_status("homed",True,timeout=timeout)
 
     def get_position(self):
+        """Get current position"""
         self.send_comm_nodata(0x0411,1)
         msg=self.recv_comm_data()
-        print(msg)
         data=msg.data
         return strpack.unpack_int(data[2:6],"<")
     def set_position_reference(self, position=0):
+        """Set position reference (actual motor position stays the same)"""
         self.send_comm_data(0x0410,b"\x01\x00"+strpack.pack_int(position,4,"<"))
         return self.get_position()
     def move(self, steps=1):
+        """Move by `steps` (positive or negative) from the current position"""
         self.send_comm_data(0x0448,b"\x01\x00"+strpack.pack_int(steps,4,"<"))
     def move_to(self, position):
+        """Move to `position` (positive or negative)"""
         self.send_comm_data(0x0453,b"\x01\x00"+strpack.pack_int(position,4,"<"))
     def jog(self, direction):
+        """Jog in the given direction (``"+"`` or ``"-"``)"""
         if not direction: # 0 or False also mean left
             direction="-"
         if direction in [1, True]:
             direction="+"
         if direction not in ["+","-"]:
             raise KinesisError("unrecognized direction: {}".format(direction))
-        self.send_comm_nodata(0x0457,1,2 if direction=="+" else 1)
+        _jog_fw=(self._forward_pos and direction=="+") or ( (not self._forward_pos) and direction=="-")
+        self.send_comm_nodata(0x0457,1,1 if _jog_fw else 2)
+    _moving_status=["moving_fw","moving_bk","jogging_fw","jogging_bk"]
+    def is_moving(self):
+        """Check if motion is in progress"""
+        curr_status=self.get_status()
+        return any([s in curr_status for s in self._moving_status])
     def wait_for_move(self, timeout=None):
-        with self.instr.using_timeout(timeout):
-            self.send_comm_nodata(0x0464,1)
-            return self.recv_comm_data()
+        """Wait until motion is done"""
+        return self.wait_for_status(self._moving_status,False,timeout=timeout)
 
-    def stop(self, immediate=False, sync=True):
+    def stop(self, immediate=False, sync=True, timeout=None):
+        """
+        Stop the motion.
+
+        If ``immediate==True`` make an abrupt stop; otherwise, slow down gradually.
+        If ``sync==True``, wait until the motion is stopped.
+        """
         self.send_comm_nodata(0x0465,1,1 if immediate else 2)
         if sync:
-            self.wait_for_stop()
+            self.wait_for_stop(timeout=timeout)
     def wait_for_stop(self, timeout=None):
-        with self.instr.using_timeout(timeout):
-            self.send_comm_nodata(0x0466,1)
-            self.recv_comm_nodata()
+        """Wait until stopping operation is done"""
+        return self.wait_for_status(self._moving_status+["homing"],False,timeout=timeout)
