@@ -9,17 +9,18 @@ class DeviceThread(controller.QTaskThread):
         self.add_command("get_settings",self.get_settings)
         self.add_command("get_full_info",self.get_full_info)
         self._full_info_job=False
+        self._full_info_nodes=None
         
     def finalize_task(self):
         self.close_device()
 
     def open_device(self):
-        if self.device is not None:
+        if self.device is not None and not self.device.is_opened():
             self.update_status("connection","opening","Connecting...")
             self.device.open()
             self.update_status("connection","opened","Connected")
     def close_device(self):
-        if self.device is not None:
+        if self.device is not None and self.device.is_opened():
             self.update_status("connection","closing","Disconnecting...")
             self.device.close()
             self.update_status("connection","closed","Disconnected")
@@ -36,14 +37,15 @@ class DeviceThread(controller.QTaskThread):
     def get_settings(self):
         return self.device.get_settings() if self.device is not None else {}
     
-    def setup_full_info_job(self, period=2.):
+    def setup_full_info_job(self, period=2., nodes=None):
         if not self._full_info_job:
+            self._full_info_nodes=nodes
             self.add_job("update_full_info",self.update_full_info,period)
-            self._full_info_job=True 
+            self._full_info_job=True
     def update_full_info(self):
-        self["full_info"]=self.device.get_full_info()
+        self["full_info"]=self.device.get_full_info(nodes=self._full_info_nodes)
     def get_full_info(self):
         if self.device:
-            return self["full_info"] if self._full_info_job else self.device.get_full_info()
+            return self["full_info"] if self._full_info_job else self.device.get_full_info(nodes=self._full_info_nodes)
         else:
             return {}

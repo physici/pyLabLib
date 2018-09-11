@@ -445,7 +445,7 @@ class NIDAQ(IDevice):
         self._running=False
     def is_running(self):
         """Check if the task is running"""
-        return not self._running
+        return self._running
     def available_samples(self):
         """Get number of available samples (return 0 if the task is not running)"""
         if not self._running:

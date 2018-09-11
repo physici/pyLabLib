@@ -1,4 +1,4 @@
-from ...core.gui.qt.thread import controller,signal_pool,synchronizing
+from ...core.gui.qt.thread import controller,signal_pool
 from ...core.utils import general
 
 from PyQt5 import QtCore

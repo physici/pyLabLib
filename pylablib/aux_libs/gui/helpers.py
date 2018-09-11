@@ -166,7 +166,8 @@ class TableAccumulator(object):
         for ch in channels:
             col=self.data[self.channels.index(ch)]
             if maxlen is not None:
-                col=col[len(col)-maxlen:]
+                start=max(0,len(col)-maxlen)
+                col=col[start:]
             data.append(col)
         return data
     def get_data_rows(self, channels=None, maxlen=None):

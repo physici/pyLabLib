@@ -516,6 +516,32 @@ class NamedUIDGenerator(object):
 
 
 
+### Skipped calling wrapper ###
+
+def call_every(func, times=1, cooldown=0., default=None):
+    """
+    Wrap `func` such that calls to it are forwarded only under certain conditions.
+
+    If ``times>1``, then `func` is called after at least `times` calls to the wrapped function.
+    If ``cooldown>0``, then `func` is called after at least `cooldown` seconds passed since the last call.
+    If both conditions are specified, they should be satisfied sumultaneously.
+    `default` specifies return value if `func` wasn't called.
+    """
+    state=[0,-cooldown] # counter, last_call_time
+    @functions.getargsfrom(func)
+    def wrapped(*args, **kwargs):
+        curr_t=time.time()
+        if (state[0]>=times-1) and (curr_t>state[1]+cooldown):
+            state[1]=curr_t
+            state[0]=0
+            res=func(*args,**kwargs)
+        else:
+            state[0]+=1
+            res=default
+        return res
+    return wrapped
+
+
 
 ### Countdown ###
 

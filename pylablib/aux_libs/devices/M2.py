@@ -6,6 +6,7 @@ import websocket
 import json
 import time
 import logging
+import threading
 
 
 c=299792458.
@@ -40,6 +41,7 @@ class M2ICE(IDevice):
                 self.start_link()
         self._last_status={}
         self.use_websocket=use_websocket
+        self._websocket_lock=threading.Lock()
         self._add_status_node("web_status",self.get_full_web_status)
         self._add_status_node("system_status",self.get_system_status)
         self._add_settings_node("wavemeter_connected",self.is_wavelemeter_connected,lambda v: self.connect_wavemeter() if v else self.disconnect_wavemeter())
@@ -174,14 +176,15 @@ class M2ICE(IDevice):
 
     def _send_websocket_request(self, msg):
         if self.use_websocket:
-            ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
-            try:
-                self._wait_for_websocket_status(ws,present_key="wlm_fitted")
-                self._wait_for_websocket_status(ws,present_key="wlm_fitted")
-                ws.send(msg)
-            finally:
-                logging.getLogger("websocket").setLevel(logging.CRITICAL)
-                ws.close()
+            with self._websocket_lock:
+                ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+                try:
+                    self._wait_for_websocket_status(ws,present_key="wlm_fitted")
+                    self._wait_for_websocket_status(ws,present_key="wlm_fitted")
+                    ws.send(msg)
+                finally:
+                    logging.getLogger("websocket").setLevel(logging.CRITICAL)
+                    ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def _wait_for_websocket_status(self, ws, present_key=None, nmax=20):
@@ -193,23 +196,14 @@ class M2ICE(IDevice):
                 return full_data
     def _read_websocket_status(self, present_key=None, nmax=20):
         if self.use_websocket:
-            ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
-            try:
-                return self._wait_for_websocket_status(ws,present_key=present_key,nmax=nmax)
-            finally:
-                ws.recv()
-                logging.getLogger("websocket").setLevel(logging.CRITICAL)
-                ws.close()
-        else:
-            raise RuntimeError("'websocket' library is requried to communicate this request")
-    def _read_multi_websocket_status(self, n):
-        if self.use_websocket:
-            ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
-            try:
-                data=[ws.recv() for _ in range(n)]
-                return [json.loads(d) for d in data]
-            finally:
-                ws.close()
+            with self._websocket_lock:
+                ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+                try:
+                    return self._wait_for_websocket_status(ws,present_key=present_key,nmax=nmax)
+                finally:
+                    ws.recv()
+                    logging.getLogger("websocket").setLevel(logging.CRITICAL)
+                    ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def connect_wavemeter(self, sync=True):
