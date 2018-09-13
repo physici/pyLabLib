@@ -186,11 +186,8 @@ class TableAccumulatorThread(controller.QTaskThread):
         self.subscribe(self.on_source_reset,srcs=data_source,dsts="any",tags="reset")
         self.logger=None
         self.streaming=False
-        self.resetting=False
-        self.reset_maxlen=0
         self.add_command("start_streaming",self.start_streaming)
         self.add_command("stop_streaming",self.stop_streaming)
-        self.add_command("reset_data",self.reset_data)
         self.data_lock=threading.Lock()
 
     def start_streaming(self, path, source_trigger=False, append=False):
@@ -204,7 +201,8 @@ class TableAccumulatorThread(controller.QTaskThread):
 
     
     def on_source_reset(self, src, tag, value):
-        self.table_accum.reset_data()
+        with self.data_lock:
+            self.table_accum.reset_data()
         if self.logger and not self.streaming:
             self.streaming=True
 
@@ -214,10 +212,6 @@ class TableAccumulatorThread(controller.QTaskThread):
         if self.logger and self.streaming:
             new_data=self.table_accum.get_data_rows(maxlen=added_len)
             self.logger.write_multi_datalines(new_data,columns=self.channels,add_timestamp=False,fmt=self.fmt)
-    
-    def reset_data(self, maxlen=0):
-        with self.data_lock:
-            self.table_accum.reset_data(maxlen=maxlen)
 
     def get_data_sync(self, channels=None, maxlen=None, fmt="rows"):
         with self.data_lock:

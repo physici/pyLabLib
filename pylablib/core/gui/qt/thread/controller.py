@@ -122,7 +122,7 @@ class QThreadController(QtCore.QObject):
         self.name=name or threadprop.thread_uids(type(self).__name__)
         self.kind=kind
         # register thread
-        store_created_controller(self)
+        _store_created_controller(self)
         if self.kind=="main":
             if not threadprop.is_gui_thread():
                 raise threadprop.ThreadError("GUI thread controller can only be created in the main thread")
@@ -130,7 +130,7 @@ class QThreadController(QtCore.QObject):
                 raise threadprop.DuplicateControllerThreadError()
             self.thread=threadprop.get_gui_thread()
             threadprop.local_data.controller=self
-            register_controller(self)
+            _register_controller(self)
         else:
             self.thread=QThreadControllerThread(self)
 
@@ -145,9 +145,12 @@ class QThreadController(QtCore.QObject):
         self._exec_notes_lock=threading.Lock()
         self._signal_pool=signal_pool or _default_signal_pool
         self._signal_pool_uids=[]
+        self._stop_notifiers=[]
         # set up life control
         self._stop_requested=(self.kind!="main")
-        self._running=not self._stop_requested
+        # self._running=not self._stop_requested
+        self._lifetime_state_lock=threading.Lock()
+        self._lifetime_state="stopped"
         # set up signals
         self.moveToThread(self.thread)
         self._messaged.connect(self._get_message)
@@ -157,6 +160,7 @@ class QThreadController(QtCore.QObject):
             threadprop.get_app().lastWindowClosed.connect(self._on_last_window_closed,type=QtCore.Qt.DirectConnection)
             self._recv_started_event.connect(self._on_start_event,type=QtCore.Qt.QueuedConnection) # invoke delayed start event (call in the main loop)
             self._recv_started_event.emit()
+            self._lifetime_state="setup"
         else:
             self.thread.started.connect(self._on_start_event,type=QtCore.Qt.QueuedConnection)
             self.thread.finalized.connect(self._on_finish_event,type=QtCore.Qt.QueuedConnection)
@@ -193,14 +197,19 @@ class QThreadController(QtCore.QObject):
     @exsafeSlot()
     def _on_start_event(self):
         self._stop_requested=False
+        with self._lifetime_state_lock:
+            self._lifetime_state="setup"
         try:
             if self.kind!="main":
                 threadprop.local_data.controller=self
-                register_controller(self)
-            self._running=True
+                _register_controller(self)
+            with self._lifetime_state_lock:
+                self._lifetime_state="starting"
             self.notify_exec("start")
             self.on_start()
             self.started.emit()
+            with self._lifetime_state_lock:
+                self._lifetime_state="running"
             self.notify_exec("run")
             if self.kind=="run":
                 self._do_run()
@@ -210,7 +219,8 @@ class QThreadController(QtCore.QObject):
     finished=QtCore.pyqtSignal()
     @exsafeSlot()
     def _on_finish_event(self):
-        is_stopped=self._stop_requested
+        with self._lifetime_state_lock:
+            self._lifetime_state="finishing"
         self._stop_requested=False
         self.finished.emit()
         try:
@@ -218,15 +228,20 @@ class QThreadController(QtCore.QObject):
             self.on_finish()
             self.check_messages()
         finally:
-            self._running=False
-            for uid in self._signal_pool_uids:
-                self._signal_pool.unsubscribe(uid)
             if self.kind=="main":
                 stop_all_controllers(stop_self=False)
+            with self._lifetime_state_lock:
+                self._lifetime_state="cleanup"
+            for sn in self._stop_notifiers:
+                sn()
+            self._stop_notifiers=[]
+            for uid in self._signal_pool_uids:
+                self._signal_pool.unsubscribe(uid)
             self.notify_exec("stop")
-            unregister_controller(self)
-            self._stop_requested=is_stopped
-            self.thread.quit() # stop event loop (no regular messages processed after this call, although loop is run manually in the thread finalizing procedure)
+            _unregister_controller(self)
+            self.thread.quit() # stop event loop (no regular messages processed after this call)
+            with self._lifetime_state_lock:
+                self._lifetime_state="stopped"
     @QtCore.pyqtSlot()
     def _on_last_window_closed(self):
         if threadprop.get_app().quitOnLastWindowClosed():
@@ -453,7 +468,7 @@ class QThreadController(QtCore.QObject):
         self._messaged.emit(("poke",None,0,None))
     def running(self):
         """Check if the thread is running."""
-        return self._running
+        return self._lifetime_state in {"starting","running","finishing"}
     
 
     def is_controlled(self):
@@ -482,6 +497,36 @@ class QThreadController(QtCore.QObject):
         If timeout is passed, raise :exc:`threadprop.TimeoutThreadError`.
         """
         return self._get_exec_note(point).wait(timeout=timeout)
+    def add_stop_notifier(self, func, call_if_stopped=True):
+        """
+        Add stop notifier: a function which is called when the thread is about to be stopped (left the main message loop).
+
+        The function is called in the controlled thread close to its shutdown, so it should be short, non-blocking, and thread-safe.
+        If the thread is already stopped and ``call_if_stopped==True``, call `func` immediately (from the caller's thread).
+        Return ``True`` if the thread is still running and the notifier is added, and ``False`` otherwise.
+        """
+        with self._lifetime_state_lock:
+            if self._lifetime_state not in {"cleanup","stopped"}:
+                if func not in self._stop_notifiers:
+                    self._stop_notifiers.append(func)
+                return True
+        if call_if_stopped:
+            func()
+        return False
+    def remove_stop_notifier(self, func):
+        """
+        Remove the stop notifier from this controller.
+
+        Return ``True`` if the notifier was in this thread and is now removed, and ``False`` otherwise.
+        """
+        with self._lifetime_state_lock:
+            try:
+                self._stop_notifiers.remove(func)
+                return True
+            except ValueError:
+                return False
+    
+
 
     def call_in_thread_callback(self, func, args=None, kwargs=None, callback=None, tag=None, priority=0):
         """
@@ -498,7 +543,7 @@ class QThreadController(QtCore.QObject):
             self._interrupt_called.emit(call)
         else:
             self.send_message(tag,call,priority=priority)
-    def call_in_thread_sync(self, func, args=None, kwargs=None, sync=True, timeout=None, default_result=None, pass_exception=True, tag=None, priority=0, same_thread_shortcut=True):
+    def call_in_thread_sync(self, func, args=None, kwargs=None, sync=True, timeout=None, default_result=None, pass_exception=True, tag=None, priority=0, error_on_stopped=True, same_thread_shortcut=True):
         """
         Call a function in this thread with the given arguments.
 
@@ -508,11 +553,14 @@ class QThreadController(QtCore.QObject):
         which can be used to check if the call is done (method `is_done`) and obtain the result (method :meth:`synchronizing.QThreadCallNotifier.get_value_sync`).
         If ``pass_exception==True`` and `func` raises and exception, re-raise it in the caller thread (applies only if ``sync==True``).
         If `tag` is supplied, send the call in a message with the given tag and priority; otherwise, use the interrupt call (generally, higher priority method).
+        If ``error_on_stopped==True`` and the controlled thread is stopped before it executed the call, raise :exc:`NoControllerThreadError`; otherwise, return `default_result`.
         If ``same_thread_shortcut==True`` (default), the call is synchronous, and the caller thread is the same as the controlled thread, call the function directly.
         """
-        if same_thread_shortcut and sync and threadprop.current_controller() is self:
+        if same_thread_shortcut and tag is None and sync and threadprop.current_controller() is self:
             return func(*(args or []),**(kwargs or {}))
-        call=synchronizing.QSyncCall(func,args=args,kwargs=kwargs,pass_exception=pass_exception)
+        call=synchronizing.QSyncCall(func,args=args,kwargs=kwargs,pass_exception=pass_exception,error_on_fail=error_on_stopped)
+        if self.add_stop_notifier(call.fail):
+            call.set_callback(lambda: self.remove_stop_notifier(call.fail),call_on_fail=True)
         if tag is None:
             self._interrupt_called.emit(call)
         else:
@@ -525,23 +573,26 @@ class QThreadController(QtCore.QObject):
 
 class QMultiRepeatingThreadController(QThreadController):
     _new_jobs_check_period=0.1
-    def __init__(self, name=None, setup=None, cleanup=None, args=None, kwargs=None, self_as_arg=False, signal_pool=None):
+    def __init__(self, name=None, signal_pool=None):
         QThreadController.__init__(self,name,kind="run",signal_pool=signal_pool)
         self.sync_period=0
         self._last_sync_time=0
-        self.setup=setup
-        self.cleanup=cleanup
-        self.args=args or []
-        if self_as_arg:
-            self.args=[self]+self.args
-        self.kwargs=kwargs or {}
         self.jobs={}
         self.timers={}
         self._jobs_list=[]
         self.batch_jobs={}
         self._batch_jobs_args={}
         
+    ### Job handling ###
+    # Called only in the controlled thread #
+
     def add_job(self, name, job, period, initial_call=True):
+        """
+        Add a recurrent `job` which is called every `period` seconds.
+
+        The job starts running automatically when the main thread loop start executing.
+        If ``initial_call==True``, call `job` once immediately after adding.
+        """
         if name in self.jobs:
             raise ValueError("job {} already exists".format(name))
         self.jobs[name]=job
@@ -550,10 +601,12 @@ class QMultiRepeatingThreadController(QThreadController):
         if initial_call:
             job()
     def change_job_period(self, name, period):
+        """Change the period of the job `name`"""
         if name not in self.jobs:
             raise ValueError("job {} doesn't exists".format(name))
         self.timers[name].change_period(period)
     def remove_job(self, name):
+        """Change the job `name` from the roster"""
         if name not in self.jobs:
             raise ValueError("job {} doesn't exists".format(name))
         self._jobs_list.remove(name)
@@ -561,10 +614,27 @@ class QMultiRepeatingThreadController(QThreadController):
         del self.timers[name]
 
     def add_batch_job(self, name, job, cleanup=None):
+        """
+        Add a batch `job` which is executed once, but with continuations.
+
+        After this call the job is just created, but is not running. To start it, call :meth:`start_batch_job`.
+        If sepcified, `cleanup` is a finalizing function which is called both when the job terminates normally,
+        and when it is forcibly stopped (including thread termination).
+
+        Unlike the usual recurrent jobs, here `job` is a generator (usually defined by a function with ``yield`` statement).
+        When the job is running, the generator is periodically called until it raises :exc:`StopIteration` exception, which signifies that the job is finished.
+        From generator function point of view, after the job is started, the function is executed once normally,
+        but every time ``yield`` statement is encountered, the execution is suspended for `period` seconds (specified in :meth:`start_batch_job`).
+        """
         if name in self.jobs or name in self.batch_jobs:
             raise ValueError("job {} already exists".format(name))
         self.batch_jobs[name]=(job,cleanup)
     def start_batch_job(self, name, period, *args, **kwargs):
+        """
+        Start the batch job with the given name.
+
+        `period` specifies suspention period. Optional argumtns are passed to the job and the cleanup functions.
+        """
         if name not in self.batch_jobs:
             raise ValueError("job {} doesn't exists".format(name))
         if name in self.jobs:
@@ -583,10 +653,16 @@ class QMultiRepeatingThreadController(QThreadController):
             self.stop_batch_job(name)
         self.add_job(name,do_step,period,initial_call=False)
     def batch_job_running(self, name):
+        """Check if a given batch job running"""
         if name not in self.batch_jobs:
             raise ValueError("job {} doesn't exists".format(name))
         return name in self.jobs
     def stop_batch_job(self, name, error_on_stopped=False):
+        """
+        Stop a given batch job.
+        
+        If ``error_on_stopped==True`` and the job is not currently running, raise an error. Otherwise, do nothing.
+        """
         if name not in self.batch_jobs:
             raise ValueError("job {} doesn't exists".format(name))
         if name not in self.jobs:
@@ -598,7 +674,20 @@ class QMultiRepeatingThreadController(QThreadController):
         cleanup=self.batch_jobs[name][1]
         if cleanup:
             cleanup(*args,**kwargs)
+
+    def check_commands(self):
+        """
+        Check for commands to execute.
+
+        Called once every scheduling cycle: after any recurrent or batch job, but at least every `self._new_jobs_check_period` seconds (by default 0.1s).
+        By defauly, simply executed all commands passed in ``"control.execute"`` messages.
+        """
+        while self.new_messages_number("control.execute"):
+            call=self.pop_message("control.execute")
+            call()
     
+
+
     def _get_next_job(self, ct):
         if not self._jobs_list:
             return None,None
@@ -621,15 +710,8 @@ class QMultiRepeatingThreadController(QThreadController):
             self.timers[name].acknowledge(nmin=1)
         except ValueError:
             pass
-    def check_commands(self):
-        while self.new_messages_number("control.execute"):
-            call=self.pop_message("control.execute")
-            call()
-    
-    def on_start(self):
-        if self.setup:
-            self.setup(*self.args,**self.kwargs)
     def run(self):
+        """Main scheduling loop"""
         while True:
             ct=time.time()
             name,to=self._get_next_job(ct)
@@ -650,15 +732,14 @@ class QMultiRepeatingThreadController(QThreadController):
                 if run_job:
                     self._acknowledge_job(name)
                     job=self.jobs[name]
-                    job(*self.args,**self.kwargs)
+                    job()
             self.check_commands()
+
     def on_finish(self):
+        QThreadController.on_finish(self)
         for n in self.batch_jobs:
             if n in self.jobs:
                 self.stop_batch_job(n)
-        if self.cleanup:
-            self.cleanup(*self.args,**self.kwargs)
-
 
 
 class QTaskThread(QMultiRepeatingThreadController):
@@ -676,6 +757,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         self.c=self.CommandAccess(self,sync=False)
         self.q=self.CommandAccess(self,sync=True)
         self.qs=self.CommandAccess(self,sync=True,safe=True)
+        self.qi=self.CommandAccess(self,sync=True,safe=True,ignore_errors=True)
 
     def setup_task(self, *args, **kwargs):
         pass
@@ -734,14 +816,14 @@ class QTaskThread(QMultiRepeatingThreadController):
         self._commands[name]=command
         self._command_priorities[name]=priority
 
-    def _sync_call(self, func, name, args, kwargs, sync, timeout=None, priority=0):
+    def _sync_call(self, func, name, args, kwargs, sync, timeout=None, priority=0, ignore_errors=False):
         priority=self._command_priorities.get(name,0)
-        return self.call_in_thread_sync(func,args=(name,)+tuple(args),kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute",priority=priority)
-    def command(self, name, *args, **kwargs):
+        return self.call_in_thread_sync(func,args=(name,)+tuple(args),kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute",priority=priority,
+                error_on_stopped=not ignore_errors,pass_exception=not ignore_errors)
+    def call_command(self, name, args, kwargs):
         return self._sync_call(self.process_command,name,args,kwargs,sync=False)
-    def query(self, name, *args, **kwargs):
-        timeout=kwargs.pop("timeout",None)
-        return self._sync_call(self.process_query,name,args,kwargs,sync=True,timeout=timeout)
+    def call_query(self, name, args, kwargs, timeout=None, ignore_errors=False):
+        return self._sync_call(self.process_query,name,args,kwargs,sync=True,timeout=timeout,ignore_errors=ignore_errors)
     def interrupt(self, *args, **kwargs):
         return self.call_in_thread_sync(self.process_interrupt,args,kwargs,sync=False)
     def get_variable(self, name, default=None, copy_branch=True, missing_error=False):
@@ -776,21 +858,22 @@ class QTaskThread(QMultiRepeatingThreadController):
                 self._params_exp[name].remove(ctl)
 
     class CommandAccess(object):
-        def __init__(self, parent, sync, timeout=None, safe=False):
+        def __init__(self, parent, sync, timeout=None, safe=False, ignore_errors=False):
             object.__init__(self)
             self.parent=parent
             self.sync=sync
             self.timeout=timeout
             self.safe=safe
+            self.ignore_errors=ignore_errors
             self._calls={}
         def __getattr__(self, name):
             if name not in self._calls:
                 parent=self.parent
                 def remcall(*args, **kwargs):
                     if self.sync:
-                        return parent.query(name,*args,timeout=self.timeout,**kwargs)
+                        return parent.call_query(name,args,kwargs,timeout=self.timeout,ignore_errors=self.ignore_errors)
                     else:
-                        return parent.command(name,*args,**kwargs)
+                        return parent.call_command(name,args,kwargs)
                 if self.safe:
                     remcall=exsafe(remcall)
                 self._calls[name]=remcall
@@ -799,7 +882,12 @@ class QTaskThread(QMultiRepeatingThreadController):
 
 
 
-def store_created_controller(controller):
+def _store_created_controller(controller):
+    """
+    Register a newly created controller.
+
+    Called automatically on controller creation.
+    """
     with _running_threads_lock:
         if _running_threads_stopping:
             raise threadprop.InterruptExceptionStop()
@@ -807,7 +895,12 @@ def store_created_controller(controller):
         if (name in _running_threads) or (name in _created_threads):
             raise threadprop.DuplicateControllerThreadError("thread with name {} already exists".format(name))
         _created_threads[name]=controller
-def register_controller(controller):
+def _register_controller(controller):
+    """
+    Register a controller as running.
+
+    Called automatically on thread start.
+    """
     with _running_threads_lock:
         if _running_threads_stopping:
             raise threadprop.InterruptExceptionStop()
@@ -819,7 +912,12 @@ def register_controller(controller):
         _running_threads[name]=controller
         del _created_threads[name]
     _running_threads_notifier.notify()
-def unregister_controller(controller):
+def _unregister_controller(controller):
+    """
+    Remove a controller from the list of running controller.
+
+    Called automatically on thread finish.
+    """
     with _running_threads_lock:
         name=controller.name
         if name not in _running_threads:
@@ -827,7 +925,17 @@ def unregister_controller(controller):
         _stopped_threads[name]=controller
         del _running_threads[name]
     _running_threads_notifier.notify()
+
+
+
 def get_controller(name=None, wait=True, timeout=None):
+    """
+    Find a controller with a given name.
+
+    If `name` is not supplied, yield current controller instead.
+    If the controller is not present and ``wait==True``, wait (with the given timeout) until the controller is running;
+    otherwise, raise error if the controller is not running.
+    """
     if name is None:
         return threadprop.current_controller()
     ctd=general.Countdown(timeout)
@@ -843,7 +951,14 @@ def get_controller(name=None, wait=True, timeout=None):
                 raise threadprop.NoControllerThreadError("thread with name {} is stopped".format(name))
         cnt=_running_threads_notifier.wait(cnt,timeout=ctd.time_left())
 
-def stop_controller(name=None, code=0, sync=True, require_controller=False):
+def stop_controller(name, code=0, sync=True, require_controller=False):
+    """
+    Stop a controller with a given name.
+
+    `code` specifies controller exit code (only applies to the main thread controller).
+    If ``require_controller==True`` and the controller is not present, raise and error; otherwise, do nothing.
+    If ``sync==True``, wait unitl the controller is stopped.
+    """
     try:
         controller=get_controller(name,wait=False)
         controller.stop(code=code)
@@ -855,6 +970,14 @@ def stop_controller(name=None, code=0, sync=True, require_controller=False):
         if require_controller:
             raise
 def stop_all_controllers(sync=True, concurrent=True, stop_self=True):
+    """
+    Stop all running threads.
+
+    If ``sync==True``, wait unitl the all of the controller are stopped.
+    If ``sync==True`` and ``concurrent==True`` stop threads in concurrent manner (first issue stop messages to all of them, then wait until all are stopped).
+    If ``sync==True`` and ``concurrent==False`` stop threads in consequtive manner (wait for each thread to stop before stopping the next one).
+    If ``stop_self==True`` stop current thread after stopping all other threads.
+    """
     global _running_threads_stopping
     with _running_threads_lock:
         _running_threads_stopping=True

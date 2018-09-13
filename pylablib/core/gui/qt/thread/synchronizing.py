@@ -75,11 +75,11 @@ class QThreadCallNotifier(QThreadNotifier):
                     return default
             else:
                 if error_on_fail:
-                    raise threadprop.ThreadError("failed executing remote call")
+                    raise threadprop.NoControllerThreadError("failed executing remote call: controller is stopped")
                 return default
         else:
             if error_on_fail:
-                raise threadprop.TimeoutThreadError()
+                raise threadprop.TimeoutThreadError
             return default
 
 class QSyncCall(object):
@@ -91,15 +91,26 @@ class QSyncCall(object):
         self.synchronizer=QThreadCallNotifier()
         self.pass_exception=pass_exception
         self.error_on_fail=error_on_fail
+        self.callback=None
+        self.callback_on_fail=True
     def __call__(self):
         try:
             res=("fail",None)
             res=("result",self.func(*self.args,**self.kwargs))
+            if self.callback and not self.callback_on_fail:
+                self.callback()
         except Exception as e:
             res=("exception",e)
             raise
         finally:
+            if self.callback and self.callback_on_fail:
+                self.callback()
             self.synchronizer.notify(res)
+    def set_callback(self, callback, call_on_fail=True):
+        self.callback=callback
+        self.callback_on_fail=call_on_fail
+    def fail(self):
+        self.synchronizer.notify(("fail",None))
     def value(self, sync=True, timeout=None, default=None):
         if sync:
             return self.synchronizer.get_value_sync(timeout=timeout,default=default,error_on_fail=self.error_on_fail,pass_exception=self.pass_exception)
@@ -109,7 +120,6 @@ class QSyncCall(object):
         return self.synchronizer.wait(timeout)
     def done(self):
         return self.synchronizer.done_wait()
-
 
 
 
