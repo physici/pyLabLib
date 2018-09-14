@@ -24,7 +24,7 @@ class NIGPIBSerialDevice(backend.IBackendWrapper):
     def init_GPIB(self, addr=0):
         self.instr.flush_read()
         self.instr.write("onl 1") # online
-        self.instr.write("caddr {}",format(addr)) # set brdige GPIB address
+        self.instr.write("caddr {}",format(addr)) # set bridge GPIB address
         self.instr.write("sic")
         self.instr.write("eos D")
         self.instr.write("eot")
@@ -270,7 +270,7 @@ class NIDAQ(IDevice):
         """
         Export system clock to the given terminal (``None`` to disconnect all terminals)
         
-        Only terminal one can be acive at a time.
+        Only terminal one can be active at a time.
          """
         terminal=self._strip_channel_name(terminal or "")
         self.ai_task.export_signals.export_signal(nidaqmx.constants.Signal.SAMPLE_CLOCK,terminal)
@@ -289,11 +289,12 @@ class NIDAQ(IDevice):
         Add analog voltage input.
 
         Readout is synchronized to the system clock.
+
         Args:
             name(str): channel name.
             channel(str): terminal name (e.g., ``"ai0"``).
             rng: voltage range
-            term_config: terminal confiugration. Can be ``"default"``, ``"rse"`` (single-ended, referenced to AI SENSE input),
+            term_config: terminal configuration. Can be ``"default"``, ``"rse"`` (single-ended, referenced to AI SENSE input),
                 ``"nrse"`` (single-ended, referenced to AI GND), ``"diff"`` (differential) and ``"pseudodiff"``
                 (see NIDAQ manual for details).
         """
@@ -308,15 +309,16 @@ class NIDAQ(IDevice):
         Add counter input (value is related to the number of counts).
 
         Readout is synchronized to the system clock.
+        
         Args:
             name(str): channel name.
             counter(str): on-board counter name (e.g., ``"ctr0"``).
             terminal(str): terminal name (e.g., ``"pfi0"``).
-            clk_src(str): source of the counter smpling clock. By default it is the analog input clock,
+            clk_src(str): source of the counter sampling clock. By default it is the analog input clock,
                 which requires at least one voltage input channel (could be dummy channel) to operate.
             max_rate(float): maximal signal rate.
             output_format(str): output format. Can be ``"acc"`` (return accumulated number of counts since the sampling start),
-                ``"diff"`` (return number of counts passed between the two consecutive sampling points; essentialy, a derivative of ``"acc"``),
+                ``"diff"`` (return number of counts passed between the two consecutive sampling points; essentially, a derivative of ``"acc"``),
                 or ``"rate"`` (return count rate based on the ``"diff"`` samples).
         """
         funcargparse.check_parameter_range(output_format,"output_format",{"acc","diff","rate"})
@@ -544,7 +546,7 @@ class NIDAQ(IDevice):
             name(str): channel name.
             channel(str): terminal name (e.g., ``"ao0"``).
             rng: voltage range.
-            inital_value(float): inital output value (has to be initialized).
+            initial_value(float): initial output value (has to be initialized).
         """
         channel=self._build_channel_name(channel)
         self.ao_task.ao_channels.add_ao_voltage_chan(channel,name,min_val=rng[0],max_val=rng[1])

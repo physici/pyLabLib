@@ -134,7 +134,7 @@ def filter_by(wf, columns=None, pred=None, exclude=False):
     """
     Filter 1D or 2D array using a predicate.
     
-    If the data is 2D, `columns` containes indices of columns to be passed to the `pred` function.
+    If the data is 2D, `columns` contains indices of columns to be passed to the `pred` function.
     If ``exclude==False``, drop all of the rows satisfying `pred` rather than keep them.
     """
     if pred is None:
@@ -292,7 +292,7 @@ class Range(object):
         """
         Find an intersection of multiple ranges.
         
-        If the intersectopn is empty, return ``None``.
+        If the intersection is empty, return ``None``.
         """
         rng=self
         for r in rngs:
@@ -460,7 +460,7 @@ def _cut_to_range(wf, xs_range, x_column=None, ordered=False):
     Cut the waveform to the given range based on `x_column`.
     
     The range is defined as ``xs_range[0]:xs_range[1]``, or infinite if ``xs_range=None``.
-    `x_column` is used to deteremine which colmn's values to use to check if the point is in range (see :func:`get_x_column`).
+    `x_column` is used to determine which colmn's values to use to check if the point is in range (see :func:`get_x_column`).
     If ``ordered_x==True``, then the function assumes that `x_column` in ascending order.
     """
     x_column=get_x_column(wf,x_column)
@@ -474,7 +474,7 @@ def _cut_out_regions(wf, regions, x_column=None, ordered=False, multi_pass=True)
     """
     Cut the regions out of the `wf` based on `x_column`.
     
-    `x_column` is used to deteremine which colmn's values to use to check if the point is in range (see :func:`get_x_column`).
+    `x_column` is used to determine which colmn's values to use to check if the point is in range (see :func:`get_x_column`).
     If ``ordered_x==True``, then the function assumes that `x_column` in ascending order.
     If ``multi_pass==False``, combine all indices before deleting the data in a single operation (works faster, but only for non-intersecting regions). 
     """

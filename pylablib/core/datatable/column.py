@@ -148,7 +148,7 @@ class IDataColumn(numclass.NumClass):
         Arguments:
             func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
             alias (str): the method name; by default, it's ``func.__name__``
-            wrap_into_columnn (bool): if ``True``, the returned result is wrapped into :class:`ArrayDataColumn`
+            wrap_into_column (bool): if ``True``, the returned result is wrapped into :class:`ArrayDataColumn`
             as_property (bool): if ``True``, the function is added as a property getter instead
             doc (str): the method docstring; by default, it's ``func.__doc__``
         """
@@ -192,7 +192,7 @@ class WrapperDataColumn(IDataColumn):
     """
     Wraps potentially mutable column types and proxies all the requests to them.
 
-    Used when the underlying column object can change in the runtime (e.g., to accomodate a new element type).
+    Used when the underlying column object can change in the runtime (e.g., to accommodate a new element type).
     """
     def __init__(self, column):
         IDataColumn.__init__(self)

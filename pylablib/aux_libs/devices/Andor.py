@@ -42,7 +42,7 @@ class AndorCamera(IDevice):
         
         self._nodes_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
         self._add_full_info_node("model_data",lambda: tuple(self.get_model_data()))
-        self._add_full_info_node("capabiliteies",lambda: tuple(self.get_capibilities()))
+        self._add_full_info_node("capabilities",lambda: tuple(self.get_capabilities()))
         self._add_full_info_node("amp_modes",lambda: tuple(self.get_all_amp_modes()),ignore_error=AndorLibError)
         self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
         self._add_status_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
@@ -77,7 +77,7 @@ class AndorCamera(IDevice):
         self._add_full_info_node("detector_size",self.get_detector_size)
 
     def _setup_default_settings(self):
-        self.capabilities=self.get_capibilities()
+        self.capabilities=self.get_capabilities()
         self.model_data=self.get_model_data()
         try:
             self._strict_option_check=False
@@ -202,9 +202,9 @@ class AndorCamera(IDevice):
         if text_status=="DRV_ACQUIRING":
             return "acquiring"
         raise AndorLibError("GetStatus",status)
-    def get_capibilities(self):
+    def get_capabilities(self):
         """
-        Get camera capibilities.
+        Get camera capabilities.
 
         For description of the structure, see Andor SDK manual.
         """
@@ -311,7 +311,7 @@ class AndorCamera(IDevice):
         """Get output amplifier kind corresponding to the given oamp index (current by default)"""
         return lib._oamp_kinds[self.oamp if oamp is None else oamp]
     def get_hsspeed_frequency(self, hsspeed=None):
-        """Get horisontal scan frequency (in Hz) corresponding to the given hsspeed index (current by default)"""
+        """Get horizontal scan frequency (in Hz) corresponding to the given hsspeed index (current by default)"""
         self._camsel()
         return lib.GetHSSpeed(self.channel,self.oamp,self.hsspeed if hsspeed is None else hsspeed)*1E6
     def get_preamp_gain(self, preamp=None):
@@ -459,7 +459,7 @@ class AndorCamera(IDevice):
         """
         Setup accum acquisition mode.
         
-        `num` is the number of accumulated frames, `cycle_time` is the acquistion period
+        `num` is the number of accumulated frames, `cycle_time` is the acquisition period
         (by default the minimal possible based on exposure and transfer time).
         """
         self._camsel()
@@ -472,8 +472,8 @@ class AndorCamera(IDevice):
         """
         Setup kinetic acquisition mode.
         
-        `num` is the number of kinteic cycles frames, `cycle_time` is the acquistion period between accum frames,
-        `num_accum` is the number of accumulated frames, `cycle_time_acc` is the accum acquistion period,
+        `num` is the number of kinetic cycles frames, `cycle_time` is the acquisition period between accum frames,
+        `num_accum` is the number of accumulated frames, `cycle_time_acc` is the accum acquisition period,
         `num_prescan` is the number of prescans.
         """
         self._camsel()
@@ -489,7 +489,7 @@ class AndorCamera(IDevice):
         """
         Setup fast kinetic acquisition mode.
         
-        `num` is the number of accumulated frames, `cycle_time` is the acquistion period
+        `num` is the number of accumulated frames, `cycle_time` is the acquisition period
         (by default the minimal possible based on exposure and transfer time).
         """
         self._camsel()
@@ -502,7 +502,7 @@ class AndorCamera(IDevice):
         """
         Setup continuous acquisition mode.
         
-        `cycle_time` is the acquistion period (by default the minimal possible based on exposure and transfer time).
+        `cycle_time` is the acquisition period (by default the minimal possible based on exposure and transfer time).
         """
         self._camsel()
         if not self._check_option("acq","AC_ACQMODE_VIDEO"): return
@@ -540,7 +540,7 @@ class AndorCamera(IDevice):
     AcqTimes=collections.namedtuple("AcqTimes",["exposure","accum_cycle_time","kinetic_cycle_time"])
     def get_timings(self):
         """
-        Get acquistion timing.
+        Get acquisition timing.
 
         Return tuple ``(exposure, accum_cycle_time, kinetic_cycle_time)``.
         In continuous mode, the relevant cycle time is ``kinetic_cycle_time``.
@@ -559,9 +559,9 @@ class AndorCamera(IDevice):
     ### Acquisition process controls ###
     def prepare_acquisition(self):
         """
-        Prepare acquistion.
+        Prepare acquisition.
         
-        Isn't required (called automatically on acquistion start), but decreases time required for starting acquisition later.
+        Isn't required (called automatically on acquisition start), but decreases time required for starting acquisition later.
         """
         self._camsel()
         lib.PrepareAcquisition()
@@ -569,7 +569,7 @@ class AndorCamera(IDevice):
         """
         Start acquisition.
 
-        If ``setup==True``, setup the acquistion parameters before the start
+        If ``setup==True``, setup the acquisition parameters before the start
         (they don't apply automatically when the mode is changed).
         """
         self._camsel()
@@ -597,7 +597,7 @@ class AndorCamera(IDevice):
         `since` specifies what constitutes a new frame.
         Can be ``"lastread"`` (wait for a new frame after the last read frame), ``"lastwait"`` (wait for a new frame after last :func:`wait_for_frame` call),
         or ``"now"`` (wait for a new frame acquired after this function call).
-        If `timeout` is exceeded, rause :exc:`AndorTimeoutError`.
+        If `timeout` is exceeded, raise :exc:`AndorTimeoutError`.
         """
         funcargparse.check_parameter_range(since,"since",{"lastread","lastwait","now"})
         if since=="lastwait":
@@ -793,7 +793,7 @@ class AndorCamera(IDevice):
         return np.transpose(data.reshape((-1,dim[0],dim[1])),axes=[0,2,1])
 
     def flush_buffer(self):
-        """Flush the camera buffer (restart the acquistion)"""
+        """Flush the camera buffer (restart the acquisition)"""
         acq_mode=self.acq_mode
         if acq_mode=="cont":
             self.set_acquisition_mode("single")

@@ -1,6 +1,6 @@
 """
 Classes for dealing with the :class:`~core.utils.dictionary.Dictionary` entries with special conversion rules when saved or loaded.
-Used to redefine how ceratin objects (e.g., tables) are written into files and read from files.
+Used to redefine how certain objects (e.g., tables) are written into files and read from files.
 """
 
 

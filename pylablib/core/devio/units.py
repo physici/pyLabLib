@@ -10,7 +10,7 @@ from ..utils import string as string_utils  #@UnresolvedImport
         
 def convert_length_units(value, value_unit="m", result_unit="m", case_sensitive=True):
     """
-    Convert `value` from `value_unit` to `resul_unit`.
+    Convert `value` from `value_unit` to `result_unit`.
     
     The possible length units are ``'m'``,``'mm'``, ``'um'``, ``'nm'``, ``'pm'``, ``'fm'``.
     If ``case_sensitive==True``, matching units is case sensitive. 
@@ -46,7 +46,7 @@ def convert_length_units(value, value_unit="m", result_unit="m", case_sensitive=
     
 def convert_time_units(value, value_unit="s", result_unit="s", case_sensitive=True):
     """
-    Convert `value` from `value_unit` to `resul_unit`.
+    Convert `value` from `value_unit` to `result_unit`.
     
     The possible time units are ``'s'``,``'ms'``, ``'us'``, ``'ns'``, ``'ps'``, ``'fs'``, ``'as'``.
     If ``case_sensitive==True``, matching units is case sensitive. 
@@ -86,7 +86,7 @@ def convert_time_units(value, value_unit="s", result_unit="s", case_sensitive=Tr
         
 def convert_frequency_units(value, value_unit="Hz", result_unit="Hz", case_sensitive=True):
     """
-    Convert `value` from `value_unit` to `resul_unit`.
+    Convert `value` from `value_unit` to `result_unit`.
     
     The possible frequency units are ``'Hz'``,``'kHz'``, ``'MHz'``, ``'GHz'``.
     If ``case_sensitive==True``, matching units is case sensitive. 
@@ -114,7 +114,7 @@ def convert_frequency_units(value, value_unit="Hz", result_unit="Hz", case_sensi
         
 def convert_power_units(value, value_unit="dBm", result_unit="dBm", case_sensitive=True, impedance=50.):
     """
-    Convert `value` from `value_unit` to `resul_unit`.
+    Convert `value` from `value_unit` to `result_unit`.
     
     For conversion between voltage and power, assume RMS voltage and the given `impedance`.
     The possible power units are ``'dBm'``, ``'dBmV'``, ``'dBuV'``, ``'W'``, ``'mW'``, ``'uW'``, ``'nW'``, ``'mV'``, ``'nV'``.

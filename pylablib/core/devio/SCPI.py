@@ -29,13 +29,13 @@ class SCPIDevice(backend_module.IBackendWrapper):
         timeout (float): Default timeout (in seconds).
     """
     # All of the foolowing _default_* parameters can be redefined in subclasses
-    # Most of these parameters are usesd to define object attributes, which can be altered individually for different objects (i.e., connections)
+    # Most of these parameters are used to define object attributes, which can be altered individually for different objects (i.e., connections)
     _default_failsafe_operation_timeout=30. # timeout for an operaton (read/write/ask) in the failsafe mode
-    _default_backend_timeout=3. # timeout for a single backend operation attempt in the failsafe mode (one operation can be attempted everal times)
+    _default_backend_timeout=3. # timeout for a single backend operation attempt in the failsafe mode (one operation can be attempted several times)
     _default_retry_delay=30. # delay between retrying an operation (in seconds)
     _default_retry_times=3 # maximal number of operation attempts
     _default_operation_timeout=3. # timeout for an operator in the standard (non-failsafe) mode
-    _default_wait_sync_timeout=600. # timeout for "sync" wait opration (waiting for the device operation to complete); an operation can be long (e.g., a single frequency sweep), thus the long timeout
+    _default_wait_sync_timeout=600. # timeout for "sync" wait operation (waiting for the device operation to complete); an operation can be long (e.g., a single frequency sweep), thus the long timeout
     _default_operation_cooldown=0.00 # operation cooldown (see backend description)
     _default_wait_callback_timeout=.3 # callback call period during wait operations (keeps the thread from complete halting)
     _default_failsafe=False # running in the failsafe mode by default
@@ -209,7 +209,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
         """
         Pause execution of the script until device overlapped commands (e.g., taking sweeps) are complete.
         
-        `timeout` and `wait_callback` override default constructor paramters.
+        `timeout` and `wait_callback` override default constructor parameters.
         """
         timeout=self._wait_sync_timeout if timeout is None else timeout
         wait_callback=wait_callback or self._wait_callback
@@ -276,7 +276,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
                 ``'bool'`` or ``'value'``.
             unit (str): If ``arg_type=='value'``, use it as a unit to append after the value.
             fmt (str): If not ``None``, is a :func:`format` string to convert arg.
-            bool_selector (tuple): A tuple ``(false_value, true_value)`` of two strings to represent bool aregument.
+            bool_selector (tuple): A tuple ``(false_value, true_value)`` of two strings to represent bool argument.
             read_echo (bool): If ``True``, read a single line after write.
             read_echo_delay (float): The delay between write and read if ``read_echo==True``.
         """
@@ -363,9 +363,9 @@ class SCPIDevice(backend_module.IBackendWrapper):
         ``'#'``, then a single digit ``s`` denoting length of the size block,
         then ``s`` digits denoting length of the data (in bytes) followed by the actual data.
         """
-        if data[:1]!="#": # range access to accomodate for bytes type in Py3
+        if data[:1]!="#": # range access to accommodate for bytes type in Py3
             raise ValueError("malformed data")
-        len_size=int(data[1:2]) # range access to accomodate for bytes type in Py3
+        len_size=int(data[1:2]) # range access to accommodate for bytes type in Py3
         length=int(data[2:2+len_size])
         data=data[2+len_size:]
         if len(data)!=length:

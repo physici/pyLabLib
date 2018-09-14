@@ -9,7 +9,7 @@ import time
 import sys, traceback
 import heapq
     
-_depends_local=["....mthread.notifier"]
+_depends_local=[".signal_pool",".synchronizing"]
 
 _default_signal_pool=signal_pool.SignalPool()
 
@@ -37,7 +37,7 @@ def exint(error_msg_template="{}:"):
                 ctl_name=get_controller(wait=False).name
                 print(error_msg_template.format("Exception raised in thread '{}'".format(ctl_name)))
             except threadprop.NoControllerThreadError:
-                print(error_msg_template.format("Exception raised in uncontroled thread"))
+                print(error_msg_template.format("Exception raised in an uncontrolled thread"))
             traceback.print_exc()
             sys.stdout.flush()
         try:
@@ -85,7 +85,7 @@ class QThreadControllerThread(QtCore.QThread):
     def _do_quit(self):
         if self.isRunning() and not self._stop_requested:
             self.controller.request_stop() # signal controller to stop
-            self.quit() # quit the first event lopp
+            self.quit() # quit the first event loop
             self._stop_requested=True
     def quit_sync(self):
         self._stop_request.emit()
@@ -140,7 +140,7 @@ class QThreadController(QtCore.QObject):
         self._message_uid=0
         self._sync_queue={}
         self._sync_clearance=set()
-        # set up high-level synchrnoization
+        # set up high-level synchronization
         self._exec_notes={}
         self._exec_notes_lock=threading.Lock()
         self._signal_pool=signal_pool or _default_signal_pool
@@ -337,7 +337,7 @@ class QThreadController(QtCore.QObject):
         """
         Receive new messages.
 
-        Runs the underlying message loop to process newely received message and signals (and place them in corresponding queues if necessary).
+        Runs the underlying message loop to process newly received message and signals (and place them in corresponding queues if necessary).
         This method is rarely invoked, and only should be used periodically during long computations to not 'freeze' the thread.
         """
         threadprop.get_app().processEvents(QtCore.QEventLoop.AllEvents)
@@ -347,7 +347,7 @@ class QThreadController(QtCore.QObject):
         """
         Sleep for a given time (in seconds).
 
-        Unlike :func:`time.sleep`, constantly checks the event loop for new messages (e.g., if stop or interrup commands are issued).
+        Unlike :func:`time.sleep`, constantly checks the event loop for new messages (e.g., if stop or interrupt commands are issued).
         """
         try:
             self._wait_in_process_loop(lambda: (False,None),timeout=timeout)
@@ -407,7 +407,7 @@ class QThreadController(QtCore.QObject):
             self._signal_pool_uids.append(uid)
             return uid
     def unsubscribe(self, id):
-        """Unsibscribe from a subscription with a given ID."""
+        """Unsubscribe from a subscription with a given ID."""
         self._signal_pool_uids.pop(id)
         self._signal_pool.unsubscribe(id)
     def send_signal(self, dst="any", tag=None, value=None, src=None):
@@ -436,7 +436,7 @@ class QThreadController(QtCore.QObject):
         """
         self._messaged.emit(("sync",tag,0,uid))
 
-    ### Thread exection control ###
+    ### Thread execution control ###
     def start(self):
         """Start the thread."""
         self.thread.start()
@@ -618,7 +618,7 @@ class QMultiRepeatingThreadController(QThreadController):
         Add a batch `job` which is executed once, but with continuations.
 
         After this call the job is just created, but is not running. To start it, call :meth:`start_batch_job`.
-        If sepcified, `cleanup` is a finalizing function which is called both when the job terminates normally,
+        If specified, `cleanup` is a finalizing function which is called both when the job terminates normally,
         and when it is forcibly stopped (including thread termination).
 
         Unlike the usual recurrent jobs, here `job` is a generator (usually defined by a function with ``yield`` statement).
@@ -633,7 +633,7 @@ class QMultiRepeatingThreadController(QThreadController):
         """
         Start the batch job with the given name.
 
-        `period` specifies suspention period. Optional argumtns are passed to the job and the cleanup functions.
+        `period` specifies suspension period. Optional arguments are passed to the job and the cleanup functions.
         """
         if name not in self.batch_jobs:
             raise ValueError("job {} doesn't exists".format(name))
@@ -680,7 +680,7 @@ class QMultiRepeatingThreadController(QThreadController):
         Check for commands to execute.
 
         Called once every scheduling cycle: after any recurrent or batch job, but at least every `self._new_jobs_check_period` seconds (by default 0.1s).
-        By defauly, simply executed all commands passed in ``"control.execute"`` messages.
+        By default, simply executed all commands passed in ``"control.execute"`` messages.
         """
         while self.new_messages_number("control.execute"):
             call=self.pop_message("control.execute")
@@ -957,7 +957,7 @@ def stop_controller(name, code=0, sync=True, require_controller=False):
 
     `code` specifies controller exit code (only applies to the main thread controller).
     If ``require_controller==True`` and the controller is not present, raise and error; otherwise, do nothing.
-    If ``sync==True``, wait unitl the controller is stopped.
+    If ``sync==True``, wait until the controller is stopped.
     """
     try:
         controller=get_controller(name,wait=False)
@@ -973,9 +973,9 @@ def stop_all_controllers(sync=True, concurrent=True, stop_self=True):
     """
     Stop all running threads.
 
-    If ``sync==True``, wait unitl the all of the controller are stopped.
+    If ``sync==True``, wait until the all of the controller are stopped.
     If ``sync==True`` and ``concurrent==True`` stop threads in concurrent manner (first issue stop messages to all of them, then wait until all are stopped).
-    If ``sync==True`` and ``concurrent==False`` stop threads in consequtive manner (wait for each thread to stop before stopping the next one).
+    If ``sync==True`` and ``concurrent==False`` stop threads in consecutive manner (wait for each thread to stop before stopping the next one).
     If ``stop_self==True`` stop current thread after stopping all other threads.
     """
     global _running_threads_stopping

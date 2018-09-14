@@ -13,7 +13,7 @@ def get_package_version(pkg):
     """
     Get the version of the package.
     
-    If the package version is unavalable, return ``None``.
+    If the package version is unavailable, return ``None``.
     """
     try:
         return pkg_resources.get_distribution(pkg).version
@@ -30,7 +30,7 @@ def cmp_package_version(pkg, ver):
     Compare current package version to `ver`.
     
     Return ``'<'`` if current version is older (smaller), ``'>'`` if it's younger (larger) or ``'='`` if it's the same.
-    If the package version is unavalable, return ``None``.
+    If the package version is unavailable, return ``None``.
     """
     cver=get_package_version(pkg)
     if cver is None:
@@ -47,7 +47,7 @@ def cmp_package_version(pkg, ver):
 
 def expand_relative_path(module_name, rel_path):
     """
-    Turn a relative module path into an absolue one.
+    Turn a relative module path into an absolute one.
     
     `module_name` is the absolute name of the reference module, `rel_path` is the path relative to this module.
     """

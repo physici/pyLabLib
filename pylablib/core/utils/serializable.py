@@ -84,7 +84,7 @@ class Serializable(object):
         Get the ``'init'`` parameter with the given name.
 
         Can be overloaded if init parameter isn't stored plainly in the object.
-        If parameter doesn't need to be saved, raise :exc:`AttirbuteError`.
+        If parameter doesn't need to be saved, raise :exc:`AttributeError`.
         """
         return getattr(self,name)
     def _get_attr_parameter(self, name):
@@ -92,7 +92,7 @@ class Serializable(object):
         Get the ``'attr'`` parameter with the given name.
 
         Can be overloaded if attr parameter isn't stored plainly in the object.
-        If parameter doesn't need to be saved, raise :exc:`AttirbuteError`.
+        If parameter doesn't need to be saved, raise :exc:`AttributeError`.
         """
         return getattr(self,name)
     def _set_attr_parameter(self, name, value):
@@ -196,9 +196,9 @@ def _serialize(obj, full_dict, deep_copy=True):
     Serialize object `obj` into the dictionary.
 
     Return the value which is to be stored in the dictionary and later used to deserialize the object.
-    If the object is :class:`Serializable`, store it on the top level of `full_dict` and return its name. Otherwise, return the object itsel.
+    If the object is :class:`Serializable`, store it on the top level of `full_dict` and return its name. Otherwise, return the object itself.
     Containeres (lists, tuples and dictionaries) are processed recursively.
-    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before returning them.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attributes before returning them.
     """
     if isinstance(obj, Serializable):
         return obj._serialize(full_dict)
@@ -225,7 +225,7 @@ def _deserialize(obj, full_dict, loaded, case_sensitive, deep_copy=True):
     If `obj` is a string, try to interpret it as a name of a stored :class:`Serializable` object and add it into `loaded` dict;
     if this name is missing, treat it as a string value.
     Containere (lists, tuples and dictionaries) objects are processed recursively.
-    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before returning them.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attributes before returning them.
     """
     if isinstance(obj,textstring):
         if obj in full_dict:
@@ -276,7 +276,7 @@ def to_dict(objects, full_dict=None, deep_copy=True):
     Serialize the list of objects into the dictionary.
 
     Return `full_dict`.
-    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before storing them in the dictionary.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attributes before storing them in the dictionary.
     Only :class:`Serializable` objects get serialized.
     """
     if full_dict is None:
@@ -291,7 +291,7 @@ def from_dict(full_dict, case_sensitive=True, deep_copy=True):
     Deserialize objects from the dictionary.
 
     Return a dictionary ``{name: object}`` containing the extracted objects.
-    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attribues before assiging them as objects attributes.
+    If ``deep_copy==True``, attempt to copy (call ``.copy()`` method) all non-serializable attributes before assigning them as objects attributes.
     Only :class:`Serializable` objects get deserialized.
     """
     loaded={"#incomplete":[]} #contains list of object currently being created, to escape recursive loops

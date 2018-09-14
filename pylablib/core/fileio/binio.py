@@ -48,7 +48,7 @@ def write_num(x, f, dtype):
     elif dtype in fdtypes_inv:
         np.asarray(float(x)).astype(dtype).tofile(f)
     else:
-        raise ValueError("unrecognzied dtype: {}".format(dtype))
+        raise ValueError("unrecognized dtype: {}".format(dtype))
 def write_str(s, f, dtype, strict=False):
     """
     Write a string `s` into a file `f`.
@@ -75,7 +75,7 @@ def write_str(s, f, dtype, strict=False):
             raise ValueError("string length {} doesn't agree with dtype {}".format(len(s),int(dtype[1:])))
         f.write(s)
     else:
-        raise ValueError("unrecognzied dtype: {}".format(dtype))
+        raise ValueError("unrecognized dtype: {}".format(dtype))
 def write_pickle(v, f, dtype):
     """
     Write a value `v` into file `f` as a Python pickle object.
@@ -90,7 +90,7 @@ def write_pickle(v, f, dtype):
         v=pickle.dumps(v,protocol=proto)
         write_str(v,f,"sp"+sdtype)
     else:
-        raise ValueError("unrecognzied dtype: {}".format(dtype))
+        raise ValueError("unrecognized dtype: {}".format(dtype))
 def write_val(v, f, dtype):
     """
     Write an arbitrary value `v` into file `f` using the supplied `dtype`.
@@ -124,7 +124,7 @@ def read_num(f, dtype):
     elif dtype in fdtypes_inv:
         return float(np.fromfile(f,dtype=dtype,count=1)[0])
     else:
-        raise ValueError("unrecognzied dtype: {}".format(dtype))
+        raise ValueError("unrecognized dtype: {}".format(dtype))
 def read_str(f, dtype):
     """
     Read a string from file `f`.
@@ -140,7 +140,7 @@ def read_str(f, dtype):
         sl=int(dtype[1:])
         return py3.as_str(f.read(sl))
     else:
-        raise ValueError("unrecognzied dtype: {}".format(dtype))
+        raise ValueError("unrecognized dtype: {}".format(dtype))
 def read_pickle(f, dtype):
     """
     Read a value from file `f` as a Python pickle object.
@@ -154,7 +154,7 @@ def read_pickle(f, dtype):
         v=read_str(f,"sp"+sdtype)
         return pickle.loads(v)
     else:
-        raise ValueError("unrecognzied dtype: {}".format(dtype))
+        raise ValueError("unrecognized dtype: {}".format(dtype))
 def read_val(f, dtype):
     """
     Read an arbitrary value from file `f` using the supplied `dtype`.

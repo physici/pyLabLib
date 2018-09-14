@@ -28,14 +28,14 @@ class PeriodicThread(object):
         """
         Perform a single iteration of the loop.
 
-        To be overrided in subclasses.
+        To be overridden in subclasses.
         """
         pass
     def process_message(self, msg):
         """
         Process a message sent from the parent thread.
 
-        To be overrided in subclasses.
+        To be overridden in subclasses.
         """
         pass
         

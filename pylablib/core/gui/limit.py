@@ -24,7 +24,7 @@ class NumberLimit(object):
         upper_limit: upper limit (inclusive), or ``None`` if there is no limit.
         action (str): action taken if the number is out of limits; either ``"coerce"`` (return the closest valid value),
             or ``"ignore"`` (raise :exc:`LimitError`).
-        value_type (str): determines value type coersion; can be ``None`` (do nothing, only check limits), ``"float"`` (cast to float), or ``"int"`` (cast to integer).
+        value_type (str): determines value type coercion; can be ``None`` (do nothing, only check limits), ``"float"`` (cast to float), or ``"int"`` (cast to integer).
     """
     def __init__(self, lower_limit=None, upper_limit=None, action="ignore", value_type=None):
         object.__init__(self)
@@ -68,7 +68,7 @@ class NumberLimit(object):
 
 def filter_limiter(pred):
     """
-    Turn a perdicator into a limiter.
+    Turn a predicator into a limiter.
 
     Returns a function that raises :exc:`LimitError` if the predicate is false.
     """

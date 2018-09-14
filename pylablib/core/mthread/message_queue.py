@@ -24,7 +24,7 @@ class MessageQueue(object):
     @staticmethod
     def build_notifier(uid, sync, event_type, notification_controller):
         """
-        Create a norifier for a message with an ID `uid`.
+        Create a notifier for a message with an ID `uid`.
 
         If `sync` is a tuple ``(tag, value)``, it specifies the notifier message parameters (see :func:`.message.build_notifier`).
         Otherwise, they are determined by the `uid`.
@@ -83,7 +83,7 @@ class MessageQueue(object):
         Read and return (instantaneously) all available messages which satisfy the filter `filt`.
 
         `interrupt_check` is an interrupt filter function, which pre-processes the message and return ``True`` if it was an interrupt
-        (in which case it's ommited in the output).
+        (in which case it's omitted in the output).
 
         Called from the receiver thread.
         """

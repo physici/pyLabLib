@@ -356,8 +356,8 @@ class BinaryTableInputFileFormatter(IInputFileFormat):
             packing (str): The way the 2D array is packed. Can be either
                 ``'flatten'`` (data is stored row-wise) or
                 ``'transposed'`` (data is stored column-wise).
-            preamble (dict): If not ``None``, defines binary file paramters that supersede the paramteres supplied to the function.
-                The defined parameters are ``'dtype'``, ``'packing'``, ``'ncol'`` (number of columns) and ``'nrows'`` (number of rows).
+            preamble (dict): If not ``None``, defines binary file parameters that supersede the parameteres supplied to the function.
+                The defined parameters are ``'dtype'``, ``'packing'``, ``'ncols'`` (number of columns) and ``'nrows'`` (number of rows).
             skip_bytes (int): Number of bytes to skip from the beginning of the file.
         """
         preamble=preamble or {}

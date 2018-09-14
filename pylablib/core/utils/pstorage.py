@@ -134,7 +134,7 @@ class ParametersStorage(object):
             raise AttributeError("'{0}' object has no parameter '{1}'".format(self.__class__.__name__,name))
     def _reimport_storages(self):
         """
-        Recursively update (re-imports) all of the storages without rcursively updating them.
+        Recursively update (re-imports) all of the storages without recursively updating them.
         """
         self._lookup_table=self._local_table.copy()
         for storage,import_table in self._imported_storages:
@@ -189,7 +189,7 @@ class ParametersStorageInterface(ParametersStorage):
     
     def descriptor_to_storage(self, desc_name, stored_name=None):
         """
-        Add a descrptor (usually a property) with the name `desc_name` to the storage.
+        Add a descriptor (usually a property) with the name `desc_name` to the storage.
 
         If ``stored_name`` is not ``None``, use it as the name of the parameter inside the storage.
         """

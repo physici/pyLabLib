@@ -52,8 +52,8 @@ class IDevice(object):
         Args:
             path: parameter name.
             kind(str): can be ``"settings"`` (device settings parameter), ``"status"`` (device status parameter) or ``"full_info"`` (full device info).
-            getter: methods for getting this parameter. Can be ``None``, meaning that this parameter is ingored when executing :meth:`get_settings`/:meth:`get_full_status`/:meth:`get_full_info`.
-            setter: methods for setting this parameter. Can be ``None``, meaning that this parameter is ingored when executing :meth:`apply_settings`.
+            getter: methods for getting this parameter. Can be ``None``, meaning that this parameter is ignored when executing :meth:`get_settings`/:meth:`get_full_status`/:meth:`get_full_info`.
+            setter: methods for setting this parameter. Can be ``None``, meaning that this parameter is ignored when executing :meth:`apply_settings`.
             ignore_error(tuple): is a list of exception classes; if raised during getter/setter call, they are ignored.
             mux(tuple): 1- or 2-tuple with parameters for function multiplexing (calling several times and combining result in a list).
                 The first element is an iterable of argument values to be iterated over, the second argument is the position where this argument is inserted (by default, 0)

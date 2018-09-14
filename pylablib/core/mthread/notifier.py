@@ -22,7 +22,7 @@ class ISkippableNotifier(object):
         """
         Check if the waiting initialization is successfull.
 
-        Called inside an interanl lock section, so should be short and preferably non-blocking.
+        Called inside an internal lock section, so should be short and preferably non-blocking.
         If return value is ``False``, waiting aborts and returns `False``, and the waiting status is marked as ``"failed"``.
         """
         return True
@@ -69,7 +69,7 @@ class ISkippableNotifier(object):
         """
         Perform pre-notification actions.
 
-        Called inside an interanl lock section, so should be short and preferably non-blocking.
+        Called inside an internal lock section, so should be short and preferably non-blocking.
         """
         pass        
     def _do_notify(self):

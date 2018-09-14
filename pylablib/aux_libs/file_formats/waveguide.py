@@ -167,7 +167,7 @@ def load_prepared_sweeps(prefix, reps, min_sweep_length=1, **add_info):
     Load sweeps with the given `prefix` and `reps` and normalize their frequency axes.
 
     Return list of tuples ``(sweep, info)``. `add_info` is added to the `info` dictionary (`rep` index is added automatically).
-    `min_sweep_length` specifies the minimal sweep length (after frequecy normalization) to be included in the list.
+    `min_sweep_length` specifies the minimal sweep length (after frequency normalization) to be included in the list.
     """
     sweeps=[]
     if reps:

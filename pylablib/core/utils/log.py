@@ -288,7 +288,7 @@ class Log(object):
             origin (str): origin prefix specifying the rule domain (by default, empty prefix, i.e., any origin)
             kind (str): a kind name or ``'*'`` (all kinds; default) for which the action is invoked
             level_range (tuple): a range (lower and upper bound) of levels for which the action is invoked
-            **kwargs: additional arguments passed to the action `report` method (override the default action arguments, but ar overriden by the :meth:`report` arguments)
+            **kwargs: additional arguments passed to the action `report` method (override the default action arguments, but ar overridden by the :meth:`report` arguments)
         
         If several rules are applicable to the same message, all of them are invoked.
         """
@@ -473,7 +473,7 @@ def read_log(path, strict=True, required=None, bad_line_action="append"):
     Read the log file.
 
     Return a list of lines, where each line is a dictionary ``{'time':time, 'level':level, 'kind':kind, 'origin':origin, 'message':message'}``.
-    If sime elements of the line are missing from the message, set them to ``None``.
+    If some elements of the line are missing from the message, set them to ``None``.
     Try to convert the time string into a :class:`datetime` object and the level string into an integer.
 
     Args:

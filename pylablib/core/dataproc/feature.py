@@ -69,7 +69,7 @@ def find_peaks_cutoff(trace, cutoff, min_width=0, kind="peak", subtract_bl=True)
     Args:
         trace: 1D data array.
         cutoff (float): Cutoff value for the peak finding.
-        min_width (int): Minimal uninterupted width (in datapoints) of a peak. Any peaks this width are ignored.
+        min_width (int): Minimal uninterrupted width (in datapoints) of a peak. Any peaks this width are ignored.
         kind (str): Peak kind. Can be ``'peak'`` (positive direction), ``'dip'`` (negative direction) or ``'both'`` (both directions).
         subtract_bl (bool): If ``True``, subtract baseline of the trace before checking cutoff.
     
@@ -226,7 +226,7 @@ def find_state_hysteretic(wf, threshold_off, threshold_on, normalize=True):
     
     Return a state array containing ``+1`` for 'on' states and ``-1`` for 'off' states.
     The states switches from 'off' to 'on' when the value goes above `threshold_on`, and from 'on' to 'off' when the value goes below `threshold_off`.
-    The intermediate states are deteremined by the nearest neighbour.
+    The intermediate states are determined by the nearest neighbor.
     """
     if threshold_off>threshold_on:
         raise ValueError("threshold_off can't be greater than threshold_on")
@@ -254,9 +254,9 @@ def trigger_hysteretic(wf, threshold_on, threshold_off, init_state="undef", resu
     
     Return either two arrays ``(rise_trig, fall_trig)`` containing trigger indices (if ``result_kind=="separate"``),
     or a single array of tuples ``[(dir,pos)]``, where `dir` is the trigger direction (``+1`` or ``-1``) and `pos` is its index  (if ``result_kind=="joined"``).
-    Triggers happe when a state switch from 'high' to 'low' (rising) or vice versa (falling).
+    Triggers happen when a state switch from 'high' to 'low' (rising) or vice versa (falling).
     The state switches from 'low' to 'high' when the trace value goes above `threshold_on`, and from 'high' to 'low' when the trace value goes below `threshold_off`.
-    `init_state` speicifies the initial state: ``"low"``, ``"high"``, or ``"undef"`` (undefined state).
+    `init_state` specifies the initial state: ``"low"``, ``"high"``, or ``"undef"`` (undefined state).
     """
     if threshold_off>threshold_on:
         raise ValueError("off threshold level should be below on threshold level")

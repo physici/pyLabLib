@@ -97,7 +97,7 @@ class TMCM1100(backend.IBackendWrapper):
         Jog in a given direction with a given speed.
         
         `direction` can be either ``"-"`` (negative) or ``"+"`` (positive).
-        The motion continues until it is explicitly stopped, or unitl a limit is hit.
+        The motion continues until it is explicitly stopped, or until a limit is hit.
         """
         if not direction: # 0 or False also mean left
             direction="-"

@@ -65,11 +65,11 @@ class LM500(SCPI.SCPIDevice):
             raise RuntimeError("LN channel doesn't support {}".format(op))
     
     def get_mode(self):
-        """Get measurement mode at the current channel (``"S"`` for sample/holde, ``"C"`` for continuous)"""
+        """Get measurement mode at the current channel (``"S"`` for sample/hold, ``"C"`` for continuous)"""
         self._check_channel_LHe("measurement modes")
         return self.ask("MODE?").upper()
     def set_mode(self, mode):
-        """Set measurement mode at the current channel (``"S"`` for sample/holde, ``"C"`` for continuous)"""
+        """Set measurement mode at the current channel (``"S"`` for sample/hold, ``"C"`` for continuous)"""
         self._check_channel_LHe("measurement modes")
         self.write("MODE",mode)
         return self.get_mode()
@@ -131,7 +131,7 @@ class LM500(SCPI.SCPIDevice):
             return float(spres[0])*60.
         if spres[1] in ["s","sec"]:
             return float(spres[0])
-        raise ValueError("unxepected response: {}".format(res))
+        raise ValueError("unexpected response: {}".format(res))
 
     def get_low_level(self, channel=1):
         """Get low level setting on a given channel"""

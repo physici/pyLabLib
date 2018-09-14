@@ -924,7 +924,7 @@ class PrefixTree(Dictionary):
     """
     Expansion of a :class:`Dictionary` designed to store data related to prefixes.
     
-    Each branch node can have a leaf with a name given by wildcard (``'*'`` by defaul) or matchcard (``'.'`` by default).
+    Each branch node can have a leaf with a name given by wildcard (``'*'`` by default) or matchcard (``'.'`` by default).
     Wildcard assumes that the branch node path is a prefix; matchcard assumes exact match.
     These leafs are inspected when specific prefix tree functions (find_largest_prefix and find_all_prefixes) are used.
         
@@ -1026,7 +1026,7 @@ def combine_dictionaries(dicts, func, select="all", pass_missing=False):
         select(str): determins which keys are selected for the resulting dictionary.
             Can be either ``"all"`` (only keep keys which are present in all the dictionaries), or ``"any"`` (keep keys which are present in at least one dictionary).
             Only keys that point to leafs count; if a key points to a non-leaf branch in some dictionary, it is considered absent from this dictionary.
-        pass_missing(bool): if ``select=="any"``, this parameter determines whether missing elemnts will be passed to `func` as ``None``, or omitted entirely.
+        pass_missing(bool): if ``select=="any"``, this parameter determines whether missing elements will be passed to `func` as ``None``, or omitted entirely.
     """
     funcargparse.check_parameter_range(select,"select",["all","any"])
     if not dicts:
@@ -1081,7 +1081,7 @@ def dict_to_object_local(data, name=None, object_generator=_default_object_gener
 
 class PrefixShortcutTree(object):
     """
-    Convenient storage for dictioanry path shortcuts.
+    Convenient storage for dictionary path shortcuts.
     
     Args:
         shortcuts (dict): Dictionary of shortcuts ``{shortcut: full_path}``.

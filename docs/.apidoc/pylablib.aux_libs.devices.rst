@@ -148,6 +148,14 @@ pylablib.aux\_libs.devices.Lakeshore module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.devices.LighthousePhotonics module
+-----------------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.LighthousePhotonics
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.devices.M2 module
 ------------------------------------
 

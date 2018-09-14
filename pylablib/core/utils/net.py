@@ -38,7 +38,7 @@ class ClientSocket(object):
     
     Args:
         sock (socket.socket): If not ``None``, use already created socket.
-        timeout (float): The timeout used for connecting and sending/receving (``None`` means no timeout).
+        timeout (float): The timeout used for connecting and sending/receiving (``None`` means no timeout).
         wait_callback (Callable): Called periodically (every 100ms by default) while waiting for connecting or sending/receiving.
         send_method (str): Default sending method.
         recv_method (str): Default receiving method.
@@ -47,7 +47,7 @@ class ClientSocket(object):
     
     Possible sending/receiving methods are:
         - ``'fixedlen'``: data is sent as is, and receiving requires to know the length of the message;
-        - ``'decllen'``: data is prepended by a length, and receving reads this length and doesn't need predetermined length info.
+        - ``'decllen'``: data is prepended by a length, and receiving reads this length and doesn't need predetermined length info.
         
     Attributes:
         sock (socket.socket): Correpsonding Python socket.
@@ -261,7 +261,7 @@ class ClientSocket(object):
 
 def recv_JSON(socket, chunk_l=1024, strict=True):
     """
-    Receive a complete JSON tokent from the socket.
+    Receive a complete JSON token from the socket.
 
     `chunk_l` specifies the size of data chunk to be read in one try.
     If ``strict==False``, keep receiving as much data as possible until the received data forms a complete JSON token.
@@ -289,10 +289,10 @@ def listen(host, port, conn_func, wait_callback=None, timeout=None, backlog=10, 
         wait_callback (Callable): A callback function which is called periodically (every 100ms by default) while awaiting for connections.
         timeout (float): Timeout for waiting for the connections (``None`` is no timeout).
         backlog (int): Backlog length for the socket (see :func:`socket.socket.listen`).
-        wrap_socket (bool): If ``True``, wrap the clinet socket of the connection into :class:`ClientSocket` class;
-            otherise, return :class:`socket.socket` object.
+        wrap_socket (bool): If ``True``, wrap the client socket of the connection into :class:`ClientSocket` class;
+            otherwise, return :class:`socket.socket` object.
         
-    Checking for connections is paused unitl `conn_func` returns.
+    Checking for connections is paused until `conn_func` returns.
     If multiple connections are expected, `conn_func` should spawn a separate processing thread and return.
     """
     if host is None:

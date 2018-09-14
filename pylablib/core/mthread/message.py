@@ -38,12 +38,12 @@ def build_notifier(note_tag, note_value, sync, notification_controller):
     `sync` can be:
         - a callable object, in which case it is called as a notifier (waiting is absent);
         - a tuple ``(note_tag, note_value)``, in which case it is interpreted as a ``"message"`` notifier with the corresponding tags (see below),
-            while the `note_tag` and `note_value` argumetns are ignored;
+            while the `note_tag` and `note_value` arguments are ignored;
         - a string, in which case it determines a synchronization primitive type. Possible types are:
             - ``"none"``: 'dummy' synchronizer (no waiting, return immediately);
-            - ``"wait_event"``: standard wite-notify pattern (`wait()` call waits until the `notify()` is called from a different thread).
-                Waiting is implemented using the standard pyhton `threading.Event` primitive (completely synchronous, can't be interrupted; should be used carefully);
-            - ``"wait"``: standard wite-notify pattern (`wait()` call waits until the `notify()` is called from a different thread).
+            - ``"wait_event"``: standard wait-notify pattern (`wait()` call waits until the `notify()` is called from a different thread).
+                Waiting is implemented using the standard python `threading.Event` primitive (completely synchronous, can't be interrupted; should be used carefully);
+            - ``"wait"``: standard wait-notify pattern (`wait()` call waits until the `notify()` is called from a different thread).
                 Waiting is implemented using the thread message queue; (synchronous, but still responds to interrupts);
             - ``"message"``: send notifying message, but don't do any waiting (asynchronous)
 

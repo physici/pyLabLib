@@ -1,5 +1,5 @@
 """
-Utilites for uniform treatment of DataTable and numpy array objects for functions which can deal with them both.
+Utilities for uniform treatment of DataTable and numpy array objects for functions which can deal with them both.
 """
 
 from . import column
@@ -47,7 +47,7 @@ class I1DWrapper(IGenWrapper):
         self.t=self.Accessor(self)
     class Accessor(object):
         """
-        An accessor: creates a simple unform interface to treat the wrapped object element-wise (get/set/iterate over elements).
+        An accessor: creates a simple uniform interface to treat the wrapped object element-wise (get/set/iterate over elements).
 
         Generated automatically for each table on creation, doesn't need to be created explicitly.
         """
@@ -346,7 +346,7 @@ class Array2DWrapper(I2DWrapper):
         self.t._storage=cont
     class RowAccessor(object):
         """
-        A row accessor: creates a simple unform interface to treat the wrapped object row-wise (append/insert/delete/iterate over rows).
+        A row accessor: creates a simple uniform interface to treat the wrapped object row-wise (append/insert/delete/iterate over rows).
 
         Generated automatically for each table on creation, doesn't need to be created explicitly.
         """
@@ -397,7 +397,7 @@ class Array2DWrapper(I2DWrapper):
     
     class ColumnAccessor(object):
         """
-        A column accessor: creates a simple unform interface to treat the wrapped object column-wise (append/insert/delete/iterate over columns).
+        A column accessor: creates a simple uniform interface to treat the wrapped object column-wise (append/insert/delete/iterate over columns).
 
         Generated automatically for each table on creation, doesn't need to be created explicitly.
         """
@@ -474,7 +474,7 @@ class Array2DWrapper(I2DWrapper):
     
     def subtable(self, idx, wrapped=True):
         """
-        Return a subtable at index `idx` of the appropriate tybe (2D numpy array).
+        Return a subtable at index `idx` of the appropriate type (2D numpy array).
         
         If ``wrapped==True``, return a new wrapper contating the table; otherwise, just return the table.
         """
@@ -531,7 +531,7 @@ class Table2DWrapper(I2DWrapper):
     
     class RowAccessor(object):
         """
-        A row accessor: creates a simple unform interface to treat the wrapped object row-wise (append/insert/delete/iterate over rows).
+        A row accessor: creates a simple uniform interface to treat the wrapped object row-wise (append/insert/delete/iterate over rows).
 
         Generated automatically for each table on creation, doesn't need to be created explicitly.
         """
@@ -585,7 +585,7 @@ class Table2DWrapper(I2DWrapper):
             
     class ColumnAccessor(object):
         """
-        A column accessor: creates a simple unform interface to treat the wrapped object column-wise (append/insert/delete/iterate over columns).
+        A column accessor: creates a simple uniform interface to treat the wrapped object column-wise (append/insert/delete/iterate over columns).
 
         Generated automatically for each table on creation, doesn't need to be created explicitly.
         """
@@ -664,7 +664,7 @@ class Table2DWrapper(I2DWrapper):
     
     def subtable(self, idx, wrapped=True):
         """
-        Return a subtable at index `idx` of the appropriate tybe (:class:`DataTable`).
+        Return a subtable at index `idx` of the appropriate type (:class:`DataTable`).
         
         If ``wrapped==True``, return a new wrapper contating the table; otherwise, just return the table.
         """

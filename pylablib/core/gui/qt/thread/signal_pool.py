@@ -13,7 +13,7 @@ def _as_name_list(lst):
 TSignal=collections.namedtuple("TSignal",["src","tag","value"])
 class SignalPool(object):
     """
-    Signal dispatcher (somewhat similar in functionalty to Qt signals).
+    Signal dispatcher (somewhat similar in functionality to Qt signals).
 
     Manages dispatching signals between sources and destinations (callback functions).
     Each signal has defined source, destination (both can also be ``"all"`` or ``"any"``, see methods descriptions for details), tag and value.
@@ -30,6 +30,7 @@ class SignalPool(object):
 
         If signal is sent, `callback` is called from the sending thread (not subscribed thread). Therefore, should be used with care.
         In Qt, analogous to making signal connection with a direct call.
+
         Args:
             callback: callback function, which takes 3 arguments: signal source, signal tag, signal value.
             src(str or [str]): signal source or list of sources (controller names) to filter the subscription;
@@ -66,6 +67,7 @@ class SignalPool(object):
 
         If signal is sent, `callback` is called from the `dest_controller` thread (by default, thread which is calling this function).
         In Qt, analogous to making signal connection with a queued call.
+        
         Args:
             callback: callback function, which takes 3 arguments: signal source, signal tag, signal value.
             src(str or [str]): signal source name or list of source names to filter the subscription;
@@ -88,7 +90,7 @@ class SignalPool(object):
         sync_callback=synchronizing.SignalSynchronizer(callback,limit_queue=limit_queue,limit_period=limit_period,dest_controller=dest_controller)
         return self.subscribe_nonsync(sync_callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,id=id)
     def unsubscribe(self, id):
-        """Unsibscribe from a subscription with a given ID."""
+        """Unsubscribe from a subscription with a given ID."""
         self._pool.remove_observer(id)
 
     def signal(self, src, dst="any", tag=None, value=None):

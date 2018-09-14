@@ -16,7 +16,7 @@ def truncate_len_pow2(trace, truncate_power=None):
     """
     Truncate trace length to the the nearest power of 2.
     
-    If `trancate_power` is not ``None``, it determines the minimal power of 2 that has to divide the length.
+    If `truncate_power` is not ``None``, it determines the minimal power of 2 that has to divide the length.
     (if it is ``None``, than it's the maximal possible power).
     """
     if truncate_power==0:

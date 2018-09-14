@@ -1,7 +1,7 @@
 """
 Data table storage.
 Does not implement any indexing or iterator interface (it's delegated to `IDataTable`).
-Should not be acessed directly by users of `DataTable`.
+Should not be accessed directly by users of `DataTable`.
 """
 
 from builtins import range
@@ -132,7 +132,7 @@ class IDataTableStorage(object):
         """Set new column names."""
         raise NotImplementedError("IDataTableStorage.change_column_name")
     def swap_columns(self, idx1, idx2):
-        """Swap two columns at indicex `idx1` and `idx2`."""
+        """Swap two columns at indices `idx1` and `idx2`."""
         raise NotImplementedError("IDataTableStorage.swap_columns")
     
     ## Copying ##
@@ -224,7 +224,7 @@ class ColumnDataTableStorage(IDataTableStorage):
         self._check_name_clashes(new_names,adding=False)
         self._column_names=new_names
     def swap_columns(self, idx1, idx2):
-        """Swap two columns at indicex `idx1` and `idx2`."""
+        """Swap two columns at indices `idx1` and `idx2`."""
         ndim1,idx1=indexing.to_list_idx_noslice(idx1,self.get_column_names()).tup()
         ndim2,idx2=indexing.to_list_idx_noslice(idx2,self.get_column_names()).tup()
         if ndim1!=0 or ndim2!=0:
@@ -590,7 +590,7 @@ class ArrayDataTableStorage(IDataTableStorage):
         self._check_name_clashes(new_names)
         self._column_names=new_names
     def swap_columns(self, idx1, idx2):
-        """Swap two columns at indicex `idx1` and `idx2`."""
+        """Swap two columns at indices `idx1` and `idx2`."""
         ndim1,idx1=indexing.to_list_idx_noslice(idx1,self.get_column_names()).tup()
         ndim2,idx2=indexing.to_list_idx_noslice(idx2,self.get_column_names()).tup()
         if ndim1!=0 or ndim2!=0:

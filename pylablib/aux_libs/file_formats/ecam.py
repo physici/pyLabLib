@@ -461,7 +461,7 @@ class ECamReader(object):
                 with open(self.path,"rb") as f:
                     self._read_next_frame(f,skip=True)
                 if file_size%self.frame_offsets[1]:
-                    raise IOError("File size {} is not a multile of single frame size {}".format(file_size,self.frame_offsets[1]))
+                    raise IOError("File size {} is not a multiple of single frame size {}".format(file_size,self.frame_offsets[1]))
                 self.frames_num=file_size//self.frame_offsets[1]
         else:
             offset=self.frame_offsets[-1]

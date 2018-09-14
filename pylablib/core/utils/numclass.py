@@ -66,16 +66,16 @@ class NumClass(object):
     By default, the operations not contained in `_numops_impl` raise :exc:`NotImplementedError`.
         
     The operation symbols are:
-        - arithemtic binary operations with the object as the first argument:
+        - arithmetic binary operations with the object as the first argument:
             ``'l+'``, ``'l-'``, ``'l*'``, ``'l/'``, ``'l**'``, ``'l//'``, ``'l%'``
             (contained in constant `_numops_arith_l`)
-        - arithemtic binary operations with the object as the second argument:
+        - arithmetic binary operations with the object as the second argument:
             ``'r+'``, ``'r-'``, ``'r*'``, ``'r/'``, ``'r**'``, ``'r//'``, ``'r%'``
             (contained in constant `_numops_arith_r`)
-        - arithemtic binary in-place operations:
+        - arithmetic binary in-place operations:
             ``'i+'``, ``'i-'``, ``'i*'``, ``'i/'``, ``'i**'``, ``'i//'``, ``'i%'``
             (contained in constant `_numops_arith_i`)
-        - arithemtic unary operations:
+        - arithmetic unary operations:
             ``'u+'``, ``'u-'``, ``'uabs'``
             (contained in constant `_numops_arith_u`)
         - bitwise binary operations with the object as the first argument:
@@ -122,7 +122,7 @@ class NumClass(object):
         
         Args:
             x: A second argument (``None`` if the operation is unary).
-            op_func (Callable): A defualt function which performs the operation
+            op_func (Callable): A default function which performs the operation
                 (e.g., ``lambda (x, y): x + y`` for addition).
             op_sym (str): A symbol for the operation. 
         """

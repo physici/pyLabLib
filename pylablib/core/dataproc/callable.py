@@ -106,7 +106,7 @@ class MultiplexedCallable(ICallable):
     If the function is called with this parameter as an iterable,
     then the underlying callable will be called for each value of the parameter separately,
     and the results will be joined into a single array
-    (if return the values are scalar, the're joined in 1D array; otherwise, they're joined using `join_method`).
+    (if return the values are scalar, they're joined in 1D array; otherwise, they're joined using `join_method`).
     
     Args:
         func (Callable): Function to be parallelized.
@@ -183,7 +183,7 @@ class JoinedCallable(ICallable):
     Join several callables sharing the same arguments list.
     
     The results will be joined into a single array
-    (if return the values are scalar, the're joined in 1D array; otherwise, they're joined using `join_method`).
+    (if return the values are scalar, they're joined in 1D array; otherwise, they're joined using `join_method`).
     
     Args:
         funcs ([Callable]): List of functions to be joined together.
@@ -400,7 +400,7 @@ class MethodCallable(FunctionCallable):
             raise ValueError("argument {0} has no default value".format(arg_name))
         else:
             raise KeyError("no argument with name {0}".format(arg_name))
-    def _is_func_arg(self, arg_name): # arg_name is assumed to be unaliased
+    def _is_func_arg(self, arg_name): # arg_name is assumed to be un-aliased
         return arg_name in self._declared_args
     def __call__(self, **params):
         for n in self._mand_args:

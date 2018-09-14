@@ -77,7 +77,7 @@ class IRecurrentPlot(object):
             self.fig=mpl.figure()
     def setup_prepare(self, *args, **kwargs):
         """
-        Prepare the plot if it hasn'd been prepared already.
+        Prepare the plot if it hasn't been prepared already.
         """
         if not self.prepared:
             self.setup_figure()
@@ -87,7 +87,7 @@ class IRecurrentPlot(object):
         """
         Plot the data.
         
-        The supplied argumetns are redirected to the overloaded methods :func:`plot_prepare` and :func:`plot_next`.
+        The supplied arguments are redirected to the overloaded methods :func:`plot_prepare` and :func:`plot_next`.
         """
         self.setup_prepare(*args,**kwargs)
         if self.auto_clear:
@@ -163,7 +163,7 @@ class GenericPlotter(IRecurrentPlot):
         self.legend=funcargparse.as_sequence(legend,axes_num)
     def plot_prepare(self, *args, **kwargs):
         """
-        Prepare the plot if it hasn'd been prepared already.
+        Prepare the plot if it hasn't been prepared already.
         """
         for a in range(self.axes_num):
             an=self.axes_names[a]

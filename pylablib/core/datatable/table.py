@@ -242,7 +242,7 @@ class DataTable(object):
         """
         Resize the table to `length`.
 
-        If the curent length is larger, the table is truncated. Otherwise, it's expanded (using :func:`expand`). 
+        If the current length is larger, the table is truncated. Otherwise, it's expanded (using :func:`expand`). 
         """
         diff=length-self.nrows()
         if diff<0:
@@ -281,7 +281,7 @@ class DataTable(object):
         self.set_column_names(new_names)
     def swap_columns(self, idx1, idx2):
         """
-        Swap two columns at indicex `idx1` and `idx2`.
+        Swap two columns at indices `idx1` and `idx2`.
 
         Names are adjusted accordingly.
         """
@@ -359,7 +359,7 @@ class DataTable(object):
         """
         Copy the table.
 
-        If ``copt_columns==True``, deep-copy the columns as well.
+        If ``y_columns==True``, deep-copy the columns as well.
         """
         if copy_columns:
             return DataTable(self._storage,force_copy=True)
@@ -404,7 +404,7 @@ class DataTable(object):
     @classmethod
     def add_array_function(cls, func, alias=None, doc=None):
         """
-        Turns a function into a method, hich is automatically applied to the array representation.
+        Turns a function into a method, which is automatically applied to the array representation.
 
         Arguments:
             func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments

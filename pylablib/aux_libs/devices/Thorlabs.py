@@ -217,7 +217,7 @@ class KinesisDevice(backend.IBackendWrapper):
         """
         Receive a message.
 
-        Return either :cls:`CommNoData` or :cls:`CommData` depending on the message type
+        Return either :class:`CommNoData` or :class:`CommData` depending on the message type
         (fixed length with two parameters, or variable length with associated data).
         For details, see APT communications protocol.
         """

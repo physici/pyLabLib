@@ -260,7 +260,7 @@ class IFileSystemDataLocation(IDataLocation):
         """
         Open a location file.
         
-        See :func:`IDataLocation.opne_file` for arguments.
+        See :func:`IDataLocation.open_file` for arguments.
         """
         if mode=="read":
             s=self._open_file_stream("r",name,data_type)
@@ -354,7 +354,7 @@ class FolderFileSystemDataLocation(IFileSystemDataLocation):
     Args:
         folder_path (str): A path to the folder.
         default_name (str): The default file name.
-        default_ext (str): The defulat file extension.
+        default_ext (str): The default file extension.
     
     Multi-level paths translate into nested subfolders.
     """

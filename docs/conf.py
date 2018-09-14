@@ -42,6 +42,7 @@ autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt5', 'pywinusb
 sys.modules['visa']=mock.Mock(VisaIOError=object, __version__='1.9.0')
 sys.modules['serial']=mock.Mock(SerialException=object)
 sys.modules['ft232']=mock.Mock(Ft232Exception=object)
+autodoc_member_order = 'bysource'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

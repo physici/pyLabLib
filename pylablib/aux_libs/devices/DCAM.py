@@ -283,7 +283,7 @@ class DCAMCamera(IDevice):
 
     def start_acquisition(self, mode="sequence", nframes=None):
         """
-        Start acquistion.
+        Start acquisition.
 
         `mode` can be either ``"snap"`` (since frame or sequency acquisition) or ``"sequence"`` (contunuous acquisition).
         `nframes` determines number of frames to acquire in ``"snap"`` mode, or size of the ring buffer in the ``"sequence"`` mode (by default, 100).
@@ -403,9 +403,9 @@ class DCAMCamera(IDevice):
     #     serial_number=lib.GetCameraSerialNumber()
     #     return self.ModelData(control_model,head_model,serial_number)
         
-    # def get_capibilities(self):
+    # def get_capabilities(self):
     #     """
-    #     Get camera capibilities.
+    #     Get camera capabilities.
 
     #     For description of the structure, see Andor SDK manual.
     #     """

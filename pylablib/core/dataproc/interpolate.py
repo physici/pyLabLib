@@ -120,7 +120,7 @@ def interpolate_trace(trace, step, rng=None, x_column=None, select_columns=None,
     `rng` specifies interpolation range (by default, whole data range).
     `x_column` specifies column index for x-data.
     `select_column` specifies which columns to interpolate and keep at the output (by default, all data).
-    If ``asume_sorted==True``, assume that x-data is sorted.
+    If ``assume_sorted==True``, assume that x-data is sorted.
     """
     src_column=waveforms.get_x_column(trace,x_column=x_column)
     select_columns=select_columns or range(np.shape(trace)[1])

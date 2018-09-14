@@ -22,9 +22,9 @@ class Fitter(object):
         func(Callable): Fit function. Can be anything callable (function, method, object with ``__call__`` method, etc.).
         xarg_name(str or list): Name (or multiple names) for x arguments. These arguments are passed to `func` (as named arguments) when calling for fitting.
             Can be a string (single argument) or a list (arbitrary number of arguments, including zero).
-        fit_paramters (dict): Dictionary ``{name: value}`` of parameters to be fitted (`value` is the starting value for the fitting procedure).
+        fit_parameters (dict): Dictionary ``{name: value}`` of parameters to be fitted (`value` is the starting value for the fitting procedure).
             If `value` is ``None``, try and get the default value from the `func`.
-        fixed_paramters (dict): Dictionary ``{name: value}`` of parameters to be fixed during the fitting procedure.
+        fixed_parameters (dict): Dictionary ``{name: value}`` of parameters to be fixed during the fitting procedure.
             If `value` is ``None``, try and get the default value from the `func`.
     """
     def __init__(self, func, xarg_name=None, fit_parameters=None, fixed_parameters=None):
@@ -67,7 +67,7 @@ class Fitter(object):
     @staticmethod
     def _build_unpacker_single(packed, template):
         """
-        Build a function that unpackes and array of floats into a parameters array.
+        Build a function that unpacks and array of floats into a parameters array.
 
         Return 2 values: function and the number of consumed array elements.
         """
@@ -92,7 +92,7 @@ class Fitter(object):
             return (lambda p: p[0]), 1
     @staticmethod
     def _build_unpacker(template):
-        """Build a function that unpackes an array of floats into a parameters array given the template"""
+        """Build a function that unpacks an array of floats into a parameters array given the template"""
         packed=Fitter._pack_parameters(template)
         unpacker,n=Fitter._build_unpacker_single(packed,template)
         if n!=len(packed):
@@ -234,7 +234,7 @@ class Fitter(object):
         res,jac,tot_err=lsqres.x,lsqres.jac,lsqres.fun
         try:
             cov=np.linalg.inv(np.dot(jac.transpose(),jac))*(np.sum(tot_err**2)/(len(tot_err)-len(res)))
-        except np.linalg.LinAlgError: # singluar matrix
+        except np.linalg.LinAlgError: # singular matrix
             cov=None
         res=unpacker(res)
         fit_dict=dict(zip(p_names,res))
@@ -272,10 +272,10 @@ class Fitter(object):
                 - `params`: a dictionary ``{name: value}`` of the parameters supplied to the function (both fit and fixed).
                 - `bound_func`: the fit function with all the parameters bound (i.e., it only requires x parameters).
                 - `stderr`: a dictionary ``{name: error}`` of standard deviation for fit parameters to the return parameters.
-                    Always zero, added for better compatiblity with :meth:`fit`.
+                    Always zero, added for better compatibility with :meth:`fit`.
                 - `residual`: either a full array of residuals ``func(x,**params)-y`` (if ``return_residual=='full'``) or
                     a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``).
-                    Always zero, added for better compatiblity with :meth:`fit`.
+                    Always zero, added for better compatibility with :meth:`fit`.
         """
         fit_parameters=self._prepare_parameters(fit_parameters)
         params_dict=general_utils.merge_dicts(self.fit_parameters,fit_parameters,self.fixed_parameters,fixed_parameters)

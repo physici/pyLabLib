@@ -615,7 +615,7 @@ def zip_folder(zip_path, source_path, inside_path="", folder_filter=None, file_f
     Args:
         zip_path (str): Path to the .zip file.
         source_path (str): Path to the source folder.
-        insde_path (str): Destination path inside the zip archive.
+        inside_path (str): Destination path inside the zip archive.
         folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
         file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
         mode (str): Zip archive adding mode (see :class:`zipfile.ZipFile`).
@@ -662,7 +662,7 @@ def unzip_folder(zip_path, dest_path, inside_path="", folder_filter=None, file_f
     Args:
         zip_path (str): Path to the .zip file.
         dest_path (str): Path to the destination folder.
-        insde_path (str): Source path inside the zip archive; extracted data paths are relative (i.e., they don't include `inside_path`).
+        inside_path (str): Source path inside the zip archive; extracted data paths are relative (i.e., they don't include `inside_path`).
         folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
         file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
     """
@@ -691,7 +691,7 @@ def unzip_file(zip_path, dest_path, inside_path):
     Args:
         zip_path (str): Path to the .zip file.
         dest_path (str): Destination file path.
-        insde_path (str): Source path inside the zip archive.
+        inside_path (str): Source path inside the zip archive.
     """
     with zipfile.ZipFile(zip_path, mode="r") as zf:
         with zf.open(inside_path,"r") as source_file:

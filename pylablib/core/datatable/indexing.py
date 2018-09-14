@@ -24,7 +24,7 @@ def string_list_idx(names_to_find, names_list, only_exact=False):
     """
     Index through a list of strings in `names_list`.
 
-    Return corresponding numberical indices.
+    Return corresponding numerical indices.
     Case sensitive; first look for exact matching, then for prefix matching (unless ``only_exact=True``).
     """
     if isinstance(names_to_find,list):
@@ -110,7 +110,7 @@ class IIndex(object):
     """
     A generic index object.
 
-    Used to transform a varitey of indexes into a subset applicable for specific objects (numpy arrays or lists).
+    Used to transform a variety of indexes into a subset applicable for specific objects (numpy arrays or lists).
     
     Allowed input index types:
         - scalar: integer, string

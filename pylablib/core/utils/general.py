@@ -104,7 +104,7 @@ def recursive_map(value, func):
 ### Dictionary routines ###
 def merge_dicts(*dicts):
     """
-    Combine multiple ``dict`` objects tohether.
+    Combine multiple ``dict`` objects together.
     
     If multiple dictionaries have the same keys, later arguments have higher priority.
     """
@@ -237,7 +237,7 @@ def sort_set_by_list(s, l, keep_duplicates=True):
     Convert the set `s` into a list ordered by a list `l`.
     
     Elements in `s` which are not in `l` are omitted.
-    If ``keep_duplicates==True``, keep duplicate occurences in `l` in the result; otherwise, only keep the first occurence.
+    If ``keep_duplicates==True``, keep duplicate occurrences in `l` in the result; otherwise, only keep the first occurrence.
     """
     if keep_duplicates:
         return [e for e in l if e in s]
@@ -352,7 +352,7 @@ def retry_wait(func, try_times=1, delay=0., exceptions=None):
     Try calling function (with no arguments) at most `try_times` as long as it keeps raising exception.
     
     If `exceptions` is not ``None``, it specifies which exception types should be silenced.
-    If an exception has been raised, wait `delay` seconds before retyring.
+    If an exception has been raised, wait `delay` seconds before retrying.
     """
     for t in RetryOnException(try_times,exceptions):
         with t:
@@ -408,7 +408,7 @@ def full_exit(code=signal.SIGTERM):
     """
     Terminate the current process and all of its threads.
     
-    Doesn't perform any cleanup or resource release; should only be used if the process is irrevokably damaged.
+    Doesn't perform any cleanup or resource release; should only be used if the process is irrevocably damaged.
     """
     os.kill(os.getpid(),code)
     os._exit(code)
@@ -524,7 +524,7 @@ def call_every(func, times=1, cooldown=0., default=None):
 
     If ``times>1``, then `func` is called after at least `times` calls to the wrapped function.
     If ``cooldown>0``, then `func` is called after at least `cooldown` seconds passed since the last call.
-    If both conditions are specified, they should be satisfied sumultaneously.
+    If both conditions are specified, they should be satisfied simultaneously.
     `default` specifies return value if `func` wasn't called.
     """
     state=[0,-cooldown] # counter, last_call_time
@@ -644,7 +644,7 @@ class Timer(object):
         Acknowledge the timer tick.
 
         `n` specifies the number of tick to acknowledge (by default, all passed).
-        Return number of actually acknowledget ticks (0 if the timer hasn't ticked since the last acknowledgement).
+        Return number of actually acknowledged ticks (0 if the timer hasn't ticked since the last acknowledgement).
         """
         npassed=max(self.passed(),nmin)
         if n is None:

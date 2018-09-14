@@ -112,7 +112,7 @@ class ANCDevice(backend_mod.IBackendWrapper):
         self.query("seta {} {}".format(axis,voltage))
         return self.get_offset(axis)
     def get_output(self, axis):
-        """Get axis curent output voltage in Volts"""
+        """Get axis current output voltage in Volts"""
         reply=self.query("geto {}".format(axis))
         return self._parse_reply(reply,"voltage","V")
     def get_frequency(self, axis):
@@ -189,7 +189,7 @@ class ANCDevice(backend_mod.IBackendWrapper):
         """
         Wait for a given axis to stop moving.
 
-        If the motion is not finsihed after `timeout` seconds, raise a backend error.
+        If the motion is not finished after `timeout` seconds, raise a backend error.
         """
         with self.instr.using_timeout(timeout):
             self.query("stepw {}".format(axis))

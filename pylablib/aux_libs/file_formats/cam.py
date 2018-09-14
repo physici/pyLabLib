@@ -88,7 +88,7 @@ class CamReader(object):
                 with open(self.path,"rb") as f:
                     self._read_next_frame(f,skip=True)
                 if file_size%self.frame_offsets[1]:
-                    raise IOError("File size {} is not a multile of single frame size {}".format(file_size,self.frame_offsets[1]))
+                    raise IOError("File size {} is not a multiple of single frame size {}".format(file_size,self.frame_offsets[1]))
                 self.frames_num=file_size//self.frame_offsets[1]
         else:
             offset=self.frame_offsets[-1]
@@ -175,7 +175,7 @@ def combine_cam_frames(path, func, init=None, start=0, step=1, max_frames=None, 
     Combine .cam frames using the function `func`.
 
     `func` takes 2 arguments (the accumulated result and a new frame) and returns the combined result.
-    `init` is the inital result value; if ``init is None`` it is initialized to the first frame.
+    `init` is the initial result value; if ``init is None`` it is initialized to the first frame.
     If `max_frames` is not ``None``, it specifies the maximal number of frames to read.
     If ``return_total==True'``, return a tuple ``(result, n)'``, where `n` is the total number of frames.
     """

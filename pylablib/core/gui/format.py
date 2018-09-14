@@ -29,7 +29,7 @@ _SI_prefix_re_str="({0})".format( "|".join(SI_prefixes.keys()) )
 _SI_float_re=re.compile(r'^\s*([+-]?)(\d*)(\.?)(\d*)((?:[Ee][+-]?\d+)?){0}\s*$'.format(_SI_prefix_re_str))
 def parse_float(s):
     """
-    Parse string as a float, with metrix prefixes recognition.
+    Parse string as a float, with metric prefixes recognition.
 
     Return tuple ``(sign, integer, dot, fractional, exponent, prefix)``, where each entry has structure ``(begin, end, text)``.
     Return ``None`` if string is unrecognizable.
@@ -99,7 +99,7 @@ def order_to_pos(s,order):
 
 def str_to_float(s):
     """
-    Return float value of a string, with metrix prefixes recognition.
+    Return float value of a string, with metric prefixes recognition.
 
     Raise ``ValueError`` if string is unrecognizable. 
     """
@@ -155,7 +155,7 @@ class FloatFormatter(object):
         output_format(str): can be ``"auto"`` (use standard Python conversion), ``"SI"`` (use SI prefixes if possible), or ``"sci"`` (scientific "E" notation).
         digits (int): if ``trailing_zeros==False``, determines the number of significant digits; otherwise, determines precision (number of digits after decimal point).
         add_trailing_zeros (bool): if ``True``, always show fixed number of digits after the decimal point, with zero padding if necessary.
-        leading_zeros (bool): determines the minimal size of the integer part (before the deicmal point) of the number; pads with zeros if necessary.
+        leading_zeros (bool): determines the minimal size of the integer part (before the decimal point) of the number; pads with zeros if necessary.
         explicit_sign (bool): if ``True``, always add explicit plus sign.
     """
     def __init__(self, output_format="auto", digits=9, add_trailing_zeros=True, leading_zeros=0, explicit_sign=False):
@@ -213,7 +213,7 @@ def as_formatter(formatter):
     Turn an object into a formatter.
 
     Can be a callable object (returned as is), a string (``"float"`` or ``"int"``),
-    or a tuple starting with ``"float"`` which containes arguments to the :class:`FloatFormatter`.
+    or a tuple starting with ``"float"`` which contains arguments to the :class:`FloatFormatter`.
     """
     if hasattr(formatter,"__call__"):
         return formatter

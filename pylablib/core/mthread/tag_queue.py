@@ -268,7 +268,7 @@ def build_filter(tags=None, filt=None, uncond_tags=None, tag_separator=None):
     Args:
         tags ([str]): list of prefixes that match message tags.
         filt (Callable): an additional filter function which needs to be satisfied (checking, e.g., message content to decide if it should be extracted).
-        uncond_tags ([str]): works like tags, but independtly of `filt` function (allows message even if `filt` returns ``False``).
+        uncond_tags ([str]): works like tags, but independently of `filt` function (allows message even if `filt` returns ``False``).
         tag_separator (str): a separator used to divide tag levels (usually ``'.'`` or ``'/'``).
             If it's not ``None``, tags are matched only either exactly, or if they're followed by tag separator (i.e., each tag level is treated as an indivisible word).
     """

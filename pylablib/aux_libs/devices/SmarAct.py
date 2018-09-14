@@ -12,7 +12,7 @@ class SmarActError(RuntimeError):
 
 class SCU3D(IDevice):
     """
-    SmarAct SCU3D translational stage.
+    SmarAct SCU3D translation stage.
 
     Args:
         lib_path(str): path to the SCU3DControl.dll (default is to use the library supplied with the package)

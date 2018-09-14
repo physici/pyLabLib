@@ -385,7 +385,7 @@ try:
             conn: Connection parameters. Can be either a string (for a port),
                 or a list/tuple ``(port, baudrate, bytesize, parity, stopbits, xonxoff, rtscts, dsrdtr)`` supplied to the serial connection
                 (default is ``('COM1',19200,8,'N',1,0,0,0)``),
-                or a dict with the same paramters. 
+                or a dict with the same parameters. 
             timeout (float): Default timeout (in seconds).
             term_write (str): Line terminator for writing operations; appended to the data
             term_read (str): List of possible single-char terminator for reading operations (specifies when :func:`readline` stops).
@@ -617,7 +617,7 @@ try:
             conn: Connection parameters. Can be either a string (for a port),
                 or a list/tuple ``(port, baudrate, bytesize, parity, stopbits, xonxoff, rtscts, dsrdtr)`` supplied to the serial connection
                 (default is ``('COM1',19200,8,'N',1,0,0,0)``),
-                or a dict with the same paramters. 
+                or a dict with the same parameters. 
             timeout (float): Default timeout (in seconds).
             term_write (str): Line terminator for writing operations; appended to the data
             term_read (str): List of possible single-char terminator for reading operations (specifies when :func:`readline` stops).
@@ -989,7 +989,7 @@ def autodetect_backend(conn):
     """
     Try to determine the backend by the connection.
 
-    The assummed default backend is ``'visa'``.
+    The assumed default backend is ``'visa'``.
     """
     if isinstance(conn, (tuple,list)):
         conn=conn[0]

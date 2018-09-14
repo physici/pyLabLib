@@ -169,7 +169,7 @@ def _sliding_func(wf, filtering_function, width=1, mode="reflect", cval=0.):
     """
     Perform a sliding filtering of a 1D waveform with the given `filtering_function`.
     
-    mode ('drop' or 'leave') deterimens whether to drop the last bin if it's not full
+    mode ('drop' or 'leave') determines whether to drop the last bin if it's not full
     Works only with arrays (no columns or tables).
     """
     if width is None or width<=1:
@@ -219,7 +219,7 @@ def _decimation_filter(wf, decimation_function, width=1, axis=0, mode="drop"):
     """
     Perform a decimation filtering with the given `decimation_function`.
     
-    mode ('drop' or 'leave') deterimens whether to drop the last bin if it's not full
+    mode ('drop' or 'leave') determines whether to drop the last bin if it's not full
     Works only with arrays (no columns or tables).
     """
     if width is None or width<=1:
@@ -396,7 +396,7 @@ def collect_into_bins(values, distance, preserve_order=False, to_return="value")
     
     Return the extent of each bin.
     If ``preserve_order==False``, values are sorted before splitting.
-    If ``to_return="value"``, the extent is fiven in values;
+    If ``to_return="value"``, the extent is given in values;
     if ``to_return="index"``, it is given in indices (only useful if ``preserve_order=True``, as otherwise the indices correspond to a sorted array).
     If `distance` is a tuple, then it denotes the minimal and the maximal separation between consecutive elements;
     otherwise, it is a single number denoting maximal absolute distance (i.e., it corresponds to a tuple ``(-distance,distance)``).

@@ -106,7 +106,7 @@ class VersionConfig(object):
         lib_path(str): library path inside the root folder
         libs(list or None): included packages inside the library (any package includes all of its sub-packages);
             by default, includes the ``'core'`` package and all individual ``'aux_libs'`` sub-packages
-        additional_scripts(list or None): additional scripts (outside of the inlcuded libraries); by default, none are included
+        additional_scripts(list or None): additional scripts (outside of the included libraries); by default, none are included
         versions(dict): list of versions of versions (e.g., of library packages); by default, none are supplied
         comments(str): config comment.
     """
@@ -266,9 +266,9 @@ class VersionConfig(object):
         return file_utils.list_dir(self.store_path,file_filter=_scripts_template)[1]
     def script_files(self):
         """
-        Get all included standalone script files (all scirpt files in the main folder and the additional scripts).
+        Get all included standalone script files (all script files in the main folder and the additional scripts).
         """
-        if self.lib_path=="": # library source config; no non-libarary scripts
+        if self.lib_path=="": # library source config; no non-library scripts
             return []
         template_files=self.template_script_files()
         return list(set(template_files+self.additional_scripts))
@@ -292,9 +292,9 @@ class RevisionDiff(object):
             - ``"-"`` - list of libraries which are removed in the first state compared to the second one;
             - ``"*"`` - list of libraries which are changed in the first state compared to the second one;
             - ``"="`` - list of libraries which are the same in both states;
-        common_lib_files_diff (str): difference in the common library files (files in the folders contatining library subfolders).
+        common_lib_files_diff (str): difference in the common library files (files in the folders containing library subfolders).
             Can be ``"+"``, ``"-"``, ``"*"``, or ``"="``; the meaning is the same as for `lib_diffs`.
-        scripts_diff (str): difference in the scirpt files (files outside of the root library folder); the meaning is the same as for `common_lib_files_diff`.
+        scripts_diff (str): difference in the script files (files outside of the root library folder); the meaning is the same as for `common_lib_files_diff`.
     """
     def __init__(self, libs_diff=None, common_lib_files_diff="=", scripts_diff="="):
         self.libs_diff={"+":[],"-":[],"*":[],"=":[]} # additional, missing, modified, same
@@ -542,8 +542,8 @@ def recall_from_folder(source_path, dest_path=".", replace=False, overwrite=True
         dest_path (str): Path to the destination folder.
         replace (bool): If ``True``, remove all parts of the dest revision which are different from the source; otherwise, source is added to dest.
         overwrite (bool): If ``True``, overwrite the old files.
-        source_config_params (dict): Overrides source verson config parameters.
-        recall_config_params (dict): Overrides merged verson config parameters.
+        source_config_params (dict): Overrides source version config parameters.
+        recall_config_params (dict): Overrides merged version config parameters.
     """
     source_config=VersionConfig.from_path(source_path,**(source_config_params or {}))
     current_config=VersionConfig.from_path(dest_path)
@@ -594,7 +594,7 @@ def fetch(source_path, dest_path=".", overwrite=True, preserve_libs=True, **reca
         dest_path (str): Path to the destination folder.
         overwrite (bool): If ``True``, overwrite the old files.
         preserve_libs (bool): If ``True``, preserve sub-libraries even if they are not specified in the `recall_config_params`.
-        recall_config_params (dict): Overrides merged verson config parameters (see :class:`VersionConfig`).
+        recall_config_params (dict): Overrides merged version config parameters (see :class:`VersionConfig`).
     """
     source_config=VersionConfig.from_path(source_path,lib_path="",libs=recall_config_params.get("libs",None))
     current_config=VersionConfig.from_path(dest_path)
@@ -629,7 +629,7 @@ def store_script_if_changed(store_path=".", coverage=None):
     Store script files (not library) if they are different from the latest revision.
     
     When storing changes, the shelves sizes are limited, and if the limit is exceeded, the oldest entries are deleted.
-    For more detailes, see :func:`get_history_size` and :func:`set_history_size`.
+    For more details, see :func:`get_history_size` and :func:`set_history_size`.
     
     Args:
         store_path (str): Path to the revision to check.
@@ -645,7 +645,7 @@ def fetch_and_store_script(source_path=None, dest_path=".", overwrite=True, once
     Fetch code library from the `source_path` (current library path by default); store any recent changes of script or library on the history shelf.
     
     When storing changes, the shelves sizes are limited, and if the limit is exceeded, the oldest entries are deleted.
-    For more detailes, see :func:`get_history_size` and :func:`set_history_size`.
+    For more details, see :func:`get_history_size` and :func:`set_history_size`.
     
     Args:
         source_path (str): Path to the library root. ``None`` means the current library path (library containing this module).
@@ -653,7 +653,7 @@ def fetch_and_store_script(source_path=None, dest_path=".", overwrite=True, once
         overwrite (bool): If ``True``, overwrite the old files.
         once_per_run (bool): If ``True``, only perform operation once per run of the script. All subsequent call will return immediately.
         preserve_libs (bool): If ``True``, preserve sub-libraries even if they are not specified in the `recall_config_params`.
-        recall_config_params (dict): Overrides merged verson config parameters (see :class:`VersionConfig`).
+        recall_config_params (dict): Overrides merged version config parameters (see :class:`VersionConfig`).
     """
     global _fetched
     if (once_per_run and _fetched):

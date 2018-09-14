@@ -1,4 +1,4 @@
 from ...core.devio.interface import IDevice
 
-class ITranslationalStage(IDevice):
+class ITranslationStage(IDevice):
     pass

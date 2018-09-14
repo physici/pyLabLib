@@ -24,7 +24,7 @@ class M2ICE(IDevice):
         addr(str): IP address of the ICE device.
         port(int): port of the ICE device.
         timeout(float): default timeout of synchronous operations.
-        start_link(bool): if ``True``, initalize device link on creation.
+        start_link(bool): if ``True``, initialize device link on creation.
         use_websocket(bool): if ``True``, use websocket interface (same as used by the web interface) for additional functionality
             (wavemeter connection, etalon value, improved operation stopping)
         only_websocket(bool): if ``True``, only use websocket operations (raises error on most standard methods, mostly used to monitor status).
@@ -80,7 +80,7 @@ class M2ICE(IDevice):
                 raise M2Error("parameter '{}' not in the message {}".format(key,msg))
         return pmsg
     _parse_errors=["unknown", "JSON parsing error", "'message' string missing",
-                             "'transimssion_id' string missing", "No 'transmission_id' value",
+                             "'transmission_id' string missing", "No 'transmission_id' value",
                              "'op' string missing", "No operation name",
                              "operation not recognized", "'parameters' string missing", "invalid parameter tag or value"]
     def _parse_reply(self, msg):
@@ -402,7 +402,7 @@ class M2ICE(IDevice):
         Get etalon lock status.
 
         Return either ``"off"`` (lock is off), ``"on"`` (lock is on), ``"debug"`` (lock in debug condition),
-        ``"errorr"`` (lock had an error), ``"search"`` (lock is searching), or ``"low"`` (lock is off due to low ouput).
+        ``"errorr"`` (lock had an error), ``"search"`` (lock is searching), or ``"low"`` (lock is off due to low output).
         """
         _,reply=self.query("etalon_lock_status",{})
         if reply["status"][0]==1:
@@ -456,7 +456,7 @@ class M2ICE(IDevice):
         Get the reference cavity lock status.
         
         Return either ``"off"`` (lock is off), ``"on"`` (lock is on), ``"debug"`` (lock in debug condition),
-        ``"errorr"`` (lock had an error), ``"search"`` (lock is searching), or ``"low"`` (lock is off due to low ouput).
+        ``"errorr"`` (lock had an error), ``"search"`` (lock is searching), or ``"low"`` (lock is off due to low output).
         """
         _,reply=self.query("cavity_lock_status",{})
         if reply["status"][0]==1:
@@ -482,7 +482,7 @@ class M2ICE(IDevice):
     
     def _check_terascan_type(self, scan_type):
         if scan_type not in {"coarse","medium","fine","line"}:
-            raise M2Error("unknown TeraScan type: {}".format(scan_type))
+            raise M2Error("unknown terascan type: {}".format(scan_type))
         if scan_type=="coarse":
             raise M2Error("coarse scan is not currently available")
     _terascan_rates=[50E3,100E3,200E3,500E3, 1E6,2E6,5E6,10E6,20E6,50E6,100E6,200E6,500E6, 1E9,2E9,5E9,10E9,15E9,20E9, 50E9, 100E9]
@@ -559,10 +559,10 @@ class M2ICE(IDevice):
         self._last_status[self._terascan_update_op]=None
     def check_terascan_update(self):
         """
-        Check the latest terascn update.
+        Check the latest terascan update.
 
         Return ``None`` if none are available, or a dictionary ``{"wavelength":current_wavelength, "operation":op}``,
-        where ``op`` is ``"scanning"`` (scannign in progress), ``"stitching"`` (stitching in progress), ``"finished"`` (scan is finished), or ``"repeat"`` (segment is repeated).
+        where ``op`` is ``"scanning"`` (scanning in progress), ``"stitching"`` (stitching in progress), ``"finished"`` (scan is finished), or ``"repeat"`` (segment is repeated).
         """
         self.update_reports()
         rep=self._last_status.get(self._terascan_update_op,None)
@@ -602,7 +602,7 @@ class M2ICE(IDevice):
             ``"range"``: tuple with the fill scan range
             ``"status"``: can be ``"stopped"`` (scan is not in progress), ``"scanning"`` (scan is in progress),
             or ``"stitching"`` (scan is in progress, but currently stitching)
-            ``"web"``: where scan is running in web interface (some failure modes stil report ``"scanning"`` through the usual interface);
+            ``"web"``: where scan is running in web interface (some failure modes still report ``"scanning"`` through the usual interface);
             only available if the laser web connection is on.
         """
         self._check_terascan_type(scan_type)
@@ -725,7 +725,7 @@ class M2ICE(IDevice):
         """
         Stop scan of the current type (terascan or fine scan) using web interface.
 
-        More reliable than native programming interface, but requires acitvated web interface.
+        More reliable than native programming interface, but requires activated web interface.
         """
         if not self.use_websocket:
             return
@@ -742,8 +742,8 @@ class M2ICE(IDevice):
         """
         Stop all laser operations (tuning and scanning).
 
-        More reliable than native programming interface, but requires acitvated web interface.
-        If ``repeated==True``, repeate trying to stop the operations until succeeded (more reliable, but takes more time).
+        More reliable than native programming interface, but requires activated web interface.
+        If ``repeated==True``, repeat trying to stop the operations until succeeded (more reliable, but takes more time).
         Return ``True`` if the operation is success otherwise ``False``.
         """
         attempts=0

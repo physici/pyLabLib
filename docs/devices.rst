@@ -64,7 +64,7 @@ Currently there are classes for these devices:
     - Agilent AWG33220A arbitrary wave generator, AMP33502A amplifier, N9310A microwave generator, HP8712B and HP8722D vector network analyzers. Located in :mod:`pylablib.aux_libs.devices.AgilentElectronics`.
     - Agilent HP8168F laser. Located in :mod:`pylablib.aux_libs.devices.AgilentLasers`.
     - Andor cameras (tested with Andor IXON). Located in :mod:`pylablib.aux_libs.devices.Andor`.
-    - Arcus PerforMax translational stages. Located in :mod:`pylablib.aux_libs.devices.Arcus`.
+    - Arcus PerforMax translation stages. Located in :mod:`pylablib.aux_libs.devices.Arcus`.
     - Attocube ANC300 controller. Located in :mod:`pylablib.aux_libs.devices.Attocube`.
     - Cryomagnetics LM500/510 cryogenic level meters. Located in :mod:`pylablib.aux_libs.devices.Cryomagnetics`.
     - HighFinesse WS/6 and WS/7 wavemeters. Located in :mod:`pylablib.aux_libs.devices.HighFinesse`.
@@ -79,7 +79,7 @@ Currently there are classes for these devices:
     - Pfeiffer TPG261 pressure gauge. Located in :mod:`pylablib.aux_libs.devices.Pfeiffer`.
     - Pure Photonics PPCL200 laser in CBDX1 chassis. Located in :mod:`pylablib.aux_libs.devices.PurePhotonics`.
     - Rigol DSA1030A spectrum analyzer. Located in :mod:`pylablib.aux_libs.devices.Rigol`.
-    - SmarAct SCU3D translational stage controller. Located in :mod:`pylablib.aux_libs.devices.SmarAct`.
+    - SmarAct SCU3D translation stage controller. Located in :mod:`pylablib.aux_libs.devices.SmarAct`.
     - Tektronix DPO2014, TDS2000, and MDO3000 scopes. Located in :mod:`pylablib.aux_libs.devices.Tektronix`.
     - Thorlabs PM100D power meter, FW102/202 motorized filter wheels, MDT693/4A high voltage sources, and MFF motorized flip mount. Located in :mod:`pylablib.aux_libs.devices.Thorlabs`.
     - Trinamic TMCM1100 stepper motor controller. Located in :mod:`pylablib.aux_libs.devices.Trinamic`.
@@ -95,9 +95,9 @@ First, any device using :mod:`PyVISA` require NI VISA to be installed. See :mod:
 Second, some devices need dlls supplied by the manufacturer:
 
     - Andor cameras: require `atmcd.dll` (currently supplied for x64 and x86).
-    - Arcus PerforMax translational stages: require `PerformaxCom.dll` (currently supplied only for x64).
+    - Arcus PerforMax translation stages: require `PerformaxCom.dll` (currently supplied only for x64).
     - HighFinesse WS/6 and WS/7 wavemeters: require `wlmData.dll`. Each device needs a unique dll supplied by the manufacturer. Currently generic version for WS/6 and WS/7 are given, but they might not work properly.
-    - SmarAct SCU3D translational stage controller: requires `SCU3DControl.dll` (currently supplied only for x64).
+    - SmarAct SCU3D translation stage controller: requires `SCU3DControl.dll` (currently supplied only for x64).
 
 Many of these are supplied with this library, but they can be removed in future versions (e.g., for compatibility or legal reasons), and not all of them are present for x86 applications.
 

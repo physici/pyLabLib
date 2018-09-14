@@ -44,7 +44,7 @@ class CTypesWrapper(object):
     """
     Wrapper object for ctypes function.
 
-    Cosntructor argumetns coincide with the call arguments, and determine their default values.
+    Constructor arguments coincide with the call arguments, and determine their default values.
     For their meaning, see :meth:`wrap`.
     """
     def __init__(self, argtypes=None, argnames=None, addargs=None, restype=None, return_res="auto", rvprep=None, rvconv=None, rvref=None, rvnames=None, tuple_single_retval=False, errcheck=None):
@@ -115,7 +115,7 @@ class CTypesWrapper(object):
         """
         Setup a ctypes function.
 
-        Analogous to :func:`setup_func`, but uses wrapper's default argumetns.
+        Analogous to :func:`setup_func`, but uses wrapper's default arguments.
         """
         argtypes=getdefault(argtypes,self.argtypes)
         restype=getdefault(restype,self.restype)
@@ -131,7 +131,7 @@ class CTypesWrapper(object):
             argtypes (list): list of `func` argument types;
                 if an argument is of return-by-pointer kind, it should be the value type (the pointer is added automatically)
             argnames (list): list of argument names of the function. Includes either strings (which are interpreted as argument names passed to the wrapper function),
-                or ``None`` (whcih mean that this argument is return-by-pointer).
+                or ``None`` (which mean that this argument is return-by-pointer).
             addargs (list): list of additional arguments which are added to the wrapper function, but are not passed to the wrapped function (added in the end);
                 can be used for, e.g., `rvprep` or `rvconv` functions.
             restype: type of the return value. Can be ``None`` if the return value isn't used.

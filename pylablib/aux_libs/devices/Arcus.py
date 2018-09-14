@@ -11,7 +11,7 @@ class ArcusError(RuntimeError):
 
 class PerformaxStage(IDevice):
     """
-    Arcus Performax translational stage.
+    Arcus Performax translation stage.
 
     Args:
         lib_path(str): path to the PerformaxCom.dll (default is to use the library supplied with the package)
@@ -201,7 +201,7 @@ class PerformaxStage(IDevice):
         """
         Check if the axis hit limit errors.
 
-        Return ``""`` (not errors), ``"+"`` (positive limit error) or ``"-"`` (negaive limit error).
+        Return ``""`` (not errors), ``"+"`` (positive limit error) or ``"-"`` (negative limit error).
         """
         stat=self.get_status_n(axis)
         err=""

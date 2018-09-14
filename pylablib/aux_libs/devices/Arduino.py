@@ -1,5 +1,5 @@
 """
-Home-built Arguino devices.
+Home-built Arduino devices.
 """
 
 from ...core.devio import backend  #@UnresolvedImport

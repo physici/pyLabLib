@@ -18,7 +18,7 @@ class IThreadController(object):
     """
     Generic thread controller.
 
-    Deals with correctly initalizing and destroying the message queue, processing standard messages, and synchronizing with other threads.
+    Deals with correctly initializing and destroying the message queue, processing standard messages, and synchronizing with other threads.
 
     Args:
         name(str): thread name (can be used to, e.g., get the controller from a different thread).
@@ -49,7 +49,7 @@ class IThreadController(object):
         """
         Process interrupt message (automatically called for all messages with tag starting with ``"interrupt"``).
 
-        Automatically called by the controller; to be overriden in subclasses.
+        Automatically called by the controller; to be overridden in subclasses.
         """
         if msg.tag=="interrupt.control":
             if msg.value=="stop":
@@ -62,7 +62,7 @@ class IThreadController(object):
 
         If return value is ``True``, the message is assumed to be processed internally (i.e., it doesn't get explicitly received).
 
-        Automatically called by the controller; to be overriden in subclasses.
+        Automatically called by the controller; to be overridden in subclasses.
         """
         return False
     def _process_any_message(self, msg):
@@ -125,14 +125,14 @@ class IThreadController(object):
         """
         Body of the thread.
 
-        Automatically called by the controller; to be overriden in subclasses.
+        Automatically called by the controller; to be overridden in subclasses.
         """
         raise NotImplementedError("IThreadController.run")
     def finalize(self):
         """
         Finalize the thread execution (regardless of the stopping reason).
 
-        Automatically called by the controller; to be overriden in subclasses.
+        Automatically called by the controller; to be overridden in subclasses.
         """
         pass
     
@@ -236,7 +236,7 @@ class IThreadController(object):
         """
         Start the current controller in the current non-controlled thread.
 
-        If `stop_after_run` is ``True``, the controller is stoppped after the :func:`run` function is done;
+        If `stop_after_run` is ``True``, the controller is stopped after the :func:`run` function is done;
         otherwise, th controller continues (e.g., :func:`run` can be empty, which means that this function simply initializes the controller).
         """
         with self.running_thread_lock:
@@ -463,7 +463,7 @@ class ServiceThreadController(IThreadController):
         args(list): arguments for `reply`, `startup` and `cleanup` functions.
         kwargs(dict): keyword arguments for `reply`, `startup` and `cleanup` functions.
         stopped_recipient_action(str): action to take if the reply recipient has stopped;
-            can be ``"error"`` (raise an error), ``"stop"`` (stop the thread; similar to th previos) or ``"ignore"`` (ignore and continue).
+            can be ``"error"`` (raise an error), ``"stop"`` (stop the thread; similar to th previous) or ``"ignore"`` (ignore and continue).
     """
     def __init__(self, name, reply, setup=None, cleanup=None, args=None, kwargs=None, stopped_recipient_action="ignore"):
         funcargparse.check_parameter_range(stopped_recipient_action,"stopped_recipient_action",{"error","ignore","stop"})
@@ -577,7 +577,7 @@ class RepeatingThreadController(IThreadController):
         self.pause(False,sync=sync)
     def trigger(self, sync=True):
         """
-        Trigger an execution cycle immediately (wuthout waiting for the required delay).
+        Trigger an execution cycle immediately (without waiting for the required delay).
         
         The execution is only performed if the thread is not paused.
         """
@@ -677,7 +677,7 @@ class TimerThreadController(RepeatingThreadController):
     """
     Timer thread.
 
-    Simplified version of the :class:`RepeatingThreadController`. Doesn't requre a name, starts as a dependent and a daemon by default.
+    Simplified version of the :class:`RepeatingThreadController`. Doesn't require a name, starts as a dependent and a daemon by default.
 
     Args:
         period(float): calling period.

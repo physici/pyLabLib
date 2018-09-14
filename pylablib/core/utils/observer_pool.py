@@ -12,7 +12,7 @@ class ObserverPool(object):
     An observer pool.
 
     Stores notification functions (callbacks), and calls them whenever :meth:`notify` is called.
-    The callbacks can have priority (higher prioirity ones are called first) and filter (observer is only called if the filter function passes the notification tag).
+    The callbacks can have priority (higher priority ones are called first) and filter (observer is only called if the filter function passes the notification tag).
 
     Args:
         expand_tuple(bool): if ``True`` and the notification value is a tuple, treat it as an argument list for the callback functions.
@@ -32,7 +32,7 @@ class ObserverPool(object):
         Args:
             callback(callable): callback function; takes at least one argument (notification tag), and possible more depending on the notification value.
             name(str): stored callback name; by default, a unique name is auto-generated
-            filt(Callable or None): a filter function for this obserever (the observer is called only if the :meth:`notify` function tag and value pass the filter); by default, all tags are accepted
+            filt(Callable or None): a filter function for this observer (the observer is called only if the :meth:`notify` function tag and value pass the filter); by default, all tags are accepted
             priority(int): callback priority; higher priority callback are invoked first.
             attr: additional observer attributes (can be used by :class:`ObserverPool` subclasses to change their behavior).
             cacheable(bool): if ``True``, assumes that the filter function only depends on the tag, so its calls can be cached.
@@ -83,7 +83,7 @@ class ObserverPool(object):
         Notify the obserevers by calling their callbacks.
 
         Return a dictionary of the callback results.
-        By default the value is an empty tuple: for ``expand_tuple==True`` this means that only one argument (`tag`) is passed to the cakkbacks.
+        By default the value is an empty tuple: for ``expand_tuple==True`` this means that only one argument (`tag`) is passed to the callbacks.
         """
         to_call=self.find_observers(tag,value)
         results=[(n,self._call_observer(o.callback,tag,value)) for n,o in to_call]

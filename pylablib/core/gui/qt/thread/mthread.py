@@ -84,7 +84,7 @@ def call_in_gui_thread(func, args=None, kwargs=None, to_return="result", note=No
             which can be used to check if the execution is done and to obtain the result.
         - ``"result"``: pause until the function has been executed, return the result. Mostly equivalent to a simple function call.
 
-    If `note` is not ``None``, it specifiec a callback function to be called after the exectuion is done, or (if it's a string), a message tag which is sent after the execution is done.
+    If `note` is not ``None``, it specific a callback function to be called after the execution is done, or (if it's a string), a message tag which is sent after the execution is done.
     """
     funcargparse.check_parameter_range(to_return,"to_return",{"none","result","syncher"})
     if is_gui_thread():
@@ -105,7 +105,7 @@ def call_in_gui_thread(func, args=None, kwargs=None, to_return="result", note=No
     
 def gui_func(to_return="result", note=None, on_stopped="error"): #decorator
     """
-    Decorator for a function which makes it exectute through a :func:`call_in_gui_thread` call.
+    Decorator for a function which makes it execute through a :func:`call_in_gui_thread` call.
 
     Effectively, makes a GUI-realted function thread-safe (can be called from any thread, but the execution is done in the GUI thread).
     """
@@ -128,7 +128,7 @@ class GUIThreadController(controller.IThreadController):
         setup(Callable): if not ``None``, function to be called when the thread is starting.
         cleanup(Callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
 
-    Any thread creation and synchronzation should be done after the controller has started, hence, it should be put into the `setup` function.
+    Any thread creation and synchronization should be done after the controller has started, hence, it should be put into the `setup` function.
     """
     def __init__(self, name="gui", setup=None, cleanup=None):
         controller.IThreadController.__init__(self,name)

@@ -60,7 +60,7 @@ class WrongFileFormat(Error):
 
 class InsufficientBinaryFileDescription(Error):
     """
-    Incufficient binary file description error.
+    Insufficient binary file description error.
     """
     def __init__(self):
         pass
