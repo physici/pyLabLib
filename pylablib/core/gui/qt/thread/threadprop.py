@@ -64,6 +64,11 @@ def is_gui_thread():
     app=get_app()
     return (app is not None) and (QtCore.QThread.currentThread() is app.thread())
 def current_controller(require_controller=True):
+    """
+    Get controller of the current thread.
+
+    If the current thread has not controller `and `require_controller==True``, raise an error; otherwise, return ``None``.
+    """
     controller=getattr(local_data,"controller",None)
     if require_controller and (controller is None):
         raise NoControllerThreadError("current thread has no controller")

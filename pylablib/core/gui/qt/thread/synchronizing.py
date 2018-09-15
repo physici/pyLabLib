@@ -6,6 +6,17 @@ import threading, time
 
 
 class QThreadNotifier(notifier.ISkippableNotifier):
+    """
+    Wait-notify thread synchronizer for controlled Qt threads based on :class:`notifier.ISkippableNotifier`.
+
+    Like :class:`notifier.ISkippableNotifier`, the main functions are :meth:`wait` (wait in a message loop until notifiedm or until timeout expirese)
+    and :meth:`notify` (notify the waiting thread). Both of these can only be called once and will raise and error otherwise.
+    Along with notifying a variable can be passed, which can be accessed using :meth:`get_value` and :meth:`get_value_sync`.
+
+    Args:
+        skippable (bool): if ``True``, allows for skippable wait events
+            (if :meth:`notify` is called before :meth:`wait`, neither methods are actually called).
+    """
     _uid_gen=general.UIDGenerator(thread_safe=True)
     _notify_tag="#sync.notifier"
     def __init__(self, skippable=True):
@@ -28,20 +39,34 @@ class QThreadNotifier(notifier.ISkippableNotifier):
         self._controller.send_sync(self._notify_tag,self._uid)
         return True
     def get_value(self):
+        """Get the value passed by the notifier (doesn't check if it has been passed already)"""
         return self.value
     def get_value_sync(self, timeout=None):
+        """Wait (with the given `timeout`) for the value passed by the notifier"""
         if not self.done_wait():
             self.wait(timeout=timeout)
         return self.get_value()
 
 
 class QMultiThreadNotifier(object):
+    """
+    Wait-notify thread synchronizer that can be used for multiple threads and called multiple times.
+
+    Performs similar function to conditional variables.
+    The synchronizer has an internal counter which is incread by 1 every time it is notified.
+    The wait functions have an option to wait until the counter reaches the specific counter value (usually, 1 above the last wait call).
+    """
     def __init__(self):
         object.__init__(self)
         self._lock=threading.Lock()
         self._cnt=0
         self._notifiers=[]
     def wait(self, state=1, timeout=None):
+        """
+        Wait until notifier counter is eqaul to at least `state`
+        
+        Return current counter state plus 1, which is the next smallest value resulting in waiting.
+        """
         with self._lock:
             if self._cnt>=state:
                 return self._cnt+1
@@ -51,7 +76,22 @@ class QMultiThreadNotifier(object):
         if success:
             return n.get_value()
         raise threadprop.TimeoutThreadError("synchronizer timed out")
+    def wait_until(self, condition, timeout=None):
+        """
+        Wait until `condition` is met.
+
+        `condition` is a function which is called (in the waiting thread) every time the synchronzier is notified.
+        If it return non-``False``, the waiting is complete and its result is returned.
+        """
+        ctd=general.Countdown(timeout)
+        cnt=1
+        while True:
+            res=condition()
+            if res:
+                return res
+            cnt=self.wait(cnt,timeout=ctd.time_left())
     def notify(self):
+        """Notify all waiting threads"""
         with self._lock:
             self._cnt+=1
             cnt=self._cnt
@@ -62,7 +102,19 @@ class QMultiThreadNotifier(object):
 
 
 class QThreadCallNotifier(QThreadNotifier):
+    """
+    Specific kind of :class:`QThreadNotifier` designed to notify about results of remote calls.
+
+    Its :meth:`get_value_sync` function takes into account that remote call could fail or raise an exception.
+    Used in (and could be returned by) :meth:`ThreadController.call_in_thread_sync`.
+    """
     def get_value_sync(self, timeout=None, default=None, error_on_fail=True, pass_exception=True):
+        """
+        Wait (with the given `timeout`) for the value passed by the notifier
+
+        If ``pass_exception==True`` and the returned value represents exception, re-raise it; otherwise, return `default`.
+        If ``error_on_stopped==True`` and the controlled thread is stopped before it executed the call, raise :exc:`NoControllerThreadError`; otherwise, return `default`.
+        """
         res=QThreadNotifier.get_value_sync(self,timeout=timeout)
         if res:
             kind,value=res
@@ -73,10 +125,12 @@ class QThreadCallNotifier(QThreadNotifier):
                     raise value
                 else:
                     return default
-            else:
+            elif kind=="fail":
                 if error_on_fail:
                     raise threadprop.NoControllerThreadError("failed executing remote call: controller is stopped")
                 return default
+            else:
+                raise ValueError("unrecognzied return value kind: {}".format(kind))
         else:
             if error_on_fail:
                 raise threadprop.TimeoutThreadError

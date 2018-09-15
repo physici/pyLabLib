@@ -1,5 +1,5 @@
 from ....utils import general, funcargparse, dictionary, functions as func_utils
-from . import signal_pool, threadprop, synchronizing
+from . import signal_pool as spool, threadprop, synchronizing
 
 from PyQt5 import QtCore
 
@@ -11,7 +11,7 @@ import heapq
     
 _depends_local=[".signal_pool",".synchronizing"]
 
-_default_signal_pool=signal_pool.SignalPool()
+_default_signal_pool=spool.SignalPool()
 
 _created_threads={}
 _running_threads={}
@@ -759,17 +759,21 @@ class QTaskThread(QMultiRepeatingThreadController):
         self.qs=self.CommandAccess(self,sync=True,safe=True)
         self.qi=self.CommandAccess(self,sync=True,safe=True,ignore_errors=True)
 
+    ### Functions to be overloaded in subclasses ###
     def setup_task(self, *args, **kwargs):
+        """Setup the thread (called before the main task loop)"""
         pass
     def process_signal(self, src, tag, value):
+        """Process a named signal (with `dst` equal to the thread name) from the signal pool"""
         pass
     def process_command(self, name, *args, **kwargs):
-        return self.process_named_command(name,*args,**kwargs)
+        """Process a command call (by default, look for an earlier created command)"""
+        return self._process_named_command(name,*args,**kwargs)
     def process_query(self, name, *args, **kwargs):
-        return self.process_named_command(name,*args,**kwargs)
-    def process_interrupt(self, *args, **kwargs):
-        pass
+        """Process a query call (by default, look for an earlier created command)"""
+        return self._process_named_command(name,*args,**kwargs)
     def finalize_task(self):
+        """Finlize the thread (always called on thread termination, regardless of the reason)"""
         pass
 
     def on_start(self):
@@ -787,14 +791,14 @@ class QTaskThread(QMultiRepeatingThreadController):
     def _recv_directed_signal(self, tag, src, value):
         self._directed_signal.emit((tag,src,value))
 
-    def process_named_command(self, name, *args, **kwargs):
-        if name in self._commands:
-            return self._commands[name](*args,**kwargs)
-        else:
-            raise KeyError("unrecognized command {}".format(name))
-
     _variable_change_tag="#sync.wait.variable"
     def set_variable(self, name, value, notify=False, notify_tag="changed/*"):
+        """
+        Set thread variable.
+
+        Can be called in any thread (controlled or external).
+        If ``notify==True``, send a signal with the given `notify_tag` (where ``"*"`` symbol is replaced by the variable name).
+        """
         with self._params_val_lock:
             self._params_val.add_entry(name,value,force=True)
         for ctl in self._params_exp.get(name,[]):
@@ -809,24 +813,58 @@ class QTaskThread(QMultiRepeatingThreadController):
             if name in self._params_val:
                 del self._params_val[name]
     def add_command(self, name, command=None, priority=0):
+        """
+        Add a new command to the command set (by default same set applies voth to commands and queries).
+
+        If `command' is ``None``, look for the method with the given `name`; otherwise, it is a command function to be called.
+        `priority` specifies command prioirity (if several commands are in a queue, higher-priority commands are executed first).
+        """
         if name in self._commands:
             raise ValueError("command {} already exists".format(name))
         if command is None:
             command=name
         self._commands[name]=command
         self._command_priorities[name]=priority
+    def _process_named_command(self, name, *args, **kwargs):
+        if name in self._commands:
+            return self._commands[name](*args,**kwargs)
+        else:
+            raise KeyError("unrecognized command {}".format(name))
 
+
+    ##########  EXTERNAL CALLS  ##########
+    ## Methods to be called by functions executing in other thread ##
+
+    ### Request calls ###
     def _sync_call(self, func, name, args, kwargs, sync, timeout=None, priority=0, ignore_errors=False):
         priority=self._command_priorities.get(name,0)
         return self.call_in_thread_sync(func,args=(name,)+tuple(args),kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute",priority=priority,
                 error_on_stopped=not ignore_errors,pass_exception=not ignore_errors)
     def call_command(self, name, args, kwargs):
+        """
+        Invoke command call with the given name and arguments
+        
+        Return :class:`synchronzing.QThreadCallNotifier` object which can be used to wait for and read the command result.
+        """
         return self._sync_call(self.process_command,name,args,kwargs,sync=False)
     def call_query(self, name, args, kwargs, timeout=None, ignore_errors=False):
+        """
+        Invoke query call with the given name and arguments, and return the result.
+        
+        Unlike :meth:`call_command`, wait until the call is done before returning.
+        If ``ignore_errors==True``, ignore all possible problems with the call (controller stopped, call raised an exception) and return ``None`` instead.
+        """
         return self._sync_call(self.process_query,name,args,kwargs,sync=True,timeout=timeout,ignore_errors=ignore_errors)
-    def interrupt(self, *args, **kwargs):
-        return self.call_in_thread_sync(self.process_interrupt,args,kwargs,sync=False)
+
+    ### Variables access ###
     def get_variable(self, name, default=None, copy_branch=True, missing_error=False):
+        """
+        Get thread variable.
+
+        Can be called in any thread (controlled or external).
+        If ``missing_error==False`` and no variable exists, return `default`; otherwise, raise and error.
+        If ``copy_branch==True`` and the variable is a :class:`Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignements.
+        """
         with self._params_val_lock:
             if missing_error and name not in self._params_val:
                 raise KeyError("no parameter {}".format(name))
@@ -837,6 +875,11 @@ class QTaskThread(QMultiRepeatingThreadController):
     def __getitem__(self, name):
         return self.get_variable(name,missing_error=True)
     def wait_for_variable(self, name, pred, timeout=None):
+        """
+        Wait until thread variable with the given `name` satisfies the given condtion.
+        
+        `pred` is a function which takes one argument (variable value) and returns whether the condition is satisfied.
+        """
         if not hasattr(pred,"__call__"):
             v=pred
             if isinstance(pred,(tuple,list,set,dict)):
@@ -858,6 +901,11 @@ class QTaskThread(QMultiRepeatingThreadController):
                 self._params_exp[name].remove(ctl)
 
     class CommandAccess(object):
+        """
+        Accessor object designed to simplify command and query syntax.
+
+        Automatically created by the thread, so doesn't need to be invoked externally.
+        """
         def __init__(self, parent, sync, timeout=None, safe=False, ignore_errors=False):
             object.__init__(self)
             self.parent=parent
@@ -938,18 +986,16 @@ def get_controller(name=None, wait=True, timeout=None):
     """
     if name is None:
         return threadprop.current_controller()
-    ctd=general.Countdown(timeout)
-    cnt=0
-    while True:
+    with _running_threads_lock:
+        if (not wait) and (name not in _running_threads):
+            raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
+    def wait_cond():
         with _running_threads_lock:
-            if name not in _running_threads:
-                if not wait:
-                    raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
-            else:
+            if name in _running_threads:
                 return _running_threads[name]
             if name in _stopped_threads:
                 raise threadprop.NoControllerThreadError("thread with name {} is stopped".format(name))
-        cnt=_running_threads_notifier.wait(cnt,timeout=ctd.time_left())
+    return _running_threads_notifier.wait_until(wait_cond,timeout=timeout)
 
 def stop_controller(name, code=0, sync=True, require_controller=False):
     """
