@@ -41,9 +41,9 @@ class AndorCamera(IDevice):
         self.open()
         
         self._nodes_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
-        self._add_full_info_node("model_data",lambda: tuple(self.get_model_data()))
-        self._add_full_info_node("capabilities",lambda: tuple(self.get_capabilities()))
-        self._add_full_info_node("amp_modes",lambda: tuple(self.get_all_amp_modes()),ignore_error=AndorLibError)
+        self._add_full_info_node("model_data",self.get_model_data)
+        self._add_full_info_node("capabilities",self.get_capabilities)
+        self._add_full_info_node("amp_modes",self.get_all_amp_modes,ignore_error=AndorLibError)
         self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
         self._add_status_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
         self._add_status_node("temperature_status",self.get_temperature_status,ignore_error=AndorLibError)
@@ -65,7 +65,7 @@ class AndorCamera(IDevice):
         self._add_status_node("acq_status",self.get_status)
         self._add_settings_node("frame_transfer",lambda:self.frame_transfer_mode,self.enable_frame_transfer_mode)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
-        self._add_status_node("timings",lambda: tuple(self.get_timings()))
+        self._add_status_node("timings",self.get_timings)
         self._add_status_node("readout_time",self.get_readout_time)
         self._add_settings_node("read_parameters/single_track",lambda:self.read_params["single_track"],self.setup_single_track_mode)
         self._add_settings_node("read_parameters/multi_track",lambda:self.read_params["multi_track"],self.setup_multi_track_mode)

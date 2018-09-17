@@ -177,7 +177,7 @@ class KinesisDevice(backend.IBackendWrapper):
         conn=backend.FT232DeviceBackend.combine_conn(conn,(None,115200))
         instr=backend.FT232DeviceBackend(conn,term_write=b"",term_read=b"",timeout=timeout)
         backend.IBackendWrapper.__init__(self,instr)
-        self._add_full_info_node("device_info",lambda: tuple(self.get_info()))
+        self._add_full_info_node("device_info",self.get_info())
 
     @staticmethod
     def list_devices(filter_ids=True):

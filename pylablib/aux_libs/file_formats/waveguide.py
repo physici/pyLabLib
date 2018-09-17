@@ -88,6 +88,14 @@ def load_sweep(prefix, force_info=True):
 
 ##### Normalizing sweep (frequency and column data) #####
 def cut_outliers(sweep, jump_size, length, padding=0, x_column=None, ignore_last=0):
+    """
+    Cut out sections of the waveform with large jumps.
+
+    Remove sections of the waveform which are at most `length` long and have jumps of at least `jump_size` on both size.
+    If ``padding>0``, remove additional `padding` points on both sides of the outlier section.
+    if ``ignore_last>0``, do not consider jumps in the last `ignore_last` points.
+    For multi-column data, `x_column` specifies the columns of interest.
+    """
     xs=waveforms.get_x_column(sweep,x_column=x_column)
     dxs=xs[1:]-xs[:-1]
     jumps=abs(dxs)>jump_size
@@ -105,6 +113,12 @@ def cut_outliers(sweep, jump_size, length, padding=0, x_column=None, ignore_last
     return wrap(sweep).t[include,:].copy()
 
 def trim_jumps(sweep, jump_size, trim=1, x_column=None):
+    """
+    Clean up jumps in the data by removing several data points around them.
+
+    Remove `trim` datapoints on both sides of jumps if at least `jump_size`.
+    For multi-column data, `x_column` specifies the columns of interest.
+    """
     if not isinstance(trim,(list,tuple)):
         trim=trim,trim
     xs=waveforms.get_x_column(sweep,x_column=x_column)
@@ -156,7 +170,7 @@ def interpolate_sweep(sweep, columns, frequency_step, rng=None, frequency_column
     stop_freq=(rng_max//frequency_step)*frequency_step
     columns=[funcargparse.as_sequence(c,2) for c in columns]
     freqs=np.arange(start_freq,stop_freq+frequency_step/2.,frequency_step)
-    data=[interpolate.interpolate1D(sweep[:,[frequency_column,src]],freqs,bounds_error=False,fill_values="bounds")() for src,_ in columns]
+    data=[interpolate.interpolate1D(sweep[:,[frequency_column,src]],freqs,bounds_error=False,fill_values="bounds") for src,_ in columns]
     return DataTable([freqs]+data,["Frequency"]+[dst for _,dst in columns])
 
 

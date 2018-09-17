@@ -40,7 +40,7 @@ class DCAMCamera(IDevice):
         self.open()
         self._last_frame=None
 
-        self._add_full_info_node("model_data",lambda: tuple(self.get_model_data()))
+        self._add_full_info_node("model_data",self.get_model_data)
         self._add_status_node("properties",self.get_all_properties)
         self._add_settings_node("trigger_mode",self.get_trigger_mode,self.set_trigger_mode)
         self._add_settings_node("ext_trigger",self.get_ext_trigger_parameters,self.setup_ext_trigger)
