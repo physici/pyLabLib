@@ -2,12 +2,13 @@
 String search, manipulation and conversion routines.
 """
 from future.utils import viewvalues
-from .py3 import textstring
+from .py3 import textstring, as_builtin_bytes, as_str
 
 from . import funcargparse
 
 import re
 import fnmatch
+import struct
 
 import numpy as np
 
@@ -321,7 +322,7 @@ def extract_escaped_string(line, start=0):
     """
     Extract escaped string in quotation marks from the `line`, starting from `start`.
     
-    ``line[start]`` should be a quotation mark (``'`` or ``"``).
+    ``line[start]`` should be a quotation mark (``'`` or ``"``) or ``b`` followed by a quotation mark (for binary strings).
     
     Returns:
         tuple ``(end position, un-escaped string)``.
@@ -330,6 +331,11 @@ def extract_escaped_string(line, start=0):
         return start,""
     if start>len(line):
         raise ValueError("starting position is further than line length")
+    if line[start].lower()=="b":
+        binary=True
+        start+=1
+    else:
+        binary=False
     start_quote=line[start]
     if not (start_quote in _quotation_characters):
         raise ValueError("malformatted string representation")
@@ -342,7 +348,7 @@ def extract_escaped_string(line, start=0):
         dash_lookup=line.find("\\",pos)
         if dash_lookup<0 or quote_lookup<dash_lookup:
             unescaped=unescaped+line[pos:quote_lookup]
-            return quote_lookup+1,unescaped
+            return quote_lookup+1,(as_builtin_bytes(unescaped) if binary else unescaped)
         if dash_lookup==len(line)-1:
             raise ValueError("malformatted string representation")
         escaped_character=line[dash_lookup+1]
@@ -350,11 +356,11 @@ def extract_escaped_string(line, start=0):
             hexn=_extract_digits(line,dash_lookup+2,2)
             if hexn=="":
                 raise ValueError("malformatted string representation")
-            escaped_character=str([int(hexn,16)])
+            escaped_character=as_str(struct.pack("B",int(hexn,16)))
             next_pos=dash_lookup+2+len(hexn)
         elif escaped_character.isdigit(): #\000
             octn=_extract_digits(line,dash_lookup+1,3)
-            escaped_character=str([int(octn,8)])
+            escaped_character=as_str(struct.pack("B",int(octn,8)))
             next_pos=dash_lookup+1+len(octn)
         else:
             escaped_character=_unescape_special_rules.get(escaped_character,escaped_character)
@@ -394,11 +400,14 @@ def _parse_parenthesis_struct(line, start=0):
         min_pos=min(quote_pos,delim_pos,open_par_pos,clos_par_pos)
         if min_pos==quote_pos:
             gap=line[pos:min_pos]
+            if len(gap)>0 and gap[-1].lower()=="b":
+                min_pos-=1
+                gap=gap[:-1]
             if len(gap)>0 and not gap.isspace():
                 raise ValueError("malformatted parenthesis structure")
             if curr_elt is None:
                 new_pos,escaped_string=extract_escaped_string(line,min_pos)
-                curr_elt=(line[min_pos],escaped_string)
+                curr_elt=("'",escaped_string)
                 pos=new_pos
             else:
                 raise ValueError("malformatted parenthesis structure")
@@ -537,7 +546,7 @@ def from_string(value, case_sensitive=True, parenthesis_rules="text"):
         _,parsed_value=_parse_parenthesis_struct(value)
         struct=(value[0],parsed_value,None)
         return _convert_parenthesis_struct(struct,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules)
-    if value[0] in _quotation_characters:
+    if value[0] in _quotation_characters or (value[0].lower()=="b" and len(value)>1 and value[1] in _quotation_characters):
         pos,unescaped=extract_escaped_string(value)
         if pos!=len(value):
             raise ValueError("malformatted string representation")
@@ -551,7 +560,7 @@ def from_string_partial(value, delimiters=_delimiters_regexp, case_sensitive=Tru
     """
     Convert the first part of the supplied string (bounded by `delimiters`) into a value.
     
-    `delimites` is a string or a regexp (default is ``"\s*,\s*|\s+"``).
+    `delimites` is a string or a regexp (default is ``"\\s*,\\s*|\\s+"``).
     
     If ``return_string==False``, return tuple ``(end position, converted value)``; else, return tuple ``(end position, value string)``.
     
