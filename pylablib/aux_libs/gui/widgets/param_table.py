@@ -156,17 +156,13 @@ class ParamTable(QtWidgets.QWidget):
         self.add_spacer(0)
         self.formLayout.setRowStretch(self.formLayout.rowCount(),prop)
 
-    def _set_enabled(self, names=None, enabled=True):
+    def lock(self, names=None, locked=True):
         if isinstance(names,py3.anystring):
             names=[names]
         if names is None:
             names=self.params.keys()
         for name in names:
-            self.params[name].widget.setEnabled(enabled)
-    def lock(self, names=None):
-        self._set_enabled(names,enabled=False)
-    def unlock(self, names=None):
-        self._set_enabled(names,enabled=True)
+            self.params[name].widget.setEnabled(not locked)
 
     def get_param(self, name):
         return self.params[name].value_handler.get_value()
