@@ -110,8 +110,9 @@ class ImageView(QtWidgets.QWidget):
         self.img=img
     @controller.exsafe
     def center_lines(self):
-        self.imgVLine.setPos(self.img.shape[0]/2)
-        self.imgHLine.setPos(self.img.shape[1]/2)
+        imshape=self.img.shape[::-1] if self._get_params().v["transpose"] else self.img.shape
+        self.imgVLine.setPos(imshape[0]/2)
+        self.imgHLine.setPos(imshape[1]/2)
     # Update image controls based on PyQtGraph image window
     @controller.exsafeSlot()
     def update_image_controls(self):

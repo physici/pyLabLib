@@ -102,6 +102,9 @@ def recursive_map(value, func):
     return func(value)
 
 ### Dictionary routines ###
+def any_item(d):
+    """Return arbitrary tuple ``(key, value)`` contained in the dictionary (works both in Python 2 and 3)"""
+    return next(iter(viewitems(d)))
 def merge_dicts(*dicts):
     """
     Combine multiple ``dict`` objects together.

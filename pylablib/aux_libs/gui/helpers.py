@@ -1,5 +1,5 @@
 from ...core.gui.qt.thread import controller
-from ...core.utils import files as file_utils
+from ...core.utils import files as file_utils, general
 from ...core.fileio import logfile
 
 from PyQt5 import QtCore
@@ -42,59 +42,92 @@ class StreamFormerThread(controller.QThreadController):
     def on_finish(self):
         self.cleanup()
 
-    Channel=collections.namedtuple("Channel",["data","func","required","max_len"])
-    def add_channel(self, name, func=None, max_len=1):
+    class ChannelQueue(object):
+        def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True):
+            object.__init__(self)
+            self.func=func
+            self.queue=collections.deque()
+            self.required=(func is None) if required=="auto" else required
+            self.max_queue_len=max_queue_len
+            self.enabled=enabled
+        def add(self, value):
+            data_available=bool(self.queue)
+            if self.enabled:
+                self.queue.append(value)
+                if self.max_queue_len>0 and len(self.queue)>self.max_queue_len:
+                    self.queue.popleft()
+            return self.queue and not (data_available)
+        def ready(self):
+            return (not self.enabled) or (not self.required) or self.queue
+        def enable(self, enable=True):
+            if self.enabled and not enable:
+                self.queue.clear()
+            self.enabled=enable
+        def need_completion(self):
+            return self.enabled and (not self.queue) and (self.func is not None)
+        def get(self, complete=True):
+            if not self.enabled:
+                return None
+            elif self.queue:
+                return self.queue.popleft()
+            elif self.func:
+                return self.func() if complete else None
+            elif not self.required:
+                return None
+            else:
+                raise IndexError("no queued data to add")
+        def clear(self):
+            self.queue.clear()
+            
+
+    def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto"):
         if name in self.channels:
             raise KeyError("channel {} already exists".format(name))
-        self.channels[name]=self.Channel(collections.deque(),func,func is None,max_len)
+        self.channels[name]=self.ChannelQueue(func,max_queue_len=max_queue_len,required=required,enabled=enabled)
         self.table[name]=[]
     def subscribe_source(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
         def on_signal(src, tag, value):
-            with self._channel_lock:
-                self._add_data(name,src,tag,value,parse=parse)
+            self._add_data(name,src,tag,value,parse=parse)
         self.subscribe_nonsync(on_signal,srcs=srcs,dsts=dsts,tags=tags,filt=filt)
+    def enable_channel(self, name, enable=True):
+        with self._channel_lock:
+            self.channels[name].enable(enable)
 
-    def _complete_row(self, row):
-        for n in self.channels:
-            if n not in row:
-                ch=self.channels[n]
-                row[n]=None if ch.func is None else ch.func()
-        return self.on_new_row(row)
     def _add_data(self, name, src, tag, value, parse=None):
-        if parse is not None:
-            row=parse(src,tag,value)
-        else:
-            row={name:value}
-        added=False
-        for name,value in viewitems(row):
-            ch=self.channels[name]
-            ch.data.append(value)
-            if ch.max_len and len(ch.data)>ch.max_len:
-                ch.data.popleft()
+        with self._channel_lock:
+            if parse is not None:
+                row=parse(src,tag,value)
             else:
-                added=True
-        if not added:
-            return
-        for _,ch in viewitems(self.channels):
-            if ch.required and not ch.data:
+                row={name:value}
+            added=False
+            for name,value in viewitems(row):
+                added=self.channels[name].add(value) or added
+            if not added:
                 return
-        self._new_row_done.emit()
+            for _,ch in viewitems(self.channels):
+                if not ch.ready():
+                    return
+            self._new_row_done.emit()
     _new_row_done=QtCore.pyqtSignal()
     @controller.exsafeSlot()
     def _add_new_row(self):
         with self._channel_lock:
             row={}
             for n,ch in viewitems(self.channels):
-                if ch.data:
-                    row[n]=ch.data.popleft()
-        row=self._complete_row(row)
+                if not ch.need_completion():
+                    row[n]=ch.get()
+        for n,ch in viewitems(self.channels):
+            if n not in row:
+                row[n]=ch.get()
+        row=self.on_new_row(row)
         with self._row_lock:
             for n,t in viewitems(self.table):
                 t.append(row[n])
             self._row_cnt+=1
-            if self.block_period and self._row_cnt>=self.block_period:
+            if self._row_cnt>=self.block_period:
                 self._row_cnt=0
                 self._new_block_done.emit()
+
 
 
 
@@ -103,7 +136,7 @@ class StreamFormerThread(controller.QThreadController):
             return self.table.copy() if copy else self.table
         with self._row_lock:
             if nrows is None:
-                nrows=len(self.table.values()[0])
+                nrows=len(general.any_item(self.table)[1])
             if columns is None:
                 return dict((n,v[:nrows]) for n,v in viewitems(self.table))
             else:
@@ -119,17 +152,18 @@ class StreamFormerThread(controller.QThreadController):
                 return np.column_stack([table[c] for c in columns])
         with self._row_lock:
             res=self.get_data(nrows=nrows,columns=columns)
-            for n,c in viewitems(self.table):
+            for _,c in viewitems(self.table):
                 del c[:nrows]
             return res
-    def clear_data(self):
+
+    def clear_table(self):
         with self._row_lock:
             self.table=dict([(n,[]) for n in self.table])
-
     def clear_all(self):
-        with self._row_lock:
+        with self._row_lock, self._channel_lock:
+            self.table=dict([(n,[]) for n in self.table])
             for _,ch in viewitems(self.channels):
-                ch.data.clear()
+                ch.clear()
 
 
 
