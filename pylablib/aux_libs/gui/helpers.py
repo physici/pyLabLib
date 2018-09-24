@@ -17,6 +17,7 @@ class StreamFormerThread(controller.QThreadController):
         self._channel_lock=threading.RLock()
         self._row_lock=threading.RLock()
         self._row_cnt=0
+        self._partial_rows=[]
         self.block_period=1
         self._new_block_done.connect(self._on_new_block_slot,type=QtCore.Qt.QueuedConnection)
         self._new_row_done.connect(self._add_new_row,type=QtCore.Qt.QueuedConnection)
@@ -75,7 +76,7 @@ class StreamFormerThread(controller.QThreadController):
             elif not self.required:
                 return None
             else:
-                raise IndexError("no queued data to add")
+                raise IndexError("no queued data to get")
         def clear(self):
             self.queue.clear()
             
@@ -89,33 +90,36 @@ class StreamFormerThread(controller.QThreadController):
         def on_signal(src, tag, value):
             self._add_data(name,src,tag,value,parse=parse)
         self.subscribe_nonsync(on_signal,srcs=srcs,dsts=dsts,tags=tags,filt=filt)
-    def enable_channel(self, name, enable=True):
+    def enable_channel(self, name, enable=True, clear=True):
         with self._channel_lock:
             self.channels[name].enable(enable)
-
+            if clear:
+                self.clear_all()
+            
     def _add_data(self, name, src, tag, value, parse=None):
         with self._channel_lock:
             if parse is not None:
                 row=parse(src,tag,value)
             else:
                 row={name:value}
-            added=False
             for name,value in viewitems(row):
-                added=self.channels[name].add(value) or added
-            if not added:
-                return
+                self.channels[name].add(value)
             for _,ch in viewitems(self.channels):
                 if not ch.ready():
                     return
+            part_row={}
+            for n,ch in viewitems(self.channels):
+                if not ch.need_completion():
+                    part_row[n]=ch.get()
+            self._partial_rows.append(part_row)
             self._new_row_done.emit()
     _new_row_done=QtCore.pyqtSignal()
     @controller.exsafeSlot()
     def _add_new_row(self):
         with self._channel_lock:
-            row={}
-            for n,ch in viewitems(self.channels):
-                if not ch.need_completion():
-                    row[n]=ch.get()
+            if not self._partial_rows: # in case reset was call in the meantime
+                return
+            row=self._partial_rows.pop(0)
         for n,ch in viewitems(self.channels):
             if n not in row:
                 row[n]=ch.get()
@@ -164,6 +168,7 @@ class StreamFormerThread(controller.QThreadController):
             self.table=dict([(n,[]) for n in self.table])
             for _,ch in viewitems(self.channels):
                 ch.clear()
+            self._partial_rows=[]
 
 
 
