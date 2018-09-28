@@ -178,8 +178,8 @@ class AndorCamera(IDevice):
         Return tuple ``(controller_mode, head_model, serial_number)``.
         """
         self._camsel()
-        control_model=lib.GetControllerCardModel()
-        head_model=lib.GetHeadModel()
+        control_model=py3.as_str(lib.GetControllerCardModel())
+        head_model=py3.as_str(lib.GetHeadModel())
         serial_number=lib.GetCameraSerialNumber()
         return self.ModelData(control_model,head_model,serial_number)
         

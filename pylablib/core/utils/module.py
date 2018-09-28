@@ -116,4 +116,11 @@ def get_library_path():
     module_path=sys.modules[__name__].__file__
     module_path=file_utils.normalize_path(module_path)
     return os.path.join(*file_utils.fullsplit(module_path)[:-3])
-    
+
+
+def get_library_name():
+    """
+    Get the name for the pyLabLib library (the one containing current the module).
+    """
+    module_name=__name__
+    return ".".join(module_name.split(".")[:-3])

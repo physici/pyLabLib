@@ -26,6 +26,8 @@ def restart_lib():
     lib.dcamapi_uninit()
     _open_cameras=0
 
+_rpyc=False
+
 class DCAMCamera(IDevice):
 
     def __init__(self, idx=0):
@@ -88,11 +90,12 @@ class DCAMCamera(IDevice):
 
         Return tuple ``(vendor, model, serial_number, camera_version)``.
         """
-        vendor=lib.dcamdev_getstring(self.handle,67109123)
-        model=lib.dcamdev_getstring(self.handle,67109124)
-        serial_number=lib.dcamdev_getstring(self.handle,67109122)
-        camera_version=lib.dcamdev_getstring(self.handle,67109125)
-        return self.ModelData(vendor,model,serial_number,camera_version)
+        vendor=py3.as_str(lib.dcamdev_getstring(self.handle,67109123))
+        model=py3.as_str(lib.dcamdev_getstring(self.handle,67109124))
+        serial_number=py3.as_str(lib.dcamdev_getstring(self.handle,67109122))
+        camera_version=py3.as_str(lib.dcamdev_getstring(self.handle,67109125))
+        model_data=self.ModelData(vendor,model,serial_number,camera_version)
+        return tuple(model_data) if _rpyc else model_data
 
 
     class Property(object):
@@ -241,6 +244,7 @@ class DCAMCamera(IDevice):
         """
         sframe=self._read_buffer(buffer)
         info=self.FrameInfo(sframe.framestamp,sframe.timestamp[0]*10**6+sframe.timestamp[1],sframe.camerastamp,sframe.left,sframe.top,sframe.pixeltype)
+        info=tuple(info) if _rpyc else info
         data=self._buffer_to_array(sframe)
         return (data,info) if return_info else data
 
@@ -268,10 +272,10 @@ class DCAMCamera(IDevice):
 
         By default, all non-supplied parameters take extreme values. Binning is the same for both axes.
         """
-        self.set_value("SUBARRAY MODE",2)
-        hend=hend or self.properties["SUBARRAY HSIZE"].max
-        vend=vend or self.properties["SUBARRAY VSIZE"].max
         with self._reset_buffers():
+            self.set_value("SUBARRAY MODE",2)
+            hend=hend or self.properties["SUBARRAY HSIZE"].max
+            vend=vend or self.properties["SUBARRAY VSIZE"].max
             self.set_value("SUBARRAY HSIZE",self.properties["SUBARRAY HSIZE"].min)
             self.set_value("SUBARRAY HPOS",hstart)
             self.set_value("SUBARRAY HSIZE",hend-hstart)
@@ -389,73 +393,3 @@ class DCAMCamera(IDevice):
         self.start_acquisition("snap",nframes=1)
         self.wait_for_frame()
         return self.get_frame(0,return_info=return_info)
-
-    # ModelData=collections.namedtuple("ModelData",["controller_model","head_model","serial_number"])
-    # def get_model_data(self):
-    #     """
-    #     Get camera model data.
-
-    #     Return tuple ``(controller_mode, head_model, serial_number)``.
-    #     """
-    #     self._camsel()
-    #     control_model=lib.GetControllerCardModel()
-    #     head_model=lib.GetHeadModel()
-    #     serial_number=lib.GetCameraSerialNumber()
-    #     return self.ModelData(control_model,head_model,serial_number)
-        
-    # def get_capabilities(self):
-    #     """
-    #     Get camera capabilities.
-
-    #     For description of the structure, see Andor SDK manual.
-    #     """
-    #     self._camsel()
-    #     return lib.GetCapabilities()
-
-    # ### Shutter controls ###
-    # def get_min_shutter_times(self):
-    #     """Get minimal shutter opening and closing times"""
-    #     self._camsel()
-    #     return lib.GetShutterMinTimes()
-    # def set_shutter(self, mode, ttl_mode=0, open_time=None, close_time=None):
-    #     """
-    #     Setup shutter.
-
-    #     `mode` can be ``"auto"``, ``"open"`` or ``"close"``, ttl_mode can be 0 (low is open) or 1 (high is open),
-    #     `open_time` and `close_time` specify opening and closing times (required to calculate the minimal exposure times).
-    #     By default, these time are minimal allowed times.
-    #     """
-    #     if mode in [0,False]:
-    #         mode="close"
-    #     if mode in [1,True]:
-    #         mode="open"
-    #     shutter_modes=["auto","open","close"]
-    #     funcargparse.check_parameter_range(mode,"state",shutter_modes)
-    #     self._camsel()
-    #     min_open_time,min_close_time=self.get_min_shutter_times()
-    #     open_time=min_open_time if open_time is None else open_time
-    #     close_time=min_close_time if close_time is None else close_time
-    #     lib.SetShutter(ttl_mode,shutter_modes.index(mode),open_time,close_time)
-    #     self.shutter_mode=mode
-
-    # ### Misc controls ###
-    # def set_fan_mode(self, mode):
-    #     """
-    #     Set fan mode.
-
-    #     Can be ``"full"``, ``"low"`` or ``"off"``.
-    #     """
-    #     text_modes=["full","low","off"]
-    #     funcargparse.check_parameter_range(mode,"mode",text_modes)
-    #     self._camsel()
-    #     lib.SetFanMode(text_modes.index(mode))
-    #     self.fan_mode=mode
-
-    # def read_in_aux_port(self, port):
-    #     """Get state at a given auxiliary port"""
-    #     self._camsel()
-    #     return lib.InAuxPort(port)
-    # def set_out_aux_port(self, port, state):
-    #     """Set state at a given auxiliary port"""
-    #     self._camsel()
-    #     return lib.OutAuxPort(port,state)
