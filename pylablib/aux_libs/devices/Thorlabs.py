@@ -42,6 +42,8 @@ class ThorlabsInterface(SCPI.SCPIDevice):
     Args:
         conn: serial connection parameters (usually port or a tuple containing port and baudrate)
     """
+    _default_operation_cooldown=0.01
+    _default_failsafe=True
     def __init__(self, conn):
         conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",115200))
         SCPI.SCPIDevice.__init__(self,conn,backend="serial",term_read=["\r","\n"],term_write="\r",timeout=5.)
@@ -57,7 +59,7 @@ class ThorlabsInterface(SCPI.SCPIDevice):
         data=""
         while not data:
             data=self.instr.readline(remove_term=True).strip()
-            if data[:1]==b">":
+            while data[:1]==b">":
                 data=data[1:].strip()
         return data
 

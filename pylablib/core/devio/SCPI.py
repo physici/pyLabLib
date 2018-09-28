@@ -333,12 +333,18 @@ class SCPIDevice(backend_module.IBackendWrapper):
         `msg` is the query message, `delay` is the delay between write and read. Other parameters are the same as in :func:`read`.
         If ``read_echo==True``, assume that the device first echoes the input and skip it.
         """
-        if read_echo:
-            self._ask_retry(msg,delay,raw=True,timeout=timeout)
-            reply=self._read_retry(raw=(data_type=="raw"),timeout=timeout)
-        else:
-            reply=self._ask_retry(msg,delay,raw=(data_type=="raw"),timeout=timeout)
-        return self._parse_msg(reply,data_type=data_type)
+        for t in general_utils.RetryOnException(self._retry_times,exceptions=ValueError):
+            with t:
+                if read_echo:
+                    self._ask_retry(msg,delay,raw=True,timeout=timeout)
+                    reply=self._read_retry(raw=(data_type=="raw"),timeout=timeout)
+                else:
+                    reply=self._ask_retry(msg,delay,raw=(data_type=="raw"),timeout=timeout)
+                return self._parse_msg(reply,data_type=data_type)
+            self.flush()
+            print("Ask error in instrument {} returned {}".format(self.instr,reply))
+            if not self._failsafe:
+                t.reraise()
     def flush(self, one_line=False):
         """
         Flush the read buffer (read all the available data and return the number of bytes read).

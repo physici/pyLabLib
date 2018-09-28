@@ -140,6 +140,11 @@ class QThreadController(QtCore.QObject):
         self._message_uid=0
         self._sync_queue={}
         self._sync_clearance=set()
+        # set up variable handling
+        self._params_val=dictionary.Dictionary()
+        self._params_val_lock=threading.Lock()
+        self._params_exp=dictionary.Dictionary()
+        self._params_exp_lock=threading.Lock()
         # set up high-level synchronization
         self._exec_notes={}
         self._exec_notes_lock=threading.Lock()
@@ -420,6 +425,29 @@ class QThreadController(QtCore.QObject):
         self._signal_pool.signal(src or self.name,dst,tag,value)
 
 
+    ### Variable management ###
+    _variable_change_tag="#sync.wait.variable"
+    def set_variable(self, name, value, notify=False, notify_tag="changed/*"):
+        """
+        Set thread variable.
+
+        Can be called in any thread (controlled or external).
+        If ``notify==True``, send a signal with the given `notify_tag` (where ``"*"`` symbol is replaced by the variable name).
+        """
+        with self._params_val_lock:
+            self._params_val.add_entry(name,value,force=True)
+        for ctl in self._params_exp.get(name,[]):
+            ctl.send_message(self._variable_change_tag,value)
+        if notify:
+            notify_tag.replace("*",name)
+            self.send_signal("any",notify_tag,value)
+    def __setitem__(self, name, value):
+        self.set_variable(name,value)
+    def __delitem__(self, name):
+        with self._params_val_lock:
+            if name in self._params_val:
+                del self._params_val[name]
+
 
     ##########  EXTERNAL CALLS  ##########
     ## Methods to be called by functions executing in other thread ##
@@ -435,6 +463,52 @@ class QThreadController(QtCore.QObject):
         This method is rarely invoked directly, and is usually used by synchronizers code.
         """
         self._messaged.emit(("sync",tag,0,uid))
+
+
+    ### Variables access ###
+    def get_variable(self, name, default=None, copy_branch=True, missing_error=False):
+        """
+        Get thread variable.
+
+        Can be called in any thread (controlled or external).
+        If ``missing_error==False`` and no variable exists, return `default`; otherwise, raise and error.
+        If ``copy_branch==True`` and the variable is a :class:`Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignements.
+        """
+        with self._params_val_lock:
+            if missing_error and name not in self._params_val:
+                raise KeyError("no parameter {}".format(name))
+            var=self._params_val.get(name,default)
+            if copy_branch and dictionary.is_dictionary(var):
+                var=var.copy()
+        return var
+    def __getitem__(self, name):
+        return self.get_variable(name,missing_error=True)
+    def wait_for_variable(self, name, pred, timeout=None):
+        """
+        Wait until thread variable with the given `name` satisfies the given condtion.
+        
+        `pred` is a function which takes one argument (variable value) and returns whether the condition is satisfied.
+        """
+        if not hasattr(pred,"__call__"):
+            v=pred
+            if isinstance(pred,(tuple,list,set,dict)):
+                pred=lambda x: x in v
+            else:
+                pred=lambda x: x==v
+        ctl=threadprop.current_controller()
+        with self._params_exp_lock:
+            self._params_exp.setdefault(name,[]).append(ctl)
+        ctd=general.Countdown(timeout)
+        try:
+            while True:
+                value=self.get_variable(name)
+                if pred(value):
+                    return value
+                ctl.wait_for_message(self._variable_change_tag,timeout=ctd.time_left())
+        finally:
+            with self._params_exp_lock:
+                self._params_exp[name].remove(ctl)
+
 
     ### Thread execution control ###
     def start(self):
@@ -474,7 +548,9 @@ class QThreadController(QtCore.QObject):
     def is_controlled(self):
         """Check if this controller corresponds to the current thread."""
         return QtCore.QThread.currentThread() is self.thread
-    
+
+
+    ### Notifier access ###
     def _get_exec_note(self, point):
         with self._exec_notes_lock:
             if point not in self._exec_notes:
@@ -527,7 +603,7 @@ class QThreadController(QtCore.QObject):
                 return False
     
 
-
+    ### External call management ###
     def call_in_thread_callback(self, func, args=None, kwargs=None, callback=None, tag=None, priority=0):
         """
         Call a function in this thread with the given arguments.
@@ -747,10 +823,6 @@ class QTaskThread(QMultiRepeatingThreadController):
         QMultiRepeatingThreadController.__init__(self,name=name,signal_pool=signal_pool)
         self.setupargs=setupargs or []
         self.setupkwargs=setupkwargs or {}
-        self._params_val=dictionary.Dictionary()
-        self._params_val_lock=threading.Lock()
-        self._params_exp=dictionary.Dictionary()
-        self._params_exp_lock=threading.Lock()
         self._directed_signal.connect(self._on_directed_signal)
         self._commands={}
         self._command_priorities={}
@@ -776,6 +848,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         """Finlize the thread (always called on thread termination, regardless of the reason)"""
         pass
 
+    ### Start/stop control (called automatically) ###
     def on_start(self):
         QMultiRepeatingThreadController.on_start(self)
         self.setup_task(*self.setupargs,**self.setupkwargs)
@@ -791,27 +864,7 @@ class QTaskThread(QMultiRepeatingThreadController):
     def _recv_directed_signal(self, tag, src, value):
         self._directed_signal.emit((tag,src,value))
 
-    _variable_change_tag="#sync.wait.variable"
-    def set_variable(self, name, value, notify=False, notify_tag="changed/*"):
-        """
-        Set thread variable.
-
-        Can be called in any thread (controlled or external).
-        If ``notify==True``, send a signal with the given `notify_tag` (where ``"*"`` symbol is replaced by the variable name).
-        """
-        with self._params_val_lock:
-            self._params_val.add_entry(name,value,force=True)
-        for ctl in self._params_exp.get(name,[]):
-            ctl.send_message(self._variable_change_tag,value)
-        if notify:
-            notify_tag.replace("*",name)
-            self.send_signal("any",notify_tag,value)
-    def __setitem__(self, name, value):
-        self.set_variable(name,value)
-    def __delitem__(self, name):
-        with self._params_val_lock:
-            if name in self._params_val:
-                del self._params_val[name]
+    ### Command control ###    
     def add_command(self, name, command=None, priority=0):
         """
         Add a new command to the command set (by default same set applies voth to commands and queries).
@@ -855,50 +908,6 @@ class QTaskThread(QMultiRepeatingThreadController):
         If ``ignore_errors==True``, ignore all possible problems with the call (controller stopped, call raised an exception) and return ``None`` instead.
         """
         return self._sync_call(self.process_query,name,args,kwargs,sync=True,timeout=timeout,ignore_errors=ignore_errors)
-
-    ### Variables access ###
-    def get_variable(self, name, default=None, copy_branch=True, missing_error=False):
-        """
-        Get thread variable.
-
-        Can be called in any thread (controlled or external).
-        If ``missing_error==False`` and no variable exists, return `default`; otherwise, raise and error.
-        If ``copy_branch==True`` and the variable is a :class:`Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignements.
-        """
-        with self._params_val_lock:
-            if missing_error and name not in self._params_val:
-                raise KeyError("no parameter {}".format(name))
-            var=self._params_val.get(name,default)
-            if copy_branch and dictionary.is_dictionary(var):
-                var=var.copy()
-        return var
-    def __getitem__(self, name):
-        return self.get_variable(name,missing_error=True)
-    def wait_for_variable(self, name, pred, timeout=None):
-        """
-        Wait until thread variable with the given `name` satisfies the given condtion.
-        
-        `pred` is a function which takes one argument (variable value) and returns whether the condition is satisfied.
-        """
-        if not hasattr(pred,"__call__"):
-            v=pred
-            if isinstance(pred,(tuple,list,set,dict)):
-                pred=lambda x: x in v
-            else:
-                pred=lambda x: x==v
-        ctl=threadprop.current_controller()
-        with self._params_exp_lock:
-            self._params_exp.setdefault(name,[]).append(ctl)
-        ctd=general.Countdown(timeout)
-        try:
-            while True:
-                value=self.get_variable(name)
-                if pred(value):
-                    return value
-                ctl.wait_for_message(self._variable_change_tag,timeout=ctd.time_left())
-        finally:
-            with self._params_exp_lock:
-                self._params_exp[name].remove(ctl)
 
     class CommandAccess(object):
         """

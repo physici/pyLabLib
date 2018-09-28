@@ -28,8 +28,8 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.add_check_box("flip_y","Flip Y",value=False)
         self.settings_table.add_check_box("transpose","Transpose",value=False)
         self.settings_table.add_check_box("normalize","Normalize",value=False)
-        self.settings_table.add_num_edit("minlim",value=0,limiter=(0,16384,"coerce","int"),formatter=("int"),label="Minimal intensity:")
-        self.settings_table.add_num_edit("maxlim",value=16384,limiter=(0,16384,"coerce","int"),formatter=("int"),label="Maximal intensity:")
+        self.settings_table.add_num_edit("minlim",value=0,limiter=(0,65535,"coerce","int"),formatter=("int"),label="Minimal intensity:")
+        self.settings_table.add_num_edit("maxlim",value=65535,limiter=(0,65535,"coerce","int"),formatter=("int"),label="Maximal intensity:")
         self.settings_table.add_check_box("show_lines","Show lines",value=True)
         self.settings_table.add_num_edit("vlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="X line:")
         self.settings_table.add_num_edit("hlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="Y line:")
@@ -37,6 +37,9 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.value_changed.connect(lambda: self.view.update_image(update_controls=False))
         self.settings_table.add_padding()
 
+    def set_img_maxlim(self, maxlim):
+        self.settings_table["minlim"].set_number_limit(0,maxlim,"coerce","int")
+        self.settings_table["maxlim"].set_number_limit(0,maxlim,"coerce","int")
     def get_all_values(self):
         return self.settings_table.get_all_values()
     def set_all_values(self, params):
