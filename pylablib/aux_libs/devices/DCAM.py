@@ -39,6 +39,7 @@ class DCAMCamera(IDevice):
         self.properties={}
         self._alloc_nframes=0
         self._default_nframes=100
+        self._acq_mode=None
         self.open()
         self._last_frame=None
 
@@ -300,9 +301,25 @@ class DCAMCamera(IDevice):
             self._allocate_buffer(self._default_nframes)
         lib.dcamcap_start(self.handle,0 if mode=="snap" else -1)
         self._last_frame=-1
+        self._acq_mode=(mode,nframes)
     def stop_acquisition(self):
         """Stop acquisition"""
         lib.dcamcap_stop(self.handle)
+        self._acq_mode=None
+    @contextlib.contextmanager
+    def pausing_acquisition(self):
+        """
+        Context manager which temporarily pauses acquisition during execution of ``with`` block.
+
+        Useful for applying certain settings which can't be changed during the acquisition.
+        """
+        acq_mode=self._acq_mode
+        try:
+            self.stop_acquisition()
+            yield
+        finally:
+            if acq_mode:
+                self.start_acquisition(*acq_mode)
     def get_status(self):
         """
         Get acquisition status.

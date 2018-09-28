@@ -66,6 +66,7 @@ class ClientSocket(object):
         funcargparse.check_parameter_range(datatype,"datatype",{"auto","str","bytes"})
         object.__init__(self)
         self.sock=sock or socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
         self.connected=False
         self.timeout=timeout
         self.wait_callback=wait_callback
@@ -109,6 +110,7 @@ class ClientSocket(object):
     def _connect_callback(self):
         self.sock.close()
         self.sock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
         self.sock.settimeout(self._default_wait_callback_timeout)
         if self.wait_callback:
             self.wait_callback()
@@ -151,9 +153,12 @@ class ClientSocket(object):
     
     def recv_fixedlen(self, l):
         """Receive fixed-length message of length `l`."""
-        buf=b""
-        while len(buf)<l:
-            buf=buf+self._recv_wait(l-len(buf))
+        chunks=[]
+        lread=0
+        while lread<l:
+            chunks.append(self._recv_wait(l-lread))
+            lread+=len(chunks[-1])
+        buf=b"".join(chunks)
         return py3.as_datatype(buf,self.datatype)
     def recv_delimiter(self, delim, lmax=None, chunk_l=1024, strict=False):
         """
@@ -234,7 +239,8 @@ class ClientSocket(object):
         """
         len_msg=strpack.pack_uint(len(msg),self.decllen_ll,self.decllen_bo)
         msg=py3.as_builtin_bytes(msg)
-        return self.send_fixedlen(len_msg+msg)-len(len_msg)
+        self.send_fixedlen(len_msg)
+        return self.send_fixedlen(msg)
     def send_delimiter(self, msg, delimiter):
         """
         Send a message with a delimiter `delim` (can be several characters).

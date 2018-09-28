@@ -1,4 +1,6 @@
 from ...core.gui.qt.thread import controller
+from ...core.utils import rpyc as rpyc_utils
+import rpyc
 
 class DeviceThread(controller.QTaskThread):
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
@@ -10,9 +12,19 @@ class DeviceThread(controller.QTaskThread):
         self.add_command("get_full_info",self.get_full_info)
         self._full_info_job=False
         self._full_info_nodes=None
+        self.rpyc=False
         
     def finalize_task(self):
         self.close_device()
+
+    def rpyc_device(self, remote, module, device, *args, **kwargs):
+        self.rpyc=True
+        self.rpyc_serv=rpyc_utils.connect_device_service(remote).root
+        return self.rpyc_serv.get_device(module,device,*args,**kwargs)
+    def rpyc_obtain(self, obj):
+        if self.rpyc:
+            return rpyc_utils.obtain(obj,serv=self.rpyc_serv)
+        return obj
 
     def open_device(self):
         if self.device is not None and not self.device.is_opened():
