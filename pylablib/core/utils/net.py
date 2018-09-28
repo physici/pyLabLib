@@ -32,6 +32,10 @@ def _wait_sock_func(func, timeout, wait_callback):
             if cnt.passed():
                 raise
 
+def get_local_addr():
+    """Get local IP address."""
+    return socket.gethostbyname(socket.gethostname())
+
 class ClientSocket(object):
     """
     A client socket (used to connect to a server socket).
@@ -278,19 +282,21 @@ def recv_JSON(socket, chunk_l=1024, strict=True):
         
         
 _listen_wait_callback_timeout=0.1
-def listen(host, port, conn_func, wait_callback=None, timeout=None, backlog=10, wrap_socket=True):
+def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=None, backlog=10, wrap_socket=True, connections_number=None):
     """
     Run a server socket at the given host and port.
     
     Args:
         host (str): Server host address. If ``None``, use the local host defined by :func:`socket.gethostname`.
-        port (int): Server port.
+        port (int): Server port. If ``0``, generate an arbitrary free port.
         conn_func (Callable): Called with the client socket as a single argument every time a connection is established.
+        port_func (Callable): Called with the port as a single argument when the listening starts (useful with ``port=0``).
         wait_callback (Callable): A callback function which is called periodically (every 100ms by default) while awaiting for connections.
         timeout (float): Timeout for waiting for the connections (``None`` is no timeout).
         backlog (int): Backlog length for the socket (see :func:`socket.socket.listen`).
         wrap_socket (bool): If ``True``, wrap the client socket of the connection into :class:`ClientSocket` class;
             otherwise, return :class:`socket.socket` object.
+        connections_number (int): Specifies maximal number of connections before the listening function returns (by default, the number is unlimited).
         
     Checking for connections is paused until `conn_func` returns.
     If multiple connections are expected, `conn_func` should spawn a separate processing thread and return.
@@ -303,6 +309,8 @@ def listen(host, port, conn_func, wait_callback=None, timeout=None, backlog=10, 
     elif timeout is not None:
         serv_sock.settimeout(timeout)
     serv_sock.bind((host,port))
+    if port_func:
+        port_func(serv_sock.getsockname()[1])
     serv_sock.listen(backlog)
     def sock_func():
         client_sock,_=serv_sock.accept()
@@ -310,7 +318,11 @@ def listen(host, port, conn_func, wait_callback=None, timeout=None, backlog=10, 
             client_sock=ClientSocket(client_sock)
         conn_func(client_sock)
     try:
+        cnt=0
         while True:
             _wait_sock_func(sock_func,timeout,wait_callback)
+            cnt+=1
+            if connections_number is not None and cnt>=connections_number:
+                return
     finally:
         serv_sock.close()
