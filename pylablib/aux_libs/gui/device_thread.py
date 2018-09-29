@@ -1,6 +1,6 @@
 from ...core.gui.qt.thread import controller
 from ...core.utils import rpyc as rpyc_utils
-import rpyc
+import socket
 
 class DeviceThread(controller.QTaskThread):
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
@@ -19,7 +19,9 @@ class DeviceThread(controller.QTaskThread):
 
     def rpyc_device(self, remote, module, device, *args, **kwargs):
         self.rpyc=True
-        self.rpyc_serv=rpyc_utils.connect_device_service(remote).root
+        self.rpyc_serv=rpyc_utils.connect_device_service(remote)
+        if not self.rpyc_serv:
+            return None
         return self.rpyc_serv.get_device(module,device,*args,**kwargs)
     def rpyc_obtain(self, obj):
         if self.rpyc:

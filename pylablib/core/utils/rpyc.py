@@ -7,6 +7,7 @@ import rpyc
 
 import importlib
 import pickle
+import warnings
 
 
 _default_packers={"numpy":np.ndarray.tostring,"pickle":pickle.dumps}
@@ -154,4 +155,9 @@ def run_device_service(port=18812):
 
 def connect_device_service(addr, port=18812):
     """Connect to the :class:`DeviceService` running at the given address and port"""
-    return rpyc.connect(addr,port=port,service=SocketTunnelService)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            return rpyc.connect(addr,port=port,service=SocketTunnelService).root
+        except net.socket.timeout:
+            return None

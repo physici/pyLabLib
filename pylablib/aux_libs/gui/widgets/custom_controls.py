@@ -11,6 +11,7 @@ class ROICtl(QtWidgets.QWidget):
         super(ROICtl, self).__init__(parent)
         self.xparams=self.AxisParams(0,1,1)
         self.yparams=self.AxisParams(0,1,1)
+        self.validate=None
         self.xlim=(0,None)
         self.ylim=(0,None)
         self.maxbin=None
@@ -29,8 +30,12 @@ class ROICtl(QtWidgets.QWidget):
     def validateROI(self, xparams, yparams):
         xparams=self._limit_range(xparams,self.xlim,self.maxbin,self.minsize)
         yparams=self._limit_range(yparams,self.ylim,self.maxbin,self.minsize)
+        if self.validate:
+            xparams,yparams=self.validate((xparams,yparams))
+            xparams=self.AxisParams(*xparams)
+            yparams=self.AxisParams(*yparams)
         return xparams,yparams
-    def setupUi(self, name, xlim=(0,None), ylim=None, maxbin=None, minsize=0):
+    def setupUi(self, name, xlim=(0,None), ylim=None, maxbin=None, minsize=0, validate=None):
         self.name=name
         self.setObjectName(self.name)
         self.setMinimumSize(QtCore.QSize(232, 83))
@@ -83,6 +88,7 @@ class ROICtl(QtWidgets.QWidget):
         self.gridLayout.setColumnStretch(1, 2)
         self.gridLayout.setColumnStretch(2, 2)
         self.gridLayout.setColumnStretch(3, 1)
+        self.validate=validate
         for v in [self.x_min,self.y_min]:
             v.set_number_format("int")
             v.set_number_limit(value_type="int")

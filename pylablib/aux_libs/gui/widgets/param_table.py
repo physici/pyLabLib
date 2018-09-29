@@ -114,11 +114,11 @@ class ParamTable(QtWidgets.QWidget):
         widget.setObjectName(_fromUtf8(name))
         if value is not None:
             widget.setText(str(value))
-        return self.add_simple_widget(name,widget,label=label)
+        return self.add_simple_widget(name,widget,label=label,add_indicator=False)
     def add_num_label(self, name, value=None, limiter=None, formatter=None, label=None):
         widget=widget_label.LVNumLabel(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(name))
-        return self.add_simple_widget(name,widget,label=label)
+        return self.add_simple_widget(name,widget,label=label,add_indicator=False)
     def add_text_edit(self, name, value=None, label=None, add_indicator=None):
         widget=edit.LVTextEdit(self,value=value)
         widget.setObjectName(_fromUtf8(name))
