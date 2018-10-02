@@ -61,12 +61,21 @@ class ROI(object):
         return self
 
 
+def get_region(image, center, size):
+    """
+    Get part of the image with the given center and size (both are tuples ``(i, j)``).
+
+    The region is automatically reduced if a part of it is outside of the image.
+    """
+    roi=ROI.from_centersize(center,size,shape=image.shape)
+    ispan,jspan=roi.ispan(),roi.jspan()
+    return image[ispan[0]:ispan[1],jspan[0]:jspan[1]]
 
 def get_region_sum(image, center, size):
     """
     Sum part of the image with the given center and size (both are tuples ``(i, j)``).
+    
     The region is automatically reduced if a part of it is outside of the image.
-
     Return tuple ``(sum, area)``, where area is the acual summer region are (in pixels).
     """
     roi=ROI.from_centersize(center,size,shape=image.shape)

@@ -1,6 +1,5 @@
 from ...core.gui.qt.thread import controller
 from ...core.utils import rpyc as rpyc_utils
-import socket
 
 class DeviceThread(controller.QTaskThread):
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
@@ -49,7 +48,7 @@ class DeviceThread(controller.QTaskThread):
             self.send_signal("any",status_str+"_text",text)
 
     def get_settings(self):
-        return self.device.get_settings() if self.device is not None else {}
+        return self.rpyc_obtain(self.device.get_settings()) if self.device is not None else {}
     
     def setup_full_info_job(self, period=2., nodes=None):
         if not self._full_info_job:
@@ -57,9 +56,9 @@ class DeviceThread(controller.QTaskThread):
             self.add_job("update_full_info",self.update_full_info,period)
             self._full_info_job=True
     def update_full_info(self):
-        self["full_info"]=self.device.get_full_info(nodes=self._full_info_nodes)
+        self["full_info"]=self.rpyc_obtain(self.device.get_full_info(nodes=self._full_info_nodes))
     def get_full_info(self):
         if self.device:
-            return self["full_info"] if self._full_info_job else self.device.get_full_info(nodes=self._full_info_nodes)
+            return self["full_info"] if self._full_info_job else self.rpyc_obtain(self.device.get_full_info(nodes=self._full_info_nodes))
         else:
             return {}

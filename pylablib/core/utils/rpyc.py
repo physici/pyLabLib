@@ -15,11 +15,12 @@ _default_unpackers={"pickle":pickle.loads}
 def _is_tunnel_service(serv):
     return hasattr(serv,"tunnel_socket")
 def _obtain_single(proxy, serv):
-    if serv and _is_tunnel_service(serv):
+    if _is_tunnel_service(serv):
         loc_serv=serv.peer
         async_send=rpyc.async_(serv.tunnel_send)
         async_send(proxy,packer="pickle")
-        return loc_serv.tunnel_recv(unpacker="pickle")
+        data=pickle.loads(loc_serv.tunnel_recv())
+        return data
     else:
         return rpyc.classic.obtain(proxy)
 
@@ -37,21 +38,28 @@ def obtain(proxy, serv=None):
     if isinstance(proxy, np.ndarray):
         elsize=np.prod(proxy.shape,dtype="u8")
         bytesize=proxy.dtype.itemsize*elsize
-        if serv and _is_tunnel_service(serv):
-            loc_serv=serv.peer
-            async_send=rpyc.async_(serv.tunnel_send)
-            async_send(proxy,packer="numpy")
-            data=loc_serv.tunnel_recv()
-            return np.frombuffer(data,dtype=proxy.dtype.str).reshape(proxy.shape)
-        else:
-            if bytesize>_numpy_block_size:
+        if bytesize>_numpy_block_size:
+            if _is_tunnel_service(serv):
+                loc_serv=serv.peer
+                async_send=rpyc.async_(serv.tunnel_send)
+                async_send(proxy,packer="numpy")
+                data=loc_serv.tunnel_recv()
+                return np.frombuffer(data,dtype=proxy.dtype.str).reshape(proxy.shape)
+            else:
                 fproxy=proxy.flatten()
                 loc=np.zeros(elsize,dtype=proxy.dtype.str)
                 block_size=_numpy_block_size//proxy.dtype.itemsize
                 for pos in range(0,elsize,block_size):
                     loc[pos:pos+block_size]=rpyc.classic.obtain(fproxy[pos:pos+block_size])
                 return loc.reshape(proxy.shape)
-    return _obtain_single(proxy,serv)
+    return rpyc.classic.obtain(proxy)
+def transfer(obj, serv):
+    """
+    Send a local object to the remote PC by value (i.e., copy it to the remote Python instance).
+
+    A 'reversed' version of :func:`obtain`.
+    """
+    return serv.transfer(obj)
 
 class SocketTunnelService(rpyc.SlaveService):
     """
@@ -74,10 +82,10 @@ class SocketTunnelService(rpyc.SlaveService):
         remote_call=rpyc.async_(self._conn.root._send_socket)
         def port_func(port):
             remote_call(net.get_local_addr(),port)
-        net.listen(None,0,listen,port_func=port_func,timeout=self._default_tunnel_timeout,connections_number=1)
+        net.listen(None,0,listen,port_func=port_func,timeout=self._default_tunnel_timeout,connections_number=1,nodelay=True)
     def _send_socket(self, dst_addr, dst_port):
         """Set up a client socket to connect to the other service."""
-        self.tunnel_socket=net.ClientSocket(timeout=self._default_tunnel_timeout)
+        self.tunnel_socket=net.ClientSocket(timeout=self._default_tunnel_timeout,nodelay=True)
         self.tunnel_socket.connect(dst_addr,dst_port)
 
     def tunnel_send(self, obj, packer=None):
@@ -99,13 +107,21 @@ class SocketTunnelService(rpyc.SlaveService):
 
         If `unpacker` is not ``None``, it defines a function to convert the received bytes string into an object.
         """
-        nchunks=strpack.unpack_uint(self.tunnel_socket.recv_fixedlen(4))
+        nchunks=strpack.unpack_uint(self.tunnel_socket.recv_fixedlen(4),">")
         chunks=[]
         for _ in range(nchunks):
             chunks.append(self.tunnel_socket.recv_decllen())
         obj=b"".join(chunks)
         unpacker=_default_unpackers.get(unpacker,unpacker)
         return unpacker(obj) if unpacker else obj
+
+    def obtain(self, proxy):
+        """Execute :func:`obtain` on the local instance"""
+        return obtain(proxy,self)
+    def transfer(self, obj):
+        """Execute :func:`transfer` on the local instance"""
+        return self.peer.obtain(obj)
+    
     def on_connect(self, conn):
         rpyc.SlaveService.on_connect(self,conn)
         self.peer=conn.root
@@ -119,11 +135,14 @@ class DeviceService(SocketTunnelService):
     Expands on :class:`SocketTunnelService` by adding :meth:`get_device` method,
     which opens local devices, tracks them, and closes them automatically on disconnect.
     """
-    def __init__(self):
+    def __init__(self, verbose=False):
         SocketTunnelService.__init__(self,server=True)
+        self.verbose=verbose
     def on_connect(self, conn):
         SocketTunnelService.on_connect(self,conn)
         self.devices=[]
+        if self.verbose:
+            print("Connected client {}".format(self._conn))
     def on_disconnect(self, conn):
         for dev in self.devices:
             try:
@@ -131,6 +150,8 @@ class DeviceService(SocketTunnelService):
             except:
                 pass
         self.devices=[]
+        if self.verbose:
+            print("Disconnected client {}".format(self._conn))
         SocketTunnelService.on_disconnect(self,conn)
     def get_device(self, module, cls, *args, **kwargs):
         """
@@ -149,9 +170,9 @@ class DeviceService(SocketTunnelService):
         self.devices.append(dev)
         return dev
 
-def run_device_service(port=18812):
+def run_device_service(port=18812, verbose=False):
     """Start :class:`DeviceService` at the given port"""
-    rpyc.ThreadedServer(DeviceService,port=port).start()
+    rpyc.ThreadedServer(rpyc.utils.helpers.classpartial(DeviceService,verbose=verbose),port=port).start()
 
 def connect_device_service(addr, port=18812):
     """Connect to the :class:`DeviceService` running at the given address and port"""

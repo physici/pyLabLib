@@ -48,6 +48,7 @@ class ClientSocket(object):
         recv_method (str): Default receiving method.
         datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
             or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
+        nodelay (bool): Whether to enable ``TCP_NODELAY``.
     
     Possible sending/receiving methods are:
         - ``'fixedlen'``: data is sent as is, and receiving requires to know the length of the message;
@@ -60,13 +61,15 @@ class ClientSocket(object):
         decllen_ll (int): Length of the prependend length for ``'decllen'`` sending method; default is 4 bytes.
     """
     _default_wait_callback_timeout=0.1
-    def __init__(self, sock=None, timeout=None, wait_callback=None, send_method="decllen", recv_method="decllen", datatype="auto"):
+    def __init__(self, sock=None, timeout=None, wait_callback=None, send_method="decllen", recv_method="decllen", datatype="auto", nodelay=False):
         funcargparse.check_parameter_range(send_method,"send_method",{"fixedlen","decllen"})
         funcargparse.check_parameter_range(recv_method,"recv_method",{"fixedlen","decllen"})
         funcargparse.check_parameter_range(datatype,"datatype",{"auto","str","bytes"})
         object.__init__(self)
+        self.nodelay=nodelay
         self.sock=sock or socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
+        if self.nodelay:
+            self.sock.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
         self.connected=False
         self.timeout=timeout
         self.wait_callback=wait_callback
@@ -110,7 +113,8 @@ class ClientSocket(object):
     def _connect_callback(self):
         self.sock.close()
         self.sock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
+        if self.nodelay:
+            self.sock.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
         self.sock.settimeout(self._default_wait_callback_timeout)
         if self.wait_callback:
             self.wait_callback()
@@ -239,8 +243,11 @@ class ClientSocket(object):
         """
         len_msg=strpack.pack_uint(len(msg),self.decllen_ll,self.decllen_bo)
         msg=py3.as_builtin_bytes(msg)
-        self.send_fixedlen(len_msg)
-        return self.send_fixedlen(msg)
+        if self.nodelay:
+            return self.send_fixedlen(len_msg+msg)-len(len_msg)
+        else:
+            self.send_fixedlen(len_msg)
+            return self.send_fixedlen(msg)
     def send_delimiter(self, msg, delimiter):
         """
         Send a message with a delimiter `delim` (can be several characters).
@@ -288,7 +295,7 @@ def recv_JSON(socket, chunk_l=1024, strict=True):
         
         
 _listen_wait_callback_timeout=0.1
-def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=None, backlog=10, wrap_socket=True, connections_number=None):
+def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=None, backlog=10, wrap_socket=True, connections_number=None, nodelay=False):
     """
     Run a server socket at the given host and port.
     
@@ -303,6 +310,7 @@ def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=No
         wrap_socket (bool): If ``True``, wrap the client socket of the connection into :class:`ClientSocket` class;
             otherwise, return :class:`socket.socket` object.
         connections_number (int): Specifies maximal number of connections before the listening function returns (by default, the number is unlimited).
+        nodelay (bool): Whether to enable ``TCP_NODELAY`` in the client socket (applies only if ``wrap_socket==True``).
         
     Checking for connections is paused until `conn_func` returns.
     If multiple connections are expected, `conn_func` should spawn a separate processing thread and return.
@@ -321,7 +329,7 @@ def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=No
     def sock_func():
         client_sock,_=serv_sock.accept()
         if wrap_socket:
-            client_sock=ClientSocket(client_sock)
+            client_sock=ClientSocket(client_sock,nodelay=nodelay)
         conn_func(client_sock)
     try:
         cnt=0
