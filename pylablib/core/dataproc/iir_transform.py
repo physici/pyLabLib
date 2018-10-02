@@ -24,7 +24,7 @@ ver="{}{}".format(sys.version_info.major,sys.version_info.minor)
 try:
     if arch not in {"32bit","64bit"}:
         raise ImportError("Unexpected system architecture: {0}".format(arch))
-    if ver not in {"27","36"}:
+    if ver not in {"27","36","37"}:
         raise ImportError("Unexpected python version: {0}".format(ver))
     if ver=="27":
         if arch=="32bit":
@@ -36,6 +36,11 @@ try:
             from .iir_transform_py36_32 import iir_apply
         else:
             from .iir_transform_py36_64 import iir_apply
+    elif ver=="37":
+        if arch=="32bit":
+            from .iir_transform_py37_32 import iir_apply
+        else:
+            from .iir_transform_py37_64 import iir_apply
 except (ImportError):
     if use_fallback: # re-create the function in Python; much slower than the precompiled one
         def iir_apply(trace, xcoeff, ycoeff):
