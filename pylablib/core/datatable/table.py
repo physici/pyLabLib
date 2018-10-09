@@ -55,6 +55,11 @@ class DataTable(object):
                     data=[data[c] for c in column_names]
                 else:
                     data,column_names=data.values(),data.keys()
+            if data is None:
+                if column_names:
+                    data=[[] for _ in column_names]
+                else:
+                    raise ValueError("can't determine table shape without data or columns")
             self._storage=storage_type(data,column_names,transposed=transposed,force_copy=force_copy)
         self._set_accessors()
         self._x_col=None

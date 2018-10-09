@@ -19,8 +19,8 @@ def errcheck(passing=None):
     """
     Build an error checking function.
 
-    Return a function which checks return codes of Andor library functions.
-    `passing` is a list specifying which return codes are acceptable (by default only 20002, which is success code, is acceptable).
+    Return a function which checks return codes of DCAM library functions.
+    `passing` is a list specifying which return codes are acceptable (by default, non-negative codes are aceptable).
     """
     passing=set(passing) if passing is not None else set()
     def checker(result, func, arguments):
@@ -29,7 +29,6 @@ def errcheck(passing=None):
         else:
             code=result
         if code<0 and code not in passing: # positive codes are always success
-            # print("function '{}' raised error {}({})".format(func.__name__,result,Andor_statuscodes.get(result,"UNKNOWN")))
             raise DCAMLibError(func.__name__,code)
     return checker
 

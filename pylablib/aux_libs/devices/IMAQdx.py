@@ -1,12 +1,20 @@
-from ...core.utils import dictionary
+from ...core.utils import dictionary, py3
 from ...core.devio import data_format
 
 import numpy as np
 import contextlib
 import time
 
-from . import IMAQdx_lib as lib
-IMAQdxError=lib.IMAQdxGenericError
+
+from . import IMAQdx_lib
+lib=IMAQdx_lib.lib
+try:
+    lib.initlib()
+except (ImportError, OSError):
+    pass
+IMAQdxError=IMAQdx_lib.IMAQdxGenericError
+
+_depends_local=[".IMAQdx_lib"]
 
 class IMAQdxAttribute(object):
     def __init__(self, sid, name):
@@ -20,7 +28,7 @@ class IMAQdxAttribute(object):
         self.readable=lib.IMAQdxIsAttributeReadable(sid,name)
         self.writable=lib.IMAQdxIsAttributeWritable(sid,name)
         self._attr_type=lib.IMAQdxGetAttributeType(sid,name)
-        self.type=lib.IMAQdxAttributeType_enum[self._attr_type]
+        self.type=IMAQdx_lib.IMAQdxAttributeType_enum[self._attr_type]
         if self._attr_type in [0,1,2,5]:
             self.min=lib.IMAQdxGetAttributeMinimum(sid,name,self._attr_type)
             self.max=lib.IMAQdxGetAttributeMaximum(sid,name,self._attr_type)
@@ -91,7 +99,7 @@ class IMAQdxCamera(object):
         pass
     def open(self, mode=None):
         mode=self.mode if mode is None else mode
-        mode=lib.IMAQdxCameraControlMode_enum.get(mode,mode)
+        mode=IMAQdx_lib.IMAQdxCameraControlMode_enum.get(mode,mode)
         self.sid=lib.IMAQdxOpenCamera(self.name,mode)
         self.post_open()
     def close(self):
@@ -110,7 +118,7 @@ class IMAQdxCamera(object):
 
     def list_attributes(self, root="", visibility=None):
         visibility=visibility or self.default_visibility
-        visibility=lib.IMAQdxAttributeVisibility_enum.get(visibility,visibility)
+        visibility=IMAQdx_lib.IMAQdxAttributeVisibility_enum.get(visibility,visibility)
         root.replace("/","::")
         attrs=lib.IMAQdxEnumerateAttributes2(self.sid,root,visibility)
         return [IMAQdxAttribute(self.sid,a.Name) for a in attrs]
@@ -119,7 +127,10 @@ class IMAQdxCamera(object):
         name.replace("::","/")
         if (default is not None) and (name not in self.attributes):
             return default
-        return self.attributes[name].get_value()
+        v=self.attributes[name].get_value()
+        if isinstance(v,py3.new_bytes):
+            v=py3.as_str(v)
+        return v
     __getitem__=get_value
     def set_value(self, name, value, ignore_missing=False, truncate=True):
         name.replace("::","/")
@@ -165,7 +176,7 @@ class IMAQdxCamera(object):
                 self.start_acquisition()
 
     def read_data_raw(self, size_bytes, mode, buffer_num=0):
-        mode=lib.IMAQdxBufferNumberMode_enum.get(mode,mode)
+        mode=IMAQdx_lib.IMAQdxBufferNumberMode_enum.get(mode,mode)
         return lib.IMAQdxGetImageData(self.sid,size_bytes,mode,buffer_num)
 
 

@@ -129,7 +129,8 @@ class CTypesWrapper(object):
         Args:
             func: C function
             argtypes (list): list of `func` argument types;
-                if an argument is of return-by-pointer kind, it should be the value type (the pointer is added automatically)
+                if an argument is of return-by-pointer kind, it should be the value type (the pointer is added automatically), with the exception of the void pointer
+                (in which case, custom rvprep function should be supplied)
             argnames (list): list of argument names of the function. Includes either strings (which are interpreted as argument names passed to the wrapper function),
                 or ``None`` (which mean that this argument is return-by-pointer).
             addargs (list): list of additional arguments which are added to the wrapper function, but are not passed to the wrapped function (added in the end);
@@ -164,7 +165,7 @@ class CTypesWrapper(object):
             return_res=not irvals
         sign_argtypes=list(argtypes)
         for i,ref in zip(irvals,rvref):
-            if ref:
+            if ref and (sign_argtypes[i] is not ctypes.c_void_p):
                 sign_argtypes[i]=ctypes.POINTER(sign_argtypes[i])
         call_argnames=[argnames[i] for i in iargs]+addargs
         sign=functions.FunctionSignature(call_argnames,name=func.__name__)
@@ -234,10 +235,11 @@ class StructWrap(object):
         _fields_=[]
     _prep={}
     _conv={}
-    _tup={}
-    _tup_exc={}
-    _tup_inc=None
-    _tup_add=[]
+    _tup={} # functions for struct-to-tuple conversion
+    _tup_exc={} # fields to exclude in struct-to-tuple conversion
+    _tup_inc=None # fields to include in struct-to-tuple conversion (if not specified, include all)
+    _tup_add=[] # fields to add in struct-to-tuple conversion
+    _tup_order=None # tuple fields order in struct-to-tuple conversion (by default, same as in the struct)
     _default={}
     def __init__(self, struct=None):
         struct=struct or self._struct()
@@ -283,6 +285,13 @@ class StructWrap(object):
         fnames+=self._tup_add
         if self._tup_inc is not None:
             fnames=[f for f in fnames if f in self._tup_inc]
+        if self._tup_order is not None:
+            def key(name):
+                try:
+                    return self._tup_order.index(name)
+                except ValueError:
+                    return len(self._tup_order)
+            fnames.sort(key=key)
         for f in fnames:
             if f not in params:
                 params[f]=getattr(self,f)

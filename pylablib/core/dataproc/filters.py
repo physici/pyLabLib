@@ -234,7 +234,7 @@ def _decimation_filter(wf, decimation_function, width=1, axis=0, mode="drop"):
         cropped_slices=[slice(s) for s in shape]
         cropped_slices[axis]=slice(dec_len)
         dec_shape=shape[:axis]+(-1,width)+shape[axis+1:]
-        return decimation_function(np.reshape(wf[cropped_slices],dec_shape),axis+1)
+        return decimation_function(np.reshape(wf[tuple(cropped_slices)],dec_shape),axis+1)
     elif mode=="leave":
         dec_wf=_decimation_filter(wf,decimation_function,width,axis=axis,mode="drop")
         if dec_len==actual_len:
