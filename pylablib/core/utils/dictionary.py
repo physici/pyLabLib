@@ -624,7 +624,7 @@ class Dictionary(object):
         for br in self._iterbranches(topdown=topdown):
             path=br.get_path()
             source=br._data
-            for k,v in source.items():
+            for k,v in list(source.items()):
                 keep=True
                 if self._is_branch(v):
                     if visit_branches:
@@ -1197,3 +1197,8 @@ class ItemAccessor(object):
         if self.deleter is not None:
             return self.deleter(name)
         raise NotImplementedError("deleter is not specified")
+    def get(self, name, default=None):
+        try:
+            return self.__getitem__(name)
+        except KeyError:
+            return default

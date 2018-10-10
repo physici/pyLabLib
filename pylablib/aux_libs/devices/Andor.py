@@ -525,7 +525,7 @@ class AndorCamera(IDevice):
         self._camsel()
         lib.SetExposureTime(exposure)
     def get_exposure(self):
-        """Set current exposure"""
+        """Get current exposure"""
         return self.get_timings()[0]
     def enable_frame_transfer_mode(self, enable=True):
         """
@@ -713,6 +713,24 @@ class AndorCamera(IDevice):
         vend-=(vend-vstart+1)%vbin
         lib.SetImage(hbin,vbin,hstart,hend,vstart,vend)
         self.read_params["image"]=(hstart,hend,vstart,vend,hbin,vbin)
+    
+    def get_roi(self):
+        """
+        Get current ROI.
+
+        Return tuple ``(hstart, hend, vstart, vend, hbin, vbin)``.
+        """
+        return self.read_params["image"]
+    def set_roi(self, hstart=1, hend=None, vstart=1, vend=None, hbin=1, vbin=1):
+        """
+        Setup camera ROI.
+
+        `hstart` and `hend` specify horizontal image extent, `vstart` and `vend` specify vertical image extent
+        (both are inclusive and starting from 1), `hbin` and `vbin` specify binning.
+        By default, all non-supplied parameters take extreme values.
+        """
+        self.setup_image_mode(hstart,hend,vstart,vend,hbin,vbin)
+        self.set_read_mode("image")
 
     def get_data_dimensions(self, mode=None, params=None):
         """Get readout data dimensions for given read mode and read parameters (current by default)"""

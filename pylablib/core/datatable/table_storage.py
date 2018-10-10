@@ -368,7 +368,7 @@ class ColumnDataTableStorage(IDataTableStorage):
         Columns data is given by `val` and their names are given by `names` (a string for a single column, or a list of strings for multiple columns).
         If ``transposed==True``, `val` is assumed to be arranged column-wise (list of columns).
         If ``transposed==False``, `val` is assumed to be arranged row-wise (list of rows).
-        If ``transposed=="auto"``, it is assumed to be ``True`` if `val` is a 2D numpy array, and ``False`` otherwise.
+        If ``transposed=="auto"``, it is assumed to be ``False`` if `val` is a 2D numpy array, and ``True`` otherwise.
         If ``force_copy==True``, make sure that `val` data is copied.
         """
         c_ndim,idx=indexing.to_list_idx_noslice(idx,self.get_column_names()).tup()
