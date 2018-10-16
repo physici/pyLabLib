@@ -5,9 +5,14 @@ from ...core.devio.interface import IDevice
 import os.path
 import ctypes
 import time
+import sys
 
 class ArcusError(RuntimeError):
     """Generic Arcus error."""
+
+HANDLE=ctypes.c_int
+BOOL=ctypes.c_int
+DWORD=ctypes.c_int
 
 class PerformaxStage(IDevice):
     """
@@ -21,11 +26,17 @@ class PerformaxStage(IDevice):
         IDevice.__init__(self)
         if lib_path is None:
             lib_path=os.path.join(default_lib_folder,"PerformaxCom.dll")
-        self.dll=load_lib(lib_path,locally=True)
-        self.dll.fnPerformaxComOpen.argtypes=[ctypes.c_uint32,ctypes.POINTER(ctypes.c_uint64)]
-        self.dll.fnPerformaxComClose.argtypes=[ctypes.c_uint64]
-        self.dll.fnPerformaxCommandReply.argtypes=[ctypes.c_uint64,ctypes.c_char_p,ctypes.c_char_p]
-        self.dll.fnPerformaxComGetProductString.argtypes=[ctypes.c_uint32,ctypes.c_char_p,ctypes.c_uint32]
+        self.dll=load_lib(lib_path,locally=True,call_conv="stdcall")
+        self.dll.fnPerformaxComOpen.argtypes=[DWORD,ctypes.c_char_p]
+        self.dll.fnPerformaxComOpen.restype=BOOL
+        self.dll.fnPerformaxComClose.argtypes=[HANDLE]
+        self.dll.fnPerformaxComClose.restype=BOOL
+        self.dll.fnPerformaxCommandReply.argtypes=[HANDLE,ctypes.c_char_p,ctypes.c_char_p]
+        self.dll.fnPerformaxCommandReply.restype=BOOL
+        self.dll.fnPerformaxComSetTimeouts.argtypes=[DWORD,DWORD]
+        self.dll.fnPerformaxComSetTimeouts.restype=BOOL
+        self.dll.fnPerformaxComGetProductString.argtypes=[DWORD,ctypes.c_char_p,DWORD]
+        self.dll.fnPerformaxComGetProductString.restype=BOOL
         self.idx=idx
         self.handle=None
         self.rbuff=ctypes.create_string_buffer(65536)
@@ -41,16 +52,27 @@ class PerformaxStage(IDevice):
         self._add_status_node("axis_status",self.get_status,mux=("XYZU",0))
         self._add_status_node("moving",self.is_moving,mux=("XYZU",0))
 
+
+    @staticmethod
+    def get_devices_num():
+        ndev=DWORD(0)
+        dll=ctypes.windll.PerformaxCom
+        dll.fnPerformaxComGetNumDevices.argtypes=[ctypes.POINTER(DWORD)]
+        dll.fnPerformaxComGetNumDevices.restype=BOOL
+        dll.fnPerformaxComGetNumDevices(ctypes.byref(ndev))
+        return ndev.value
     def open(self):
         """Open the connection to the stage"""
-        if self.handle:
-            self.close()
-        self.handle=ctypes.c_uint64()
+        self.close()
+        self.dll.fnPerformaxComSetTimeouts(5000,5000)
+        handle=ctypes.create_string_buffer(32)
         for _ in range(5):
-            if self.dll.fnPerformaxComOpen(self.idx,ctypes.byref(self.handle)):
+            code=self.dll.fnPerformaxComOpen(DWORD(int(0)),handle)
+            if code:
+                self.handle=int.from_bytes(handle.value[:8],sys.byteorder,signed=True)
                 return
             time.sleep(0.3)
-        raise ArcusError("can't connect to the stage with index {}".format(self.idx))
+        raise ArcusError("can't connect to the stage with index {}, return code {}".format(self.idx,code))
     def close(self):
         """Close the connection to the stage"""
         if self.handle:

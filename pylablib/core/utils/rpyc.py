@@ -127,6 +127,11 @@ class SocketTunnelService(rpyc.SlaveService):
         self.peer=conn.root
         if not self.server:
             self._recv_socket()
+    def on_disconnect(self, conn):
+        try:
+            self.tunnel_socket.close()
+        except AttributeError:
+            pass
 
 class DeviceService(SocketTunnelService):
     """
