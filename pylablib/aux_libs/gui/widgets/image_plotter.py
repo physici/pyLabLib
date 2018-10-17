@@ -35,6 +35,9 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.add_num_edit("hlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="Y line:")
         self.settings_table.add_button("center_lines","Center lines").clicked.connect(view.center_lines)
         self.settings_table.value_changed.connect(lambda: self.view.update_image(update_controls=False))
+        self.settings_table.add_spacer(10)
+        self.settings_table.add_button("update_image","Updating",checkable=True)
+        self.settings_table.add_button("single","Single").clicked.connect(self.view.arm_single)
         self.settings_table.add_padding()
 
     def set_img_maxlim(self, maxlim):
@@ -53,6 +56,7 @@ class ImageView(QtWidgets.QWidget):
     def setupUi(self, name, img_size=(1024,1024), min_size=(512,512)):
         self.name=name
         self.setObjectName(self.name)
+        self.single=False
         self.layout=QtWidgets.QHBoxLayout(self)
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setObjectName("layout")
@@ -86,7 +90,8 @@ class ImageView(QtWidgets.QWidget):
                 "normalize":True,
                 "show_lines":False,
                 "vlinepos":0,
-                "hlinepos":0})
+                "hlinepos":0,
+                "update_image":True})
     
     def _connect_signals(self):
         if not self._signals_connected:
@@ -116,6 +121,8 @@ class ImageView(QtWidgets.QWidget):
         imshape=self.img.shape[::-1] if self._get_params().v["transpose"] else self.img.shape
         self.imgVLine.setPos(imshape[0]/2)
         self.imgHLine.setPos(imshape[1]/2)
+    def arm_single(self):
+        self.single=True
     # Update image controls based on PyQtGraph image window
     @controller.exsafeSlot()
     def update_image_controls(self):
@@ -129,6 +136,9 @@ class ImageView(QtWidgets.QWidget):
     def update_image(self, update_controls=False):
         with self.no_events():
             params=self._get_params()
+            if not (params.v["update_image"] or self.single):
+                return params
+            self.single=False
             draw_img=self.img
             if params.v["transpose"]:
                 draw_img=draw_img.transpose()

@@ -26,7 +26,7 @@ _exception_print_lock=threading.Lock()
 
 @contextlib.contextmanager
 def exint(error_msg_template="{}:"):
-    """Context that intercepts exceptions raised by `func` and stops the execution in a controlled manner (quitting the main thread)"""
+    """Context that intercepts exceptions and stops the execution in a controlled manner (quitting the main thread)"""
     try:
         yield
     except threadprop.InterruptExceptionStop:

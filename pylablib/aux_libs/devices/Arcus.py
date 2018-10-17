@@ -85,7 +85,7 @@ class PerformaxStage(IDevice):
     def is_opened(self):
         return self.handle is not None
     def _check_handle(self):
-        if not self.handle:
+        if self.handle is None:
             raise ArcusError("device is not opened")
 
     def get_device_id(self):
