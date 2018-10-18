@@ -33,7 +33,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
     _default_failsafe_operation_timeout=30. # timeout for an operaton (read/write/ask) in the failsafe mode
     _default_backend_timeout=3. # timeout for a single backend operation attempt in the failsafe mode (one operation can be attempted several times)
     _default_retry_delay=30. # delay between retrying an operation (in seconds)
-    _default_retry_times=3 # maximal number of operation attempts
+    _default_retry_times=5 # maximal number of operation attempts
     _default_operation_timeout=3. # timeout for an operator in the standard (non-failsafe) mode
     _default_wait_sync_timeout=600. # timeout for "sync" wait operation (waiting for the device operation to complete); an operation can be long (e.g., a single frequency sweep), thus the long timeout
     _default_operation_cooldown=0.00 # operation cooldown (see backend description)
@@ -118,10 +118,12 @@ class SCPIDevice(backend_module.IBackendWrapper):
             if not self._concatenate_write:
                 self._write_retry(flush=True)
                 
+    _flush_comm="*IDN?"
     def _flush_retry(self):
         for t in general_utils.RetryOnException(self._retry_times,exceptions=self.instr.Error):
             with t:
-                response=self.instr.ask("*IDN?")
+                response=self.instr.ask(self._flush_comm)
+                self.flush()
                 return response
     def _try_recover(self, cnt, silent=True):
         try:
@@ -341,10 +343,13 @@ class SCPIDevice(backend_module.IBackendWrapper):
                 else:
                     reply=self._ask_retry(msg,delay,raw=(data_type=="raw"),timeout=timeout)
                 return self._parse_msg(reply,data_type=data_type)
-            self.flush()
-            print("Ask error in instrument {} returned {}".format(self.instr,reply))
             if not self._failsafe:
                 t.reraise()
+            error_msg="ask error in instrument {} returned {}".format(self.instr,reply)
+            log.default_log.info(error_msg,origin="devices/SCPI",level="warning")
+            self.sleep(0.5)
+            self.flush()
+            self._try_recover(t.try_number)
     def flush(self, one_line=False):
         """
         Flush the read buffer (read all the available data and return the number of bytes read).

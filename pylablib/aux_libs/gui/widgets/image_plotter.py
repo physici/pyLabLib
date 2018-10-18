@@ -147,6 +147,9 @@ class ImageView(QtWidgets.QWidget):
             if params.v["flip_y"]:
                 draw_img=draw_img[:,::-1]
             autoscale=params.v["normalize"]
+            if np.all(draw_img==draw_img[0,0]):
+                draw_img=draw_img.copy()
+                draw_img[0,0]+=1
             if self.isVisible():
                 self.imageWindow.setImage(draw_img,autoLevels=autoscale,autoHistogramRange=autoscale)
             if update_controls:
