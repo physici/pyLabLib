@@ -45,6 +45,7 @@ class StreamFormerThread(controller.QThreadController):
         self.cleanup()
 
     class ChannelQueue(object):
+        QueueStatus=collections.namedtuple("QueueStatus",["queue_len","enabled"])
         def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True, fill_on="started"):
             object.__init__(self)
             funcargparse.check_parameter_range(fill_on,"fill_on",{"started","completed"})
@@ -89,6 +90,8 @@ class StreamFormerThread(controller.QThreadController):
                 raise IndexError("no queued data to get")
         def clear(self):
             self.queue.clear()
+        def get_status(self):
+            return self.QueueStatus(len(self.queue),self.enabled)
             
 
     def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", fill_on="started"):
@@ -200,6 +203,13 @@ class StreamFormerThread(controller.QThreadController):
             for _,ch in viewitems(self.channels):
                 ch.clear()
             self._partial_rows=[]
+
+    def get_channel_status(self):
+        status={}
+        with self._channel_lock:
+            for n,ch in viewitems(self.channels):
+                status[n]=ch.get_status()
+        return status
 
 
 

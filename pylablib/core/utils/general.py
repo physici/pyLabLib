@@ -576,6 +576,11 @@ class Countdown(object):
         if bound_below:
             dtime=max(dtime,0.)
         return dtime
+    def time_passed(self):
+        """
+        Return the amount of time passed since the countdown start/reset.
+        """
+        return time.time()-self.start
     def passed(self):
         """
         Check if the timeout has passed.

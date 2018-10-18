@@ -53,14 +53,16 @@ class ParamTable(QtWidgets.QWidget):
         changed_signal=params.value_handler.value_changed_signal()
         if changed_signal:
             changed_signal.connect(lambda value: self.value_changed.emit(name,value))
-    def add_simple_widget(self, name, widget, label=None, value_handler=None, add_indicator=None):
+    def add_simple_widget(self, name, widget, label=None, value_handler=None, add_indicator=None, location=(None,0)):
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
-        row=self.formLayout.rowCount()
+        row_cnt=self.formLayout.rowCount()
+        row=row_cnt if location[0] is None else (location[0]%row_cnt)
+        col=location[1] or 0
         if label is not None:
             wlabel=QtWidgets.QLabel(self)
             wlabel.setObjectName(_fromUtf8("{}__label".format(name)))
-            self.formLayout.addWidget(wlabel,row,0)
+            self.formLayout.addWidget(wlabel,row,col)
             wlabel.setText(_translate(self.name,label,None))
         else:
             wlabel=None
@@ -70,14 +72,14 @@ class ParamTable(QtWidgets.QWidget):
         if add_indicator:
             windicator=QtWidgets.QLabel(self)
             windicator.setObjectName(_fromUtf8("{}__indicator".format(name)))
-            self.formLayout.addWidget(windicator,row,2)
+            self.formLayout.addWidget(windicator,row,col+2)
             indicator_handler=values_module.WidgetLabelIndicatorHandler(windicator,widget=value_handler)
         else:
             indicator_handler=None
         if wlabel is None:
-            self.formLayout.addWidget(widget,row,0,1,2 if add_indicator else 3)
+            self.formLayout.addWidget(widget,row,col,1,2 if add_indicator else 3)
         else:
-            self.formLayout.addWidget(widget,row,1,1,1 if add_indicator else 2)
+            self.formLayout.addWidget(widget,row,col+1,1,1 if add_indicator else 2)
         self._add_widget(name,self.ParamRow(widget,wlabel,value_handler,indicator_handler))
         return widget
 
@@ -85,7 +87,8 @@ class ParamTable(QtWidgets.QWidget):
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
         row,col,rowspan,colspan=location
-        row=self.formLayout.rowCount() if row is None else row
+        row_cnt=self.formLayout.rowCount()
+        row=row_cnt if row is None else (row%row_cnt)
         rowspan=1 if rowspan is None else rowspan
         col=0 if col is None else col
         if colspan is None:
@@ -96,37 +99,37 @@ class ParamTable(QtWidgets.QWidget):
         self._add_widget(name,self.ParamRow(widget,None,value_handler,indicator_handler))
         return widget
 
-    def add_button(self, name, caption, checkable=False, value=False, label=None, add_indicator=None):
+    def add_button(self, name, caption, checkable=False, value=False, label=None, add_indicator=None, location=(None,0)):
         widget=QtWidgets.QPushButton(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(name))
         widget.setCheckable(checkable)
         widget.setChecked(value)
-        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
-    def add_check_box(self, name, caption, value=False, label=None, add_indicator=None):
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
+    def add_check_box(self, name, caption, value=False, label=None, add_indicator=None, location=(None,0)):
         widget=QtWidgets.QCheckBox(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(name))
         widget.setChecked(value)
-        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
-    def add_text_label(self, name, value=None, label=None):
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
+    def add_text_label(self, name, value=None, label=None, location=(None,0)):
         widget=QtWidgets.QLabel(self)
         widget.setObjectName(_fromUtf8(name))
         if value is not None:
             widget.setText(str(value))
-        return self.add_simple_widget(name,widget,label=label,add_indicator=False)
-    def add_num_label(self, name, value=None, limiter=None, formatter=None, label=None):
+        return self.add_simple_widget(name,widget,label=label,add_indicator=False,location=location)
+    def add_num_label(self, name, value=None, limiter=None, formatter=None, label=None, location=(None,0)):
         widget=widget_label.LVNumLabel(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(name))
-        return self.add_simple_widget(name,widget,label=label,add_indicator=False)
-    def add_text_edit(self, name, value=None, label=None, add_indicator=None):
+        return self.add_simple_widget(name,widget,label=label,add_indicator=False,location=location)
+    def add_text_edit(self, name, value=None, label=None, add_indicator=None, location=(None,0)):
         widget=edit.LVTextEdit(self,value=value)
         widget.setObjectName(_fromUtf8(name))
-        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
-    def add_num_edit(self, name, value=None, limiter=None, formatter=None, label=None, add_indicator=None):
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
+    def add_num_edit(self, name, value=None, limiter=None, formatter=None, label=None, add_indicator=None, location=(None,0)):
         widget=edit.LVNumEdit(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(name))
-        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
+        return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
     def add_progress_bar(self, name, value=None, label=None):
         widget=QtWidgets.QProgressBar(self)
         widget.setObjectName(_fromUtf8(name))
@@ -142,9 +145,12 @@ class ParamTable(QtWidgets.QWidget):
             widget.setCurrentIndex(value)
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
 
-    def add_spacer(self, height):
-        spacer=QtWidgets.QSpacerItem(1,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Minimum)
-        self.formLayout.addItem(spacer)
+    def add_spacer(self, height, width=1, location=(None,0)):
+        spacer=QtWidgets.QSpacerItem(width,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Minimum)
+        row_cnt=self.formLayout.rowCount()
+        row=row_cnt if location[0] is None else (location[0]%row_cnt)
+        col=location[1]
+        self.formLayout.addItem(spacer,row,col)
         return spacer
     def add_label(self, text):
         label=QtWidgets.QLabel(self)
