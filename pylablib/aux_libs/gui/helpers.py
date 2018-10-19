@@ -46,7 +46,7 @@ class StreamFormerThread(controller.QThreadController):
 
     class ChannelQueue(object):
         QueueStatus=collections.namedtuple("QueueStatus",["queue_len","enabled"])
-        def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True, fill_on="started"):
+        def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True, fill_on="started", latching=True, default=None):
             object.__init__(self)
             funcargparse.check_parameter_range(fill_on,"fill_on",{"started","completed"})
             self.func=func
@@ -55,12 +55,17 @@ class StreamFormerThread(controller.QThreadController):
             self.max_queue_len=max_queue_len
             self.enabled=enabled
             self.fill_on=fill_on
+            self.last_value=default
+            self.default=default
+            self.latching=latching
         def add(self, value):
             data_available=bool(self.queue)
             if self.enabled:
                 self.queue.append(value)
                 if self.max_queue_len>0 and len(self.queue)>self.max_queue_len:
                     self.queue.popleft()
+                if self.latching:
+                    self.last_value=value
             return self.queue and not (data_available)
         def add_from_func(self):
             if self.enabled and self.func and self.fill_on=="started":
@@ -75,6 +80,8 @@ class StreamFormerThread(controller.QThreadController):
             if self.enabled and not enable:
                 self.queue.clear()
             self.enabled=enable
+        def set_requried(self, required="auto"):
+            self.required=(self.func is None) if required=="auto" else required
         def need_completion(self):
             return self.enabled and (not self.queue) and (self.func is not None)
         def get(self, complete=True):
@@ -83,29 +90,31 @@ class StreamFormerThread(controller.QThreadController):
             elif self.queue:
                 return self.queue.popleft()
             elif self.func:
-                return self.func() if complete else None
+                return self.func() if complete else self.last_value
             elif not self.required:
-                return None
+                return self.last_value
             else:
                 raise IndexError("no queued data to get")
         def clear(self):
             self.queue.clear()
+            self.last_value=self.default
         def get_status(self):
             return self.QueueStatus(len(self.queue),self.enabled)
             
 
-    def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", fill_on="started"):
+    def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", fill_on="started", latching=True, default=None):
         if name in self.channels:
             raise KeyError("channel {} already exists".format(name))
-        self.channels[name]=self.ChannelQueue(func,max_queue_len=max_queue_len,required=required,enabled=enabled,fill_on=fill_on)
+        self.channels[name]=self.ChannelQueue(func,max_queue_len=max_queue_len,required=required,enabled=enabled,fill_on=fill_on,latching=latching,default=default)
         self.table[name]=[]
     def subscribe_source(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
         def on_signal(src, tag, value):
             self._add_data(name,src,tag,value,parse=parse)
         self.subscribe_nonsync(on_signal,srcs=srcs,dsts=dsts,tags=tags,filt=filt)
-    def enable_channel(self, name, enable=True, clear=True):
+    def configure_channel(self, name, enable=True, required="auto", clear=True):
         with self._channel_lock:
             self.channels[name].enable(enable)
+            self.channels[name].set_requried(required)
             if clear:
                 self.clear_all()
             
@@ -303,3 +312,6 @@ class TableAccumulatorThread(controller.QTaskThread):
                 return self.table_accum.get_data_dict(channels=channels,maxlen=maxlen)
             else:
                 raise ValueError("unrecognized data format: {}".format(fmt))
+    def reset(self):
+        with self.data_lock:
+            self.table_accum.reset_data()

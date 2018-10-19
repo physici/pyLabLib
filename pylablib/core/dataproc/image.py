@@ -49,8 +49,8 @@ class ROI(object):
     @classmethod
     def from_centersize(cls, center, size, shape=None):
         size=funcargparse.as_sequence(size,2)
-        imin,imax=center[0]-abs(size[0])//2,center[0]+(abs(size[0])+1)//2
-        jmin,jmax=center[1]-abs(size[1])//2,center[1]+(abs(size[1])+1)//2
+        imin,imax=int(center[0]-abs(size[0])/2),int(center[0]+abs(size[0])/2)
+        jmin,jmax=int(center[1]-abs(size[1])/2),int(center[1]+abs(size[1])/2)
         res=cls(imin,imax,jmin,jmax)
         if shape is not None:
             res.limit(shape)

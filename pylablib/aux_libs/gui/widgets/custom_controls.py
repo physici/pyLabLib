@@ -5,10 +5,10 @@ from ....core.utils.numerical import limit_to_range
 
 import collections
 
-class ROICtl(QtWidgets.QWidget):
+class BinROICtl(QtWidgets.QWidget):
     AxisParams=collections.namedtuple("AxisParams",["min","max","bin"])
     def __init__(self, parent=None):
-        super(ROICtl, self).__init__(parent)
+        QtWidgets.QWidget.__init__(self,parent)
         self.xparams=self.AxisParams(0,1,1)
         self.yparams=self.AxisParams(0,1,1)
         self.validate=None

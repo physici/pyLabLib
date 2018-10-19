@@ -43,6 +43,13 @@ class ParamTable(QtWidgets.QWidget):
 
     value_changed=QtCore.pyqtSignal("PyQt_PyObject","PyQt_PyObject")
 
+    def _normalize_location(self, location, default=(None,0,1,1)):
+        location+=(None,)*(4-len(location))
+        location=[d if l is None else l for (l,d) in zip(location,default)]
+        row,col,rowspan,colspan=location
+        row_cnt=self.formLayout.rowCount()
+        row=row_cnt if row is None else (row%row_cnt)
+        return row,col,rowspan,colspan
     ParamRow=collections.namedtuple("ParamRow",["widget","label","value_handler","indicator_handler"])
     def _add_widget(self, name, params):
         self.params[name]=params
@@ -56,13 +63,11 @@ class ParamTable(QtWidgets.QWidget):
     def add_simple_widget(self, name, widget, label=None, value_handler=None, add_indicator=None, location=(None,0)):
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
-        row_cnt=self.formLayout.rowCount()
-        row=row_cnt if location[0] is None else (location[0]%row_cnt)
-        col=location[1] or 0
+        row,col,rowspan,_=self._normalize_location(location)
         if label is not None:
             wlabel=QtWidgets.QLabel(self)
             wlabel.setObjectName(_fromUtf8("{}__label".format(name)))
-            self.formLayout.addWidget(wlabel,row,col)
+            self.formLayout.addWidget(wlabel,row,col,rowspan,1)
             wlabel.setText(_translate(self.name,label,None))
         else:
             wlabel=None
@@ -72,28 +77,22 @@ class ParamTable(QtWidgets.QWidget):
         if add_indicator:
             windicator=QtWidgets.QLabel(self)
             windicator.setObjectName(_fromUtf8("{}__indicator".format(name)))
-            self.formLayout.addWidget(windicator,row,col+2)
+            self.formLayout.addWidget(windicator,row,col+2,rowspan,1)
             indicator_handler=values_module.WidgetLabelIndicatorHandler(windicator,widget=value_handler)
         else:
             indicator_handler=None
         if wlabel is None:
-            self.formLayout.addWidget(widget,row,col,1,2 if add_indicator else 3)
+            self.formLayout.addWidget(widget,row,col,rowspan,2 if add_indicator else 3)
         else:
-            self.formLayout.addWidget(widget,row,col+1,1,1 if add_indicator else 2)
+            self.formLayout.addWidget(widget,row,col+1,rowspan,1 if add_indicator else 2)
         self._add_widget(name,self.ParamRow(widget,wlabel,value_handler,indicator_handler))
         return widget
 
     def add_custom_widget(self, name, widget, value_handler=None, indicator_handler=None, location=(None,0,1,None)):
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
-        row,col,rowspan,colspan=location
-        row_cnt=self.formLayout.rowCount()
-        row=row_cnt if row is None else (row%row_cnt)
-        rowspan=1 if rowspan is None else rowspan
-        col=0 if col is None else col
-        if colspan is None:
-            colspan=3 if self.add_indicator else 2
-        self.formLayout.addWidget(widget,row,col,rowspan,colspan)
+        location=self._normalize_location(location,default=(None,0,1,3))
+        self.formLayout.addWidget(widget,*location)
         value_handler=value_handler or values_module.get_default_value_handler(widget)
         indicator_handler=indicator_handler or values_module.get_default_indicator_handler(widget)
         self._add_widget(name,self.ParamRow(widget,None,value_handler,indicator_handler))
@@ -147,16 +146,15 @@ class ParamTable(QtWidgets.QWidget):
 
     def add_spacer(self, height, width=1, location=(None,0)):
         spacer=QtWidgets.QSpacerItem(width,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Minimum)
-        row_cnt=self.formLayout.rowCount()
-        row=row_cnt if location[0] is None else (location[0]%row_cnt)
-        col=location[1]
-        self.formLayout.addItem(spacer,row,col)
+        location=self._normalize_location(location)
+        self.formLayout.addItem(spacer,*location)
         return spacer
-    def add_label(self, text):
+    def add_label(self, text, location=(None,0)):
         label=QtWidgets.QLabel(self)
         label.setText(str(text))
         label.setAlignment(QtCore.Qt.AlignLeft)
-        self.formLayout.addWidget(label,self.formLayout.rowCount(),0,1,3 if self.add_indicator else 2)
+        location=self._normalize_location(location)
+        self.formLayout.addWidget(label,*location)
         return label
     def add_padding(self, prop=1):
         self.add_spacer(0)

@@ -53,6 +53,17 @@ class ImageView(QtWidgets.QWidget):
         super(ImageView, self).__init__(parent)
         self.ctl=None
 
+    class Rectangle(object):
+        def __init__(self, rect, center=None, size=None):
+            object.__init__(self)
+            self.rect=rect
+            self.center=center or (0,0)
+            self.size=size or (0,0)
+        def update_params(self, center=None, size=None):
+            if center:
+                self.center=center
+            if size:
+                self.size=size
     def setupUi(self, name, img_size=(1024,1024), min_size=(512,512)):
         self.name=name
         self.setObjectName(self.name)
@@ -78,6 +89,7 @@ class ImageView(QtWidgets.QWidget):
         self.imgVLine.sigPositionChanged.connect(self.update_image_controls)
         self.imgHLine.sigPositionChanged.connect(self.update_image_controls)
         self.imageWindow.getHistogramWidget().sigLevelsChanged.connect(self.update_image_controls)
+        self.rectangles={}
 
     def attach_controller(self, ctl):
         self.ctl=ctl
@@ -123,6 +135,41 @@ class ImageView(QtWidgets.QWidget):
         self.imgHLine.setPos(imshape[1]/2)
     def arm_single(self):
         self.single=True
+    def set_rectangle(self, name, center=None, size=None):
+        if name not in self.rectangles:
+            pqrect=pyqtgraph.ROI((0,0),(0,0),movable=False)
+            self.imageWindow.getView().addItem(pqrect)
+            self.rectangles[name]=self.Rectangle(pqrect)
+        rect=self.rectangles[name]
+        rect.update_params(center,size)
+        rcenter=rect.center[0]-rect.size[0]/2.,rect.center[1]-rect.size[1]/2.
+        rsize=rect.size
+        imshape=self.img.shape
+        params=self._get_params()
+        if params.v["transpose"]:
+            rcenter=rcenter[::-1]
+            rsize=rsize[::-1]
+            imshape=imshape[::-1]
+        if params.v["flip_x"]:
+            rcenter=(imshape[0]-rcenter[0]-rsize[0]),rcenter[1]
+        if params.v["flip_y"]:
+            rcenter=rcenter[0],(imshape[1]-rcenter[1]-rsize[1])
+        rect.rect.setPos(rcenter)
+        rect.rect.setSize(rsize)
+    def update_rectangles(self):
+        for name in self.rectangles:
+            self.set_rectangle(name)
+    def del_rectangle(self, name):
+        if name in self.rectangles:
+            rect=self.rectangles.pop(name)
+            self.imageWindow.getView().removeItem(rect)
+    def show_rectangles(self, show=True):
+        imgview=self.imageWindow.getView()
+        for rect in self.rectangles.values():
+            if show and rect.rect not in imgview.addedItems:
+                imgview.addItem(rect.rect)
+            if (not show) and rect.rect in imgview.addedItems:
+                imgview.removeItem(rect.rect)
     # Update image controls based on PyQtGraph image window
     @controller.exsafeSlot()
     def update_image_controls(self):
@@ -171,4 +218,5 @@ class ImageView(QtWidgets.QWidget):
             self.imgHLine.setBounds([0,draw_img.shape[1]])
             self.imgVLine.setPos(params.v["vlinepos"])
             self.imgHLine.setPos(params.v["hlinepos"])
+            self.update_rectangles()
             return params
