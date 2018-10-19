@@ -376,21 +376,42 @@ class Dictionary(object):
         except KeyError:
             self.__setitem__(path, default)
             return default
-    def viewitems(self, ordered=False):
+    def viewitems(self, ordered=False, leafs=False, path_kind="split", wrap_branches=True):
         """
-        Analog of ``dict.viewitems()``, iterating only over the immediate children of the root.
+        Analog of ``dict.viewitems()``, by default iterating only over the immediate children of the root.
         
         Args:
             ordered (bool): If ``True``, loop over keys in alphabetic order.
+            leafs (bool): If ``True``, loop over leaf nodes (i.e., behave as 'flat' dictionary);
+                otherwise, loop over immediate children (i.e., behave as 'nested' dictionary)
+            path_kind (str): either ``"split"`` (each path is a tuple of individual keys), or ``"joined"`` (each path is a single string)
+            wrap_branches (bool): if ``True``, wrap sub-branches into :class:`DictionaryPointer` objects; otherwise, return them as nested built-in dictionaries
         """
-        return sorted(viewitems_(self._data)) if ordered else viewitems_(self._data)
+        if leafs:
+            funcargparse.check_parameter_range(path_kind,"path_kind",{"split","joined"})
+            makep=tuple if path_kind=="split" else "/".join
+            for p,v in self.iternodes(to_visit="leafs",ordered=ordered,include_path=True):
+                yield makep(p),v
+        else:
+            items_=sorted(viewitems_(self._data)) if ordered else viewitems_(self._data)
+            if wrap_branches:
+                makev=lambda p,v: (self._fast_build_branch_pointer([p],v) if self._is_branch(v) else v)
+            else:
+                makev=lambda p,v: v
+            for p,v in items_:
+                yield p,makev(p,v)
     iteritems=viewitems # for compatibility
     items=viewitems
-    def viewvalues(self):
+    def viewvalues(self, leafs=False):
         """
         Analog of ``dict.viewvalues()``, iterating only over the immediate children of the root.
+
+        Args:
+            ordered (bool): If ``True``, loop over keys in alphabetic order.
+            leafs (bool): If ``True``, loop over leaf nodes (i.e., behave as 'flat' dictionary);
+                otherwise, loop over immediate children (i.e., behave as 'nested' dictionary)
         """
-        return viewvalues_(self._data)
+        return self.iternodes(to_visit="leafs") if leafs else viewvalues_(self._data)
     itervalues=viewvalues
     def viewkeys(self, ordered=False):
         """
@@ -404,17 +425,20 @@ class Dictionary(object):
     def __iter__(self):
         return self._data.__iter__()
     keys=viewkeys
-    def paths(self, ordered=False, topdown=False):
+    def paths(self, ordered=False, topdown=False, path_kind="split"):
         """
         Return list of all leaf paths.
         
         Args:
             ordered (bool): If ``True``, loop over paths in alphabetic order.
             topdown (bool): If ``True``, return node's leafs before its subtrees leafs.
+            path_kind (str): either ``"split"`` (each path is a tuple of individual keys), or ``"joined"`` (each path is a single string)
         """
         ps=[]
+        funcargparse.check_parameter_range(path_kind,"path_kind",{"split","joined"})
+        makep=tuple if path_kind=="split" else "/".join
         for p,_ in self.iternodes(to_visit="leafs",ordered=ordered,topdown=topdown,include_path=True):
-            ps.append(tuple(p))
+            ps.append(makep(p))
         return ps
     def _iterbranches(self, ordered=False, topdown=False):
         if topdown:
@@ -452,7 +476,7 @@ class Dictionary(object):
             if topdown and (to_visit in {"branches","all"}):
                 yield (path,br) if include_path else br
             if to_visit in {"leafs","all"}:
-                for k,v in viewitems_(br):
+                for k,v in viewitems_(br,wrap_branches=False):
                     if not self._is_branch(v):
                         yield (path+[k],v) if include_path else v
             if (not topdown) and (to_visit in {"branches","all"}):

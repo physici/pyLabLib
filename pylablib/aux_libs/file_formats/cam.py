@@ -108,6 +108,8 @@ class CamReader(object):
     __len__=size
 
     def __getitem__(self, idx):
+        if isinstance(idx,slice):
+            return list(self.iterrange(idx.start or 0,idx.stop,idx.step or 1))
         try:
             return self._read_frame(idx)
         except StopIteration:
@@ -130,6 +132,8 @@ class CamReader(object):
             start,stop=args
         elif len(args)==3:
             start,stop,step=args
+        if step<0:
+            raise IndexError("format doesn't support reversed indexing")
         try:
             n=start
             while True:

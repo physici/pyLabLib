@@ -15,7 +15,11 @@ Most devices share common methods and approach to make them more predictable and
 
 First, the device identifier / address needs to be provided by user during the device object creation, and it is automatically connected. The devices have ``open`` and ``close`` methods but the device also works as a resource (with Python ``with`` statement), so these usually aren't used explicitly.
 
-The devices usually have ``get_settings`` and ``apply_settings`` methods which return Python dictionaries with the most common settings or take these dictionaries and apply them. ``get_settings`` can be particularly useful to check the device status and see if it is connected.
+The devices usually have ``get_settings`` and ``apply_settings`` methods which return Python dictionaries with the most common settings or take these dictionaries and apply them.
+In addition, there are ``get_full_status`` and ``get_full_info`` functions, which return progressively more information (``get_full_status`` adds variable status information which cannot be changed by user, and ``get_full_info`` adds constant device information, such as model name and serial number).
+``get_full_info`` can be particularly useful to check the device status and see if it is connected and working properly.
+
+Devices of the same kind (e.g., cameras or translation stages) aim to have consistent overlapping interfaces (where it makes sense), so different devices are fairly interchangeable in simple applications.
 
 --------
 Examples
@@ -59,32 +63,46 @@ Stepping the M squared laser wavelength and recording an image from the Andor IX
 List of devices
 ---------------
 
-Currently there are classes for these devices:
+===================================    ==============================    ====================================================   ====================================================
+Device                                 Kind                              Module                                                 Comments
+===================================    ==============================    ====================================================   ====================================================
+Msquared ICE BLOC                      Laser                             :mod:`pylablib.aux_libs.devices.M2`
+Photonics PPCL200                      Laser                             :mod:`pylablib.aux_libs.devices.PurePhotonics`         In CBDX1 chassis
+Lighthouse Photonics SproutG           Laser                             :mod:`pylablib.aux_libs.devices.LighthousePhotonics`
+Agilent HP8168F                        Laser                             :mod:`pylablib.aux_libs.devices.AgilentLasers`
+Nuphoton NP2000                        EDFA                              :mod:`pylablib.aux_libs.devices.NuPhoton`
+HighFinesse WS/6 and WS/7              Wavemeter                         :mod:`pylablib.aux_libs.devices.HighFinesse`
+Andor                                  Camera                            :mod:`pylablib.aux_libs.devices.Andor`                 Tested with Andor IXON and Luca
+Hamamatsu DCAM interface               Camera                            :mod:`pylablib.aux_libs.devices.DCAM`                  Tested with ORCA-Flash 4.0 (C11440-22CU)
+NI IMAQdx interface                    Camera                            :mod:`pylablib.aux_libs.devices.IMAQdx`                Tested with Pure Photonics AG with Ethernet connection
+Ophir Vega                             Optical power meter               :mod:`pylablib.aux_libs.devices.Ophir`
+Thorlabs PM100D                        Optical power meter               :mod:`pylablib.aux_libs.devices.Thorlabs`
+OZ Optics TF100                        Tunable optical filter            :mod:`pylablib.aux_libs.devices.OZOptics`
+OZ Optics DD100                        Variable optical attenuator       :mod:`pylablib.aux_libs.devices.OZOptics`
+OZ Optics EPC04                        Polarization controller           :mod:`pylablib.aux_libs.devices.OZOptics`
+Agilent AWG33220A                      Arbitrary wave generator          :mod:`pylablib.aux_libs.devices.AgilentElectronics`
+Agilent N9310A                         Microwave generator               :mod:`pylablib.aux_libs.devices.AgilentElectronics`
+Vaunix LMS (Lab Brick)                 Microwave generator               :mod:`pylablib.aux_libs.devices.Vaunix`
+Thorlabs MDT693/4A                     High voltage source               :mod:`pylablib.aux_libs.devices.Thorlabs`
+Agilent AMP33502A                      DC amplifier                      :mod:`pylablib.aux_libs.devices.AgilentElectronics`
+Rigol DSA1030A                         Microwave spectrum analyzer       :mod:`pylablib.aux_libs.devices.Rigol`
+Agilent HP8712B, HP8722D               Vector network analyzers          :mod:`pylablib.aux_libs.devices.AgilentElectronics`
+Tektronix DPO2014, TDS2000, MDO3000    Oscilloscopes                     :mod:`pylablib.aux_libs.devices.Tektronix`
+NI DAQ interface                       NI DAQ devices                    :mod:`pylablib.aux_libs.devices.NI`                    Wrapper around the :mod:`nidaqmx` package. Tested with NI USB-6008 and NI PCIe-6323
+Zurich Instruments HF2 / UHF           Lock-in amplifiers                :mod:`pylablib.aux_libs.devices.ZurichInstruments`
+Arcus PerforMax                        Translation stage                 :mod:`pylablib.aux_libs.devices.Arcus`
+SmarAct SCU3D                          Translation stage                 :mod:`pylablib.aux_libs.devices.SmarAct`
+Attocube ANC300                        Piezo slider controller           :mod:`pylablib.aux_libs.devices.Attocube`
+Trinamic TMCM1110                      Stepper motor controller          :mod:`pylablib.aux_libs.devices.Trinamic`
+Thorlabs KDC101                        DC servo motor controller         :mod:`pylablib.aux_libs.devices.Thorlabs`
+Thorlabs FW102/202                     Motorized filter wheel            :mod:`pylablib.aux_libs.devices.Thorlabs`
+Thorlabs MFF                           Motorized flip mount              :mod:`pylablib.aux_libs.devices.Thorlabs`
+Cryomagnetics LM500/510                Cryogenic level meter             :mod:`pylablib.aux_libs.devices.Cryomagnetics`
+Lakeshore 218 and 370                  Temperature controllers           :mod:`pylablib.aux_libs.devices.Lakeshore`
+MKS 9xx                                Pressure gauge                    :mod:`pylablib.aux_libs.devices.MKS`
+Pfeiffer TPG261                        Pressure gauge                    :mod:`pylablib.aux_libs.devices.Pfeiffer`
+===================================    ==============================    ====================================================   ====================================================
 
-    - Agilent AWG33220A arbitrary wave generator, AMP33502A amplifier, N9310A microwave generator, HP8712B and HP8722D vector network analyzers. Located in :mod:`pylablib.aux_libs.devices.AgilentElectronics`.
-    - Agilent HP8168F laser. Located in :mod:`pylablib.aux_libs.devices.AgilentLasers`.
-    - Andor cameras (tested with Andor IXON). Located in :mod:`pylablib.aux_libs.devices.Andor`.
-    - Arcus PerforMax translation stages. Located in :mod:`pylablib.aux_libs.devices.Arcus`.
-    - Attocube ANC300 controller. Located in :mod:`pylablib.aux_libs.devices.Attocube`.
-    - Cryomagnetics LM500/510 cryogenic level meters. Located in :mod:`pylablib.aux_libs.devices.Cryomagnetics`.
-    - HighFinesse WS/6 and WS/7 wavemeters. Located in :mod:`pylablib.aux_libs.devices.HighFinesse`.
-    - Low-level IMAQdx camera controller, and more specific IMAQdx controller for PhotonFocus cameras. Located in :mod:`pylablib.aux_libs.devices.IMAQdx`.
-    - Lakeshore 218 and 370 temperature controllers. Located in :mod:`pylablib.aux_libs.devices.Lakeshore`.
-    - M squared ICE BLOC laser controller for SolsTiS lasers. Located in :mod:`pylablib.aux_libs.devices.M2`.
-    - MKS 9xx pressure gauge. Located in :mod:`pylablib.aux_libs.devices.MKS`.
-    - National Instruments DAQ devices. This is a restricted but simplified wrapper for the :mod:`nidaqmx` package, and should only be used for simple application. Located in :mod:`pylablib.aux_libs.devices.NI`.
-    - Nuphoton NP2000 EDFA. Located in :mod:`pylablib.aux_libs.devices.NuPhoton`.
-    - Ophir Vega power meter. Located in :mod:`pylablib.aux_libs.devices.Ophir`.
-    - OZ Optics fiber-coupled devices: TF100 tunable filter, DD100 variable attenuator, and EPC04 polarization controller. Located in :mod:`pylablib.aux_libs.devices.OZOptics`.
-    - Pfeiffer TPG261 pressure gauge. Located in :mod:`pylablib.aux_libs.devices.Pfeiffer`.
-    - Pure Photonics PPCL200 laser in CBDX1 chassis. Located in :mod:`pylablib.aux_libs.devices.PurePhotonics`.
-    - Rigol DSA1030A spectrum analyzer. Located in :mod:`pylablib.aux_libs.devices.Rigol`.
-    - SmarAct SCU3D translation stage controller. Located in :mod:`pylablib.aux_libs.devices.SmarAct`.
-    - Tektronix DPO2014, TDS2000, and MDO3000 scopes. Located in :mod:`pylablib.aux_libs.devices.Tektronix`.
-    - Thorlabs PM100D power meter, FW102/202 motorized filter wheels, MDT693/4A high voltage sources, and MFF motorized flip mount. Located in :mod:`pylablib.aux_libs.devices.Thorlabs`.
-    - Trinamic TMCM1100 stepper motor controller. Located in :mod:`pylablib.aux_libs.devices.Trinamic`.
-    - Vaunix LMS (Lab Brick) microwave generators. Located in :mod:`pylablib.aux_libs.devices.Vaunix`.
-    - Zurich Instruments HF2 / UHF Lock-In amplifiers. Located in :mod:`pylablib.aux_libs.devices.ZurichInstruments`.
 
 ------------------------
 Additional requirements
@@ -95,7 +113,7 @@ First, any device using :mod:`PyVISA` require NI VISA to be installed. See :mod:
 Second, some devices need dlls supplied by the manufacturer:
 
     - Andor cameras: require `atmcd.dll` (currently supplied for x64 and x86).
-    - Arcus PerforMax translation stages: require `PerformaxCom.dll` (currently supplied only for x64).
+    - Arcus PerforMax translation stages: require `PerformaxCom.dll` and `SiUSBXp.dll` (currently supplied only for x64).
     - HighFinesse WS/6 and WS/7 wavemeters: require `wlmData.dll`. Each device needs a unique dll supplied by the manufacturer. Currently generic version for WS/6 and WS/7 are given, but they might not work properly.
     - SmarAct SCU3D translation stage controller: requires `SCU3DControl.dll` (currently supplied only for x64).
 
@@ -104,8 +122,12 @@ Many of these are supplied with this library, but they can be removed in future 
 Third, some devices need additional software installed:
 
     - IMAQdx cameras: National Instruments IMAQdx library.
-    - HighFinesse: manufacturer-provided drivers and software.
-    - Thorlabs MFF: Kinesis software.
+    - Hamamatsu DCAM cameras: DCAM software and drivers.
+    - NI DAQs: National Instruments NI-DAQmx library (with C support).
+    - HighFinesse: manufacturer-provided drivers and software (specific to the particular wavemeter).
+    - Thorlabs MFF: Kinesis/APT software.
+    - Trinamic hardware: Trinamic TMCL-IDE (needed to install device drivers)
+    - Arcus PerforMax sofrware: Arcus Drivers and Tools, Arcus USB Series and Arcus Performax Series software (needed to install device drivers).
     - Zurich Instruments: manufacturer provided software and Python libraries.
 
 The list might be incomplete, and it does not include drivers for USB devices.

@@ -132,6 +132,14 @@ pylablib.core.utils.py3 module
     :undoc-members:
     :show-inheritance:
 
+pylablib.core.utils.rpyc module
+-------------------------------
+
+.. automodule:: pylablib.core.utils.rpyc
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.core.utils.serializable module
 ---------------------------------------
 

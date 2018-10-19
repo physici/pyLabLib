@@ -113,7 +113,7 @@ def regular_grid_from_scatter(data, x_points, y_points, x_range=None, y_range=No
     return interp_data,(x_grid,y_grid)
 
 
-def interpolate_trace(trace, step, rng=None, x_column=None, select_columns=None, assume_sorted=False):
+def interpolate_trace(trace, step, rng=None, x_column=0, select_columns=None, kind="linear", assume_sorted=False,):
     """
     Interpolate trace data over a regular grid with the given step.
 
@@ -121,6 +121,7 @@ def interpolate_trace(trace, step, rng=None, x_column=None, select_columns=None,
     `x_column` specifies column index for x-data.
     `select_column` specifies which columns to interpolate and keep at the output (by default, all data).
     If ``assume_sorted==True``, assume that x-data is sorted.
+    `kind` specifies interpolation method.
     """
     src_column=waveforms.get_x_column(trace,x_column=x_column)
     select_columns=select_columns or range(np.shape(trace)[1])
@@ -133,6 +134,49 @@ def interpolate_trace(trace, step, rng=None, x_column=None, select_columns=None,
     wtrace=wrapping.wrap(trace)
     xidx=wtrace.c.get_index(x_column)
     columns=[ pts if wtrace.c.get_index(c)==xidx else
-            interpolate1D_func(src_column,trace[:,c],bounds_error=False,fill_values="bounds",assume_sorted=assume_sorted)(pts)
+            interpolate1D_func(src_column,trace[:,c],kind=kind,bounds_error=False,fill_values="bounds",assume_sorted=assume_sorted)(pts)
             for c in select_columns]
     return wtrace.subtable((slice(None),select_columns)).columns_replaced(columns,wrapped=False)
+
+
+def average_interpolate_1D(data, step, rng=None, avg_kernel=1, min_weight=0, kind="linear"):
+    """
+    1D interpolation combined with pre-averaging.
+    
+    Args:
+        data: 2-column array [(x,y)], where ``y`` is a function of ``x``.
+        step: distance between the points in the interpolated data (all resulting x-coordinates are multiples of `step`).
+        rng: if not ``None``, specifies interpolation range (by default, whole data range).
+        avg_kernel: kernel used for initial averaging. Can be either a 1D array, where each point corresponds to the relative bin weight,
+            or an integer, which specifies simple rectangular kernel of the given width.
+        min_weight: minimal accumulated weight in the bin to consider it 'valid'
+            (if the bin is invalid, its accumulated value is ignored, and its value is obtained by the interpolation step).
+            `min_weight` of 0 implies any non-zero weight; otherwise, weight ``>=min_weight``.
+        kind: Interpolation method.
+    Returns:
+        A 2-column array with the interpolated data.
+    """
+    if isinstance(avg_kernel,(int,float)):
+        avg_kernel=max(int(avg_kernel)//2,0)*2+1
+        avg_kernel=np.ones(avg_kernel)
+    rng_min,rng_max=rng or (None,None)
+    rng_min=data[:,0].min() if (rng_min is None) else rng_min
+    rng_max=data[:,0].max() if (rng_max is None) else rng_max
+    rng=(rng_min,rng_max)
+    rng=[(l//step)*step for l in rng]
+    bins=np.linspace(rng[0],rng[1],int((rng[1]-rng[0])/step)+1)
+    locs=bins.searchsorted(data[:,0])
+    locs[locs==len(bins)]-=1
+    bindiffs=data[:,0]-bins[locs]
+    locs[(locs>0)&(bindiffs<-step/2.)]-=1
+    sums=np.zeros((len(bins)))
+    np.add.at(sums,locs,data[:,1])
+    weights=np.zeros((len(bins)))
+    np.add.at(weights,locs,1)
+    sums=np.convolve(sums,avg_kernel,mode="same")
+    weights=np.convolve(weights,avg_kernel,mode="same")
+    filled=weights>min_weight if min_weight==0 else weights>=min_weight
+    intx=bins[filled]
+    inty=sums[filled]/weights[filled]
+    data=interpolate1D_func(intx,inty,kind=kind,bounds_error=False,fill_values="bounds",assume_sorted=True)(bins)
+    return np.column_stack((bins,data))
