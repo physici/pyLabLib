@@ -160,7 +160,10 @@ class PushButtonValueHandler(IBoolValueHandler):
     def get_single_value(self):
         return self.widget.isChecked()
     def set_single_value(self, value):
-        return self.widget.setChecked(value)
+        if self.widget.isCheckable():
+            return self.widget.setChecked(value)
+        elif value:
+            return self.widget.click()
     def value_changed_signal(self):
         return self.widget.toggled
     def repr_single_value(self, value):

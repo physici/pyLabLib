@@ -27,11 +27,18 @@ class DeviceThread(controller.QTaskThread):
             return rpyc_utils.obtain(obj,serv=self.rpyc_serv)
         return obj
 
+    def connect_device(self):
+        pass
     def open_device(self):
-        if self.device is not None and not self.device.is_opened():
-            self.update_status("connection","opening","Connecting...")
-            self.device.open()
-            self.update_status("connection","opened","Connected")
+        if self.device is None:
+            self.connect_device()
+        if self.device is not None:
+            if not self.device.is_opened():
+                self.update_status("connection","opening","Connecting...")
+                self.device.open()
+                self.update_status("connection","opened","Connected")
+            return True
+        return False
     def close_device(self):
         if self.device is not None and self.device.is_opened():
             self.update_status("connection","closing","Disconnecting...")

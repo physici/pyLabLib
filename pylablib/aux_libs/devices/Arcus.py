@@ -151,11 +151,11 @@ class PerformaxStage(IDevice):
         Re-calibrate the position encoder so that the current position is set as `position` (0 by default).
         """
         axis=self._check_axis(axis)
-        self.query("P{}={:d}".format(axis,position))
+        self.query("P{}={:.0f}".format(axis,position))
     def move_to(self, axis, position):
         """Move a given axis to a given position"""
         axis=self._check_axis(axis)
-        self.query("{}{:d}".format(axis,position))
+        self.query("{}{:.0f}".format(axis,position))
     def move(self, axis, steps=1):
         """Move a given axis for a given number of steps"""
         self.move_to(axis,self.get_position(axis)+steps)
@@ -192,11 +192,11 @@ class PerformaxStage(IDevice):
         return int(self.query("HS"+axis))
     def set_speed(self, speed):
         """Set the global speed setting (in Hz)"""
-        self.query("HS={:d}".format(speed))
+        self.query("HS={:.0f}".format(speed))
     def set_axis_speed(self, axis, speed):
         """Set the individual axis speed setting (in Hz)"""
         axis=self._check_axis(axis)
-        self.query("HS{}={:d}".format(axis,speed))
+        self.query("HS{}={:.0f}".format(axis,speed))
 
     _status_bits={  "accel":0x001,"decel":0x002,"moving":0x004,
                     "alarm":0x008,
