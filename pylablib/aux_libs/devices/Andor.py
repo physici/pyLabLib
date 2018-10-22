@@ -666,7 +666,7 @@ class AndorCamera(IDevice):
         if not self._check_option("read",self._read_modes_cap[mode]): return
         lib.SetReadMode(self._read_modes.index(mode))
         self.read_mode=mode
-    def setup_single_track_mode(self, center=1, width=1):
+    def setup_single_track_mode(self, center=0, width=1):
         """
         Setup singe-track read mode.
 
@@ -674,7 +674,7 @@ class AndorCamera(IDevice):
         """
         self._camsel()
         if not self._check_option("read","AC_READMODE_FULLIMAGE"): return
-        lib.SetSingleTrack(center,width)
+        lib.SetSingleTrack(center+1,width)
         self.read_params["single_track"]=(center,width)
     def setup_multi_track_mode(self, number=1, height=1, offset=1):
         """
@@ -689,17 +689,22 @@ class AndorCamera(IDevice):
         self.read_params["multi_track"]=(number,height,offset)
         return res
     def setup_random_track_mode(self, tracks=None):
+        """
+        Setup random track read mode.
+
+        `tracks` is a list of tuples ``(start, stop)`` specifying track span (start are inclusive, stop are exclusive, starting from 0)
+        """
         self._camsel()
         if not self._check_option("read","AC_READMODE_RANDOMTRACK"): return
-        tracks=tracks or [(1,1)]
-        lib.SetRandomTracks(tracks)
+        tracks=tracks or [(0,1)]
+        lib.SetRandomTracks([(t[0]+1,t[1]) for t in tracks])
         self.read_params["random_track"]=list(tracks)
-    def setup_image_mode(self, hstart=1, hend=None, vstart=1, vend=None, hbin=1, vbin=1):
+    def setup_image_mode(self, hstart=0, hend=None, vstart=0, vend=None, hbin=1, vbin=1):
         """
         Setup image read mode.
 
         `hstart` and `hend` specify horizontal image extent, `vstart` and `vend` specify vertical image extent
-        (both are inclusive and starting from 1), `hbin` and `vbin` specify binning.
+        (start are inclusive, stop are exclusive, starting from 0), `hbin` and `vbin` specify binning.
         """
         hdet,vdet=self.get_detector_size()
         if not self._check_option("read","AC_READMODE_FULLIMAGE"): return
@@ -707,11 +712,11 @@ class AndorCamera(IDevice):
         vend=vdet if vend is None else vend
         hend=min(hdet,hend) # truncate the image size
         vend=min(vdet,vend)
-        if (hstart,hend,vstart,vend)!=(1,hdet,1,vdet):
+        if (hstart,hend,vstart,vend)!=(0,hdet,0,vdet):
             if not self._check_option("read","AC_READMODE_SUBIMAGE"): return
-        hend-=(hend-hstart+1)%hbin # make size divisible by bin
-        vend-=(vend-vstart+1)%vbin
-        lib.SetImage(hbin,vbin,hstart,hend,vstart,vend)
+        hend-=(hend-hstart)%hbin # make size divisible by bin
+        vend-=(vend-vstart)%vbin
+        lib.SetImage(hbin,vbin,hstart+1,hend,vstart+1,vend)
         self.read_params["image"]=(hstart,hend,vstart,vend,hbin,vbin)
     
     def get_roi(self):
@@ -721,12 +726,12 @@ class AndorCamera(IDevice):
         Return tuple ``(hstart, hend, vstart, vend, hbin, vbin)``.
         """
         return self.read_params["image"]
-    def set_roi(self, hstart=1, hend=None, vstart=1, vend=None, hbin=1, vbin=1):
+    def set_roi(self, hstart=0, hend=None, vstart=0, vend=None, hbin=1, vbin=1):
         """
         Setup camera ROI.
 
         `hstart` and `hend` specify horizontal image extent, `vstart` and `vend` specify vertical image extent
-        (both are inclusive and starting from 1), `hbin` and `vbin` specify binning.
+        (start are inclusive, stop are exclusive, starting from 0), `hbin` and `vbin` specify binning.
         By default, all non-supplied parameters take extreme values.
         """
         self.setup_image_mode(hstart,hend,vstart,vend,hbin,vbin)
@@ -738,7 +743,7 @@ class AndorCamera(IDevice):
             mode=self.read_mode
         if params is None:
             params=self.read_params[mode]
-        hdet,vdet=self.get_detector_size()
+        hdet,_=self.get_detector_size()
         if mode in {"fvb","single_track"}:
             return (1,hdet)
         if mode=="multi_track":
@@ -747,7 +752,7 @@ class AndorCamera(IDevice):
             return (len(params),hdet)
         if mode=="image":
             (hstart,hend,vstart,vend,hbin,vbin)=params
-            return (vend-vstart+1)//vbin,(hend-hstart+1)//hbin
+            return (vend-vstart)//vbin,(hend-hstart)//hbin
     def read_newest_image(self, dim=None, peek=False):
         """
         Read the newest image.
@@ -789,7 +794,8 @@ class AndorCamera(IDevice):
         """
         self._camsel()
         try:
-            return lib.GetNumberNewImages()
+            rng=lib.GetNumberNewImages()
+            return (rng[0]-1,rng[1]-1)
         except AndorLibError as e:
             if e.text_code=="DRV_NO_NEW_DATA":
                 return None
@@ -807,7 +813,7 @@ class AndorCamera(IDevice):
             dim=self.get_data_dimensions()
         if rng is None:
             return np.zeros((0,dim[1],dim[0]))
-        data,vmin,vmax=lib.GetImages16(rng[0],rng[1],dim[0]*dim[1]*(rng[1]-rng[0]+1))
+        data,vmin,vmax=lib.GetImages16(rng[0]+1,rng[1]+1,dim[0]*dim[1]*(rng[1]-rng[0]+1))
         return np.transpose(data.reshape((-1,dim[0],dim[1])),axes=[0,2,1])
 
     def flush_buffer(self):

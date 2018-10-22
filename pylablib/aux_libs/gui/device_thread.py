@@ -30,14 +30,18 @@ class DeviceThread(controller.QTaskThread):
     def connect_device(self):
         pass
     def open_device(self):
+        if self.device is not None and self.device.is_opened():
+            return True
+        self.update_status("connection","opening","Connecting...")
         if self.device is None:
             self.connect_device()
         if self.device is not None:
             if not self.device.is_opened():
-                self.update_status("connection","opening","Connecting...")
                 self.device.open()
+            if self.device.is_opened():
                 self.update_status("connection","opened","Connected")
-            return True
+                return True
+        self.update_status("connection","closed","Disconnected")
         return False
     def close_device(self):
         if self.device is not None and self.device.is_opened():
