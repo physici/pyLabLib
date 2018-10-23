@@ -107,6 +107,20 @@ def reload_package_modules(pkg_name, ignore_errors=False):
         except ImportError:
             if not ignore_errors:
                 raise
+def unload_package_modules(pkg_name, ignore_errors=False):
+    """
+    Reload package `pkg_name`, while respecting dependencies of its submodules.
+    
+    If ``ignore_errors=True``, ignore :exc:`ImportError` exceptions during the reloading process.
+    """
+    modules=get_loaded_package_modules(pkg_name)
+    order=get_reload_order(modules)
+    for name in order:
+        try:
+            del sys.modules[name]
+        except IndexError:
+            if not ignore_errors:
+                raise
             
             
 def get_library_path():

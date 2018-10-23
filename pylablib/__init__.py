@@ -19,3 +19,9 @@ def reload_all(from_load_path=True):
             os.chdir(cur_dir)
     else:
         module_utils.reload_package_modules(__name__)
+
+def unload_all(from_load_path=True):
+    """
+    Reload all loaded modules.
+    """
+    module_utils.unload_package_modules(__name__)

@@ -1,6 +1,5 @@
-from pylablib.core.gui.qt.thread import controller, threadprop
-from pylablib.core.gui.qt import values as values_module
-# from pylablib.core.utils import dictionary
+from ...core.gui.qt.thread import controller, threadprop
+from ...core.gui.qt import values as values_module
 
 from PyQt5 import QtCore
 
