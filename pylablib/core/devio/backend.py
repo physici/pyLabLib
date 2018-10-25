@@ -511,7 +511,7 @@ try:
                         result=result+c
                         if c==b"":
                             if error_on_timeout and terms:
-                                raise self.Error()
+                                raise self.Error("timeout during read")
                             return result
                         if singlechar_terms:
                             if c in terms:
@@ -550,7 +550,7 @@ try:
                 else:
                     result=self.instr.read(size=size)
                     if len(result)!=size:
-                        raise self.Error()
+                        raise self.Error("read returned less than expected")
                 self.cooldown()
                 return self._to_datatype(result)
         def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
@@ -878,8 +878,8 @@ class NetworkDeviceBackend(IDeviceBackend):
         if self.socket is not None:
             self.socket.close()
             self.socket=None
-        def is_opened(self):
-            return bool(self.socket)
+    def is_opened(self):
+        return bool(self.socket)
         
     def cooldown(self):
         """
@@ -975,8 +975,198 @@ class NetworkDeviceBackend(IDeviceBackend):
     
     
 _backends["network"]=NetworkDeviceBackend
+
+
+
+
+try:
+    import usb
+    import usb.backend.libusb0
+    import usb.backend.libusb1
+    import usb.backend.openusb
+
+    class PyUSBDeviceBackend(IDeviceBackend):
+        """
+        USB backend (via PyUSB package).
+        
+        Connection is automatically opened on creation.
+        
+        Args:
+            conn: Connection parameters. Can be either a string (for a port),
+                or a list/tuple ``(vendorID, productID, index, endpoint_read, endpoint_write, backend)`` supplied to the connection
+                (default is ``(0x0000,0x0000,0,0x00,0x00,'libusb0')``, which is invalid for most devices),
+                or a dict with the same parameters. 
+            timeout (float): Default timeout (in seconds).
+            term_write (str): Line terminator for writing operations; appended to the data
+            term_read (str): List of possible single-char terminator for reading operations (specifies when :func:`readline` stops).
+            datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
+                or ``"auto"`` (default Python result: `str` in Python 2 and `bytes` in Python 3)
+        """
+        _default_operation_cooldown=0.0
+        _backend="pyusb"
+        Error=usb.USBError
+        """Base class for the errors raised by the backend operations"""
+        class BackendOpenError(IBackendOpenError,usb.USBError):
+            """USB backend opening error"""
+            def __init__(self, e):
+                IBackendOpenError.__init__(self)
+                usb.USBError.__init__(self,*e.args)
+        
+        _conn_params=["vendorID","productID","index","endpoint_read","endpoint_write","backend"]
+        _default_conn=[0x0000,0x0000,0,0x00,0x01,"libusb1"]
+        _usb_backends={"libusb0":usb.backend.libusb0, "libusb1":usb.backend.libusb1, "openusb":usb.backend.openusb}
+
+        def __init__(self, conn, timeout=10., term_write=None, term_read=None, check_read_size=True, datatype="auto"):
+            conn_dict=self.combine_conn(conn,self._default_conn)
+            funcargparse.check_parameter_range(conn_dict["backend"],"usb_backend",self._usb_backends)
+            if isinstance(term_read,anystring):
+                term_read=[term_read]
+            self._operation_cooldown=self._default_operation_cooldown
+            IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read,datatype=datatype)
+            self.timeout=timeout
+            self.check_read_size=check_read_size
+            try:
+                self.open()
+            except self.Error as e:
+                raise self.BackendOpenError(e)
+            
+        def open(self):
+            """Open the connection."""
+            idx=self.conn["index"]
+            backend=self._usb_backends[self.conn["backend"]].get_backend()
+            all_devs=list(usb.core.find(idVendor=self.conn["vendorID"],idProduct=self.conn["productID"],backend=backend,find_all=True))
+            if len(all_devs)<idx+1:
+                raise self.BackendOpenError("can't find device with index {}; {} devices found".format(idx,len(all_devs)))
+            self.instr=all_devs[idx]
+            self.ep_read=self.conn["endpoint_read"]
+            self.ep_write=self.conn["endpoint_write"]
+            self.cooldown()
+            self.opened=True
+        def close(self):
+            """Close the connection."""
+            self.instr.finalize()
+            self.opened=False
+        def is_opened(self):
+            return self.opened
+            
+        
+        def cooldown(self):
+            """
+            Cooldown between the operations.
+            
+            Sleeping for a short time defined by `_operation_cooldown` attribute (no cooldown by default).
+            Also defined class-wide by `_default_operation_cooldown` class attribute.
+            """
+            if self._operation_cooldown>0:
+                time.sleep(self._operation_cooldown)
+            
+        def set_timeout(self, timeout):
+            """Set operations timeout (in seconds)."""
+            if timeout is not None:
+                self.timeout=timeout
+        def get_timeout(self):
+            """Get operations timeout (in seconds)."""
+            return self.timeout
+        def _timeout(self):
+            return None if self.timeout is None else int(self.timeout*1000)
+        
+        
+        def _read_terms(self, terms=(), read_block_size=65536, timeout=None, error_on_timeout=True):
+            result=b""
+            singlechar_terms=all(len(t)==1 for t in terms)
+            terms=[py3.as_builtin_bytes(t) for t in terms]
+            while True:
+                c=self.instr.read(self.ep_read,1 if terms else read_block_size,timeout=self._timeout()).tobytes()
+                result=result+c
+                if c==b"":
+                    if error_on_timeout and terms:
+                        raise self.Error("timeout during read")
+                    return result
+                if not terms:
+                    return result
+                if singlechar_terms:
+                    if c in terms:
+                        return result
+                else:
+                    for t in terms:
+                        if result.endswith(t):
+                            return result
+        def readline(self, remove_term=True, timeout=None, skip_empty=True, error_on_timeout=True):
+            """
+            Read a single line from the device.
+            
+            Args:
+                remove_term (bool): If ``True``, remove terminal characters from the result.
+                timeout: Operation timeout. If ``None``, use the default device timeout.
+                skip_empty (bool): If ``True``, ignore empty lines (works only for ``remove_term==True``).
+                error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
+            """
+            while True:
+                result=self._read_terms(self.term_read or [],timeout=timeout,error_on_timeout=error_on_timeout)
+                self.cooldown()
+                if remove_term and self.term_read:
+                    result=remove_longest_term(result,self.term_read)
+                if not (skip_empty and remove_term and (not result)):
+                    break
+            return self._to_datatype(result)
+        def read(self, size=None, max_read_size=65536, error_on_timeout=True):
+            """
+            Read data from the device.
+            
+            If `size` is not None, read `size` bytes (usual timeout applies); otherwise, read all available data (return immediately).
+            """
+            if size is None:
+                result=self._read_terms(read_block_size=max_read_size,timeout=0,error_on_timeout=error_on_timeout)
+            else:
+                result=self.instr.read(self.ep_read,size,timeout=self._timeout()).tobytes()
+                if len(result)!=size and self.check_read_size:
+                    raise self.Error("read returned less than expected")
+            self.cooldown()
+            return self._to_datatype(result)
+        def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
+            """
+            Read a single line with multiple possible terminators.
+            
+            Args:
+                term: Either a string (single multi-char terminator) or a list of strings (multiple terminators).
+                remove_term (bool): If ``True``, remove terminal characters from the result.
+                timeout: Operation timeout. If ``None``, use the default device timeout.
+                error_on_timeout (bool): If ``False``, return an incomplete line instead of raising the error on timeout.
+            """
+            if isinstance(term,anystring):
+                term=[term]
+            result=self._read_terms(term,timeout=timeout,error_on_timeout=error_on_timeout)
+            self.cooldown()
+            if remove_term and term:
+                result=remove_longest_term(result,term)
+            return self._to_datatype(result)
+        def write(self, data, read_echo=False, read_echo_delay=0, read_echo_lines=1):
+            """
+            Write data to the device.
+            
+            If ``read_echo==True``, wait for `read_echo_delay` seconds and then perform :func:`readline` (`read_echo_lines` times).
+            """
+            data=py3.as_builtin_bytes(data)
+            if self.term_write:
+                data=data+py3.as_builtin_bytes(self.term_write)
+            self.instr.write(self.ep_write,data,timeout=self._timeout())
+            self.cooldown()
+            if read_echo:
+                if read_echo_delay>0.:
+                    time.sleep(read_echo_delay)
+                for _ in range(read_echo_lines):
+                    self.readline()
+                    self.cooldown()
+
+        def __repr__(self):
+            return "PyUSBDeviceBackend("+self.instr.__repr__()+")"
+        
+        
+    _backends["pyusb"]=PyUSBDeviceBackend
+except ImportError:
+    pass
     
-    
+
     
     
 _serial_re=re.compile(r"^com\d+",re.IGNORECASE)
