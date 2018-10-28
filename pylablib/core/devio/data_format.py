@@ -136,7 +136,7 @@ class DataFormat(object):
     def convert_from_str(self, data):
         """Convert the string data into an array."""
         if self.is_ascii():
-            return np.array([float(e.strip()) for e in re.split("\s*,\s*|\s+",data) if e!=""])
+            return np.array([float(e.strip()) for e in re.split(r"\s*,\s*|\s+",data) if e!=""])
         else:
             return np.fromstring(data,dtype=self.to_desc("numpy"))
     def convert_to_str(self, data, ascii_format=".5f"):

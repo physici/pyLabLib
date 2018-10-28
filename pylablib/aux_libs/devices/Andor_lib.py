@@ -134,7 +134,7 @@ Andor_statuscodes = {
 def text_status(status):
     if status in Andor_statuscodes:
         return Andor_statuscodes[status]
-    raise AndorLibError("unrecognized status code: {}".format(status))
+    raise AndorLibError("unrecognized status code: {}".format(status),-1)
 
 Andor_AcqMode = {
         1: "AC_ACQMODE_SINGLE",

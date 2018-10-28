@@ -255,7 +255,7 @@ class ANC350(backend_mod.IBackendWrapper):
         data=data[:(len(data)//4)*4]
         l=16+len(data)
         if add_corr:
-            self._corr_number=self._corr_number%0xFFFF+1
+            self._corr_number=(self._corr_number%0xFFFF)+1
             corr_number=self._corr_number
         else:
             corr_number=0
@@ -274,9 +274,11 @@ class ANC350(backend_mod.IBackendWrapper):
         while True:
             tg=self._parse_telegram(self.instr.read(512))
             if tg.opcode==3: # ACK
-                return tg
+                if corr_number is None or tg.corr_number==corr_number:
+                    return tg
+                raise AttocubeError("gut unexpected correlation number: {}, expected {}".format(tg.corr_number,corr_number))
             if tg.opcode==4: # TELL
-                if tg.address//0x100!=0x0F:
+                if (tg.address>>8)!=0x0F:
                     self._tell_telegrams[(tg.address,tg.index)]=tg
             if ctd.passed():
                 raise AttocubeError("timeout while read")
@@ -329,6 +331,17 @@ class ANC350(backend_mod.IBackendWrapper):
         if as_int:
             res=unpack_int(res,"<")
         return (res,resp.reason) if return_reason else res
+    def _read_register(self, address):
+        idx=0
+        res=b""
+        while True:
+            data=self.get_value(address,idx,as_int=False)
+            eoln_pos=data.find(b"\x00")
+            if eoln_pos>=0:
+                res+=data[:eoln_pos]
+                return res
+            res+=data
+            idx+=1
 
 
     def enable_updates(self, enabled=True):

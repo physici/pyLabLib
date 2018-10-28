@@ -1,5 +1,5 @@
 from ...core.devio.interface import IDevice
-from ...core.utils import py3, funcargparse
+from ...core.utils import py3, funcargparse, dictionary
 
 _depends_local=[".DCAM_lib","...core.devio.interface"]
 
@@ -42,6 +42,7 @@ class DCAMCamera(IDevice):
         self._acq_mode=None
         self.open()
         self._last_frame=None
+        self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
 
         self._add_full_info_node("model_data",self.get_model_data)
         self._add_status_node("properties",self.get_all_properties)

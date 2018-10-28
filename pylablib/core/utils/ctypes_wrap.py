@@ -187,16 +187,21 @@ class CTypesWrapper(object):
     __call__=wrap
 
 
-def strprep(l, ctype=None):
+def strprep(l, ctype=None, unicode=False):
     """
     Make a string preparation function.
     
     Return a function which creates a string with a fixed length of `l` bytes and returns a pointer to it.
     `ctype` can specify the type of the result (by default, :class:`ctypes.c_char_p`).
     """
-    ctype=ctype or ctypes.c_char_p
-    def prep(*args, **kwargs):
-        return ctypes.cast(ctypes.create_string_buffer(l),ctype)
+    if unicode:
+        ctype=ctype or ctypes.c_wchar_p
+        def prep(*args, **kwargs):
+            return ctypes.cast(ctypes.create_unicode_buffer(l),ctype)
+    else:
+        ctype=ctype or ctypes.c_char_p
+        def prep(*args, **kwargs):
+            return ctypes.cast(ctypes.create_string_buffer(l),ctype)
     return prep
 
 def buffprep(size_arg_pos, dtype):

@@ -1,13 +1,18 @@
 from .Andor_lib import lib, AndorLibError
+from .AndorSDK3_lib import lib as lib3, AndorSDK3LibError, AndorSDK3_feature_types
 
+from ...core.devio import data_format
 from ...core.devio.interface import IDevice
-from ...core.utils import funcargparse, py3
+from ...core.utils import funcargparse, py3, dictionary, strpack, general
 
-_depends_local=[".Andor_lib","...core.devio.interface"]
+_depends_local=[".Andor_lib",".AndorSDK3_lib","...core.devio.interface"]
 
 import numpy as np
 import collections
 import contextlib
+import ctypes
+import threading
+import time
 
 class AndorError(RuntimeError):
     "Generic Andor camera error."
@@ -836,3 +841,643 @@ class AndorCamera(IDevice):
         self.wait_for_frame()
         self.stop_acquisition()
         return self.read_newest_image()
+
+
+
+
+
+
+
+
+
+
+_open_cams_SDKs=0
+
+def get_cameras_number_SDK3():
+    """Get number of connected Andor cameras"""
+    lib3.initlib()
+    lib3.AT_InitialiseLibrary()
+    return lib3.AT_GetInt(1,"DeviceCount")
+
+class AndorSDK3Camera(IDevice):
+    """
+    Andor SDK3 camera.
+
+    Args:
+        idx(int): camera index (use :func:`get_cameras_number_SDK3` to get the total number of connected cameras)
+    """
+    def __init__(self, idx=0):
+        IDevice.__init__(self)
+        lib3.initlib()
+        self.idx=idx
+        self.handle=None
+        self._default_nframes=100
+        self._buffer_overflow=10
+        self._ring_buffer=None
+        self._frame_counter=self.FrameCounter(self)
+        self._last_wait_frame=-1
+        self._reg_cb=None
+        self._image_lock=threading.RLock()
+        self._wait_thread_lock=threading.RLock()
+        self._wait_thread=threading.Thread(target=self._wait_skip_images,daemon=True)
+        self._wait_thread_event=threading.Event()
+        self._wait_thread_cnt=0
+        self.open()
+        self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
+
+        self._nodes_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
+        self._add_full_info_node("model_data",self.get_model_data)
+        self._add_full_info_node("values",self.get_all_values)
+        self._add_settings_node("trigger_mode",self.get_trigger_mode,self.set_trigger_mode)
+        self._add_settings_node("shutter",self.get_shutter,self.set_shutter)
+        self._add_status_node("is_acquiring",self.is_acquiring)
+        self._add_status_node("timings",self.get_timings)
+        self._add_status_node("data_dimensions",self.get_data_dimensions)
+        self._add_settings_node("roi",self.get_roi,self.set_roi)
+        self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
+        self._add_settings_node("readout_time",self.get_readout_time,self.set_readout_time)
+        self._add_status_node("ring_buffer_size",self.get_ring_buffer_size)
+        self._add_full_info_node("detector_size",self.get_detector_size)
+
+
+
+    def _wait_skip_images(self):
+        while True:
+            self._wait_thread_event.wait()
+            with self._image_lock:
+                self._wait_thread_event.clear()
+                if self._wait_thread_cnt<0:
+                    return
+                for _ in range(self._wait_thread_cnt):
+                    self._skip_next_image()
+                self._wait_thread_cnt=0
+    def _req_skip_image(self):
+        with self._image_lock:
+            self._wait_thread_cnt+=1
+            self._wait_thread_event.set()
+    def _req_wait_thread_pause(self):
+        with self._image_lock:
+            self._wait_thread_cnt=0
+            self._wait_thread_event.clear()
+    def _req_wait_thread_stop(self):
+        with self._image_lock:
+            self._wait_thread_cnt=-1
+            self._wait_thread_event.set()
+
+
+    _open_cams=0
+    def open(self):
+        """Open connection to the camera"""
+        self.close()
+        ncams=get_cameras_number_SDK3()
+        if self.idx>=ncams:
+            raise AndorError("camera index {} is not available ({} cameras exist)".format(self.idx,ncams))
+        lib3.AT_InitialiseLibrary()
+        self.handle=lib3.AT_Open(self.idx)
+        self._open_cams+=1
+        self._wait_thread.start()
+        self._register_frame_counter()
+    def close(self):
+        """Close connection to the camera"""
+        if self.handle is not None:
+            self._req_wait_thread_stop()
+            self._wait_thread.join()
+            self._unregister_frame_counter()
+            lib3.AT_Close(self.handle)
+            self._open_cams-=1
+            if self._open_cams<=0:
+                lib3.AT_FinaliseLibrary()
+        self.handle=None
+    def is_opened(self):
+        """Check if the device is connected"""
+        return self.handle is not None
+
+    def is_feature_available(self, name):
+        """Check if given feature is available"""
+        return lib3.AT_IsImplemented(self.handle,name)
+    def is_feature_readable(self, name):
+        """Check if given feature is available"""
+        return lib3.AT_IsImplemented(self.handle,name) and lib3.AT_IsReadable(self.handle,name) 
+    def is_feature_writable(self, name):
+        """Check if given feature is available"""
+        return lib3.AT_IsImplemented(self.handle,name) and lib3.AT_IsWritable(self.handle,name) 
+    def _check_feature(self, name):
+        if not self.is_feature_available(name):
+            raise AndorNotSupportedError("feature {} is not supported by camera {}",name,self.get_model_data().camera_model)
+    def get_value(self, name, kind="auto", enum_str=True, default="error"):
+        """
+        Get current value of the given feature.
+        
+        `kind` determines feature kind, can be ``"int"``, ``"float"``, ``"str"``, ``"bool"`` or ``"enum``";
+        by default (``"auto"``), auto-determine value kind (might not work for newer features).
+        If ``enum_str==True``, return enum values as strings; otherwise, return as indices.
+        If ``default=="error"``, raise :exc:`AndorError` if the feature is not implemented; otherwise, return `default` if it is not implemented.
+        """
+        if kind=="auto":
+            if name in AndorSDK3_feature_types:
+                kind=AndorSDK3_feature_types[name]
+            else:
+                raise AndorError("can't determine feature kind: {}".format(name))
+        if not lib3.AT_IsImplemented(self.handle,name):
+            if default=="error":
+                raise AndorError("feature is not implemented: {}".format(name))
+            else:
+                return default
+        if not lib3.AT_IsReadable(self.handle,name):
+            raise AndorError("feature is not readable: {}".format(name))
+        if kind=="int":
+            return lib3.AT_GetInt(self.handle,name)
+        if kind=="float":
+            return lib3.AT_GetFloat(self.handle,name)
+        if kind=="str":
+            strlen=lib3.AT_GetStringMaxLength(self.handle,name)
+            return lib3.AT_GetString(self.handle,name,strlen)
+        if kind=="bool":
+            return bool(lib3.AT_GetBool(self.handle,name))
+        if kind=="enum":
+            val=lib3.AT_GetEnumIndex(self.handle,name)
+            if enum_str:
+                val=lib3.AT_GetEnumStringByIndex(self.handle,name,val,512)
+            return val
+        raise AndorError("can't read feature '{}' with kind '{}'".format(name,kind))
+    def set_value(self, name, value, kind="auto", not_implemented_error=True):
+        """
+        Set current value of the given feature.
+        
+        `kind` determines feature kind, can be ``"int"``, ``"float"``, ``"str"``, ``"bool"`` or ``"enum``";
+        by default (``"auto"``), auto-determine value kind (might not work for newer features).
+
+        If ``not_implemented_error==True`` and the feature is not implemented, raise :exc:`AndorError`; otherwise, do nothing.
+        """
+        if kind=="auto":
+            if name in AndorSDK3_feature_types:
+                kind=AndorSDK3_feature_types[name]
+            else:
+                raise AndorError("can't determine feature kind: {}".format(name))
+        if not lib3.AT_IsImplemented(self.handle,name):
+            if not_implemented_error:
+                raise AndorError("feature is not implemented: {}".format(name))
+            else:
+                return
+        if not lib3.AT_IsWritable(self.handle,name):
+            raise AndorError("feature is not writable: {}".format(name))
+        if kind=="int":
+            lib3.AT_SetInt(self.handle,name,int(value))
+        elif kind=="float":
+            lib3.AT_SetFloat(self.handle,name,float(value))
+        elif kind=="str":
+            lib3.AT_SetString(self.handle,name,value)
+        elif kind=="bool":
+            lib3.AT_SetBool(self.handle,name,bool(value))
+        elif kind=="enum":
+            if isinstance(value,py3.anystring):
+                lib3.AT_SetEnumString(self.handle,name,value)
+            else:
+                lib3.AT_SetEnumIndex(self.handle,name,int(value))
+        else:
+            raise AndorError("can't read feature '{}' with kind '{}'".format(name,kind))
+    def command(self, name):
+        """Execute given command"""
+        if not lib3.AT_IsImplemented(self.handle,name):
+            raise AndorError("command is not implemented: {}".format(name))
+        lib3.AT_Command(self.handle,name)
+    def get_value_range(self, name, kind="auto", enum_str=True):
+        """
+        Get allowed rande of the given value.
+        
+        `kind` determines feature kind, can be ``"int"``, ``"float"``, ``"str"``, ``"bool"`` or ``"enum``";
+        by default (``"auto"``), auto-determine value kind (might not work for newer features).
+
+        For ``"int"`` or ``"float"`` values return tuple ``(min, max)`` (inclusive); for ``"enum"`` return list of possible values
+        (if ``enum_str==True``, return list of string values, otherwise return list of indices).
+        For all other value kinds return ``None``.
+        """
+        if kind=="auto":
+            if name in AndorSDK3_feature_types:
+                kind=AndorSDK3_feature_types[name]
+            else:
+                raise AndorError("can't determine feature kind: {}".format(name))
+        if not lib3.AT_IsImplemented(self.handle,name):
+            raise AndorError("feature is not implemented: {}".format(name))
+        if kind=="int":
+            return (lib3.AT_GetIntMin(self.handle,name),lib3.AT_GetIntMax(self.handle,name))
+        if kind=="float":
+            return (lib3.AT_GetFloatMin(self.handle,name),lib3.AT_GetFloatMax(self.handle,name))
+        if kind=="enum":
+            count=lib3.AT_GetEnumCount(self.handle,name)
+            available=[i for i in range(count) if lib3.AT_IsEnumIndexAvailable(self.handle,name,i)]
+            if enum_str:
+                available=[lib3.AT_GetEnumStringByIndex(self.handle,name,i,512) for i in available]
+            return available
+
+    def get_all_values(self, enum_str=True):
+        """
+        Get all readable values.
+
+        If ``enum_str==True``, return enum values as strings; otherwise, return as indices.
+        """
+        values={}
+        for v in AndorSDK3_feature_types:
+            if AndorSDK3_feature_types[v]!="comm" and lib3.AT_IsImplemented(self.handle,v) and lib3.AT_IsReadable(self.handle,v):
+                try:
+                    values[v]=self.get_value(v,enum_str=enum_str)
+                except AndorSDK3LibError:
+                    pass
+        return values
+
+    ModelData=collections.namedtuple("ModelData",["camera_model","serial_number","firmware_version","software_version"])
+    def get_model_data(self, enum_str=True):
+        """
+        Get camera model data.
+
+        Return tuple ``(camera_model, serial_number, firmware_version, software_version)``.
+        """
+        camera_model=self.get_value("CameraModel")
+        serial_number=self.get_value("SerialNumber")
+        firmware_version=self.get_value("FirmwareVersion")
+        strlen=lib3.AT_GetStringMaxLength(1,"SoftwareVersion")
+        software_version=lib3.AT_GetString(1,"SoftwareVersion",strlen)
+        return self.ModelData(camera_model,serial_number,firmware_version,software_version)
+        
+
+
+    _trigger_modes={"int":"Internal","ext":"External","software":"Software","ext_start":"External start","ext_exp":"External Exposure"}
+    _inv_trigger_modes=general.invert_dict(_trigger_modes)
+    def get_trigger_mode(self):
+        """
+        Get trigger mode.
+
+        Can be ``"int"`` (internal), ``"ext"`` (external), ``"software"`` (software trigger),
+            ``"ext_start"`` (external start), or ``"ext_exp"`` (external exposure).
+        """
+        tm=self.get_value("TriggerMode")
+        tm=self._inv_trigger_modes.get(tm,tm)
+        return tm
+    def set_trigger_mode(self, mode):
+        """
+        Set trigger mode.
+
+        Can be ``"int"`` (internal), ``"ext"`` (external), or ``"software"`` (software trigger).
+        """
+        funcargparse.check_parameter_range(mode,"mode",self._trigger_modes)
+        self.set_value("TriggerMode",self._trigger_modes[mode])
+        return self.get_trigger_mode()
+    _shutter_modes={"open":"Open","closed":"Closed","auto":"Auto"}
+    _inv_shutter_modes=general.invert_dict(_trigger_modes)
+    def get_shutter(self):
+        """Get current shutter mode"""
+        self._check_feature("ShutterMode")
+        sm=self.get_value("ShutterMode")
+        return self._inv_shutter_modes(sm)
+    def set_shutter(self, mode):
+        """
+        Set trigger mode.
+
+        Can be ``"open"``, ``"closed"``, or ``"auto"``.
+        """
+        self._check_feature("ShutterMode")
+        funcargparse.check_parameter_range(mode,"mode",self._shutter_modes)
+        self.set_value("ShutterMode",self._shutter_modes[mode])
+        return self.get_shutter()
+
+    def get_exposure(self):
+        """Get current exposure"""
+        return self.get_value("ExposureTime")
+    def set_exposure(self, exposure, set_min_readout_time=True):
+        """Set camera exposure"""
+        self.set_readout_time(0)
+        self.set_value("ExposureTime",exposure)
+        return self.get_exposure()
+    def get_readout_time(self):
+        return 1./self.get_value("FrameRate")
+    def set_readout_time(self, readout_time):
+        if not self.is_feature_writable("FrameRate"):
+            return
+        fr_rng=self.get_value_range("FrameRate")
+        ro_rng=1./fr_rng[1],1./fr_rng[0]
+        readout_time=min(max(readout_time,ro_rng[1]),ro_rng[0])
+        self.set_value("FrameRate",1./readout_time)
+        return self.get_readout_time()
+    AcqTimes=collections.namedtuple("AcqTimes",["exposure","accum_cycle_time","kinetic_cycle_time"])
+    def get_timings(self):
+        """
+        Get acquisition timing.
+
+        Return tuple ``(exposure, accum_cycle_time, kinetic_cycle_time)``.
+        In continuous mode, the relevant cycle time is ``kinetic_cycle_time``.
+        """
+        return self.AcqTimes(self.get_exposure(),0,self.get_readout_time())
+
+
+    
+    ### Frame counting ###
+    class FrameCounter(object):
+        def __init__(self, cam):
+            object.__init__(self)
+            self.acq_frames=0
+            self.read_frames=0
+            self.missed_frames=0
+            self.cam=cam
+            self._cnt_lock=threading.RLock()
+        def reset(self):
+            self.acq_frames=0
+            self.read_frames=0
+            self.missed_frames=0
+        def acq(self):
+            with self._cnt_lock:
+                self.acq_frames+=1
+                if self.acq_frames-self.read_frames>len(self.cam._ring_buffer)-self.cam._buffer_overflow:
+                    self.cam._req_skip_image()
+                    self.missed_frames+=1
+                return 0
+        def read(self):
+            with self._cnt_lock:
+                self.read_frames+=1
+                return 0
+        def get_status(self):
+            with self._cnt_lock:
+                return self.acq_frames,self.read_frames,self.missed_frames
+    def _register_frame_counter(self):
+        self._unregister_frame_counter()
+        self.set_value("EventSelector","ExposureEndEvent")
+        self.set_value("EventEnable",True)
+        acq_cb=lib3.AT_RegisterFeatureCallback(self.handle,"ExposureEndEvent",lambda *args: self._frame_counter.acq())
+        self._reg_cb=acq_cb
+        self._frame_counter.reset()
+    def _unregister_frame_counter(self):
+        if self._reg_cb is not None:
+            lib3.AT_UnregisterFeatureCallback(self.handle,"ExposureEndEvent",self._reg_cb)
+            self.set_value("EventSelector","ExposureEndEvent")
+            self.set_value("EventEnable",False)
+            self._reg_cb=None
+            self._frame_counter.reset()
+
+    def start_acquisition(self, mode="sequence", nframes=None):
+        """
+        Start acquisition.
+
+        `mode` can be either ``"snap"`` (since frame or sequency acquisition) or ``"sequence"`` (contunuous acquisition).
+        `nframes` determines number of frames to acquire in ``"snap"`` mode, or size of the ring buffer in the ``"sequence"`` mode (by default, 100).
+        """
+        self.stop_acquisition()
+        with self._image_lock:
+            acq_modes=["sequence","snap"]
+            funcargparse.check_parameter_range(mode,"mode",acq_modes)
+            self._setup_ring_buffer(nframes=nframes)
+            if mode=="snap":
+                self.set_value("CycleMode","Fixed")
+                self.set_value("FrameCount",nframes or 1)
+            else:
+                self.set_value("CycleMode","Continuous")
+            self._frame_counter.reset()
+            self._last_wait_frame=-1
+            self._req_wait_thread_pause()
+            self.command("AcquisitionStart")
+            self._acq_mode=(mode,nframes)
+    def stop_acquisition(self):
+        """Stop acquisition"""
+        self._req_wait_thread_pause()
+        with self._image_lock:
+            if self.get_value("CameraAcquiring"):
+                self.command("AcquisitionStop")
+                self._cleanup_ring_buffer()
+                self._frame_counter.reset()
+        self._acq_mode=None
+    def is_acquiring(self):
+        """Check if acquisition is in progress"""
+        return self.get_value("CameraAcquiring")
+    @contextlib.contextmanager
+    def pausing_acquisition(self):
+        """
+        Context manager which temporarily pauses acquisition during execution of ``with`` block.
+
+        Useful for applying certain settings which can't be changed during the acquisition.
+        """
+        acq_mode=self._acq_mode
+        try:
+            self.stop_acquisition()
+            yield
+        finally:
+            if acq_mode:
+                self.start_acquisition(*acq_mode)
+    def wait_for_frame(self, since="lastread", timeout=20., period=1E-3):
+        """
+        Wait for a new camera frame.
+
+        `since` specifies what constitutes a new frame.
+        Can be ``"lastread"`` (wait for a new frame after the last read frame),
+        ``"lastwait"`` (wait for a new frame after last :func:`wait_for_frame` call),
+        or ``"now"`` (wait for a new frame acquired after this function call).
+        If `timeout` is exceeded, raise :exc:`AndorTimeoutError`.
+        `period` specifies camera polling period.
+        """
+        ctd=general.Countdown(timeout)
+        last_acq_frame=self._frame_counter.get_status()[0]
+        while not ctd.passed():
+            acq_frame,read_frame=self._frame_counter.get_status()[0:2]
+            since_last_wait=acq_frame-self._last_wait_frame
+            self._last_wait_frame=acq_frame
+            if since=="lastread" and acq_frame>read_frame:
+                return
+            if since=="now" and acq_frame>last_acq_frame:
+                return
+            if since=="lastwait" and since_last_wait>0:
+                return
+            time.sleep(min(period,ctd.time_left()))
+        raise AndorTimeoutError()
+
+    class RingBuffer(object):
+        def __init__(self, buffers, size):
+            object.__init__(self)
+            self.buffers=buffers
+            self.idx=0
+            self.size=size
+        def next_buffer(self):
+            return self.buffers[self.idx]
+        def advance(self):
+            self.idx=(self.idx+1)%len(self.buffers)
+        def __len__(self):
+            return len(self.buffers)
+    def create_ring_buffer(self, nframes=None):
+        """
+        Create and set up a new ring buffer.
+
+        If a ring buffer is already allocated, remove it and create a new one.
+        """
+        self.remove_ring_buffer()
+        with self._image_lock:
+            nframes=nframes or self._default_nframes
+            frame_size=self.get_value("ImageSizeBytes")
+            buffers=lib3.allocate_buffers(self.handle,nframes+self._buffer_overflow,frame_size)
+            self._ring_buffer=self.RingBuffer(buffers,frame_size)
+    def remove_ring_buffer(self):
+        """Remove the ring buffer and clean up the memory."""
+        self._cleanup_ring_buffer()
+        self._ring_buffer=None
+    def get_ring_buffer_size(self):
+        return len(self._ring_buffer) if self._ring_buffer else 0
+    def _setup_ring_buffer(self, nframes=None):
+        if self._ring_buffer is None:
+            self.create_ring_buffer(nframes=nframes)
+        else:
+            frame_size=self.get_value("ImageSizeBytes")
+            if (self._ring_buffer.size!=frame_size) or (nframes is not None and len(self._ring_buffer)!=nframes):
+                self.create_ring_buffer(nframes=nframes)
+            else:
+                with self._image_lock:
+                    self._cleanup_ring_buffer()
+                    self._ring_buffer.idx=0
+                    for b in self._ring_buffer.buffers:
+                        lib3.AT_QueueBuffer(self.handle,ctypes.cast(b,ctypes.POINTER(ctypes.c_uint8)),frame_size)
+    def _cleanup_ring_buffer(self):
+        if self._ring_buffer:
+            with self._image_lock:
+                self._req_wait_thread_pause()
+                lib3.AT_Flush(self.handle)
+
+
+    def _get_next_image(self, timeout=None):
+        with self._image_lock:
+            if self._ring_buffer is None:
+                return b""
+            if timeout is None:
+                timeout=0xFFFFFFFF
+            else:
+                timeout=int(timeout*1E3)
+            buff,size=lib3.AT_WaitBuffer(self.handle,timeout)
+            buff_addr=ctypes.addressof(buff.contents)
+            ring_buffer=self._ring_buffer.next_buffer()
+            ring_buff_addr=ctypes.addressof(ring_buffer)
+            if buff_addr!=ring_buff_addr:
+                raise AndorError("unexpected buffer address: expected {}, got {} (difference of {})".format(ring_buff_addr,buff_addr,ring_buff_addr-buff_addr))
+            res=ctypes.string_at(buff,size)
+            lib3.AT_QueueBuffer(self.handle,ctypes.cast(ring_buffer,ctypes.POINTER(ctypes.c_uint8)),self._ring_buffer.size)
+            self._ring_buffer.advance()
+            self._frame_counter.read()
+            return res
+    def _skip_next_image(self, timeout=None):
+        with self._image_lock:
+            if self._ring_buffer is None:
+                return
+            if timeout is None:
+                timeout=0xFFFFFFFF
+            else:
+                timeout=int(timeout*1E3)
+            lib3.AT_WaitBuffer(self.handle,timeout)
+            ring_buffer=self._ring_buffer.next_buffer()
+            lib3.AT_QueueBuffer(self.handle,ctypes.cast(ring_buffer,ctypes.POINTER(ctypes.c_uint8)),self._ring_buffer.size)
+            self._ring_buffer.advance()
+            self._frame_counter.read()
+    def _parse_image(self, img):
+        width,height=self.get_value("AOIWidth"),self.get_value("AOIHeight")
+        metadata_enabled=self.get_value("MetadataEnable",default=False)
+        imlen=len(img)
+        if metadata_enabled:
+            chunks={}
+            read_len=0
+            while read_len<imlen:
+                clen=strpack.unpack_uint(img[imlen-read_len-4:imlen-read_len  ],"<")
+                cid =strpack.unpack_uint(img[imlen-read_len-8:imlen-read_len-4],"<")
+                chunks[cid]=img[imlen-read_len-clen-4:imlen-read_len-8]
+                read_len+=clen+4
+            if 0 not in chunks:
+                raise AndorError("missing image data")
+            img=chunks.pop(0)
+            metadata=chunks
+        else:
+            metadata={}
+        bpp=self.get_value("BytesPerPixel")
+        if bpp%1:
+            raise ValueError("can't process fractional pixel byte size: {}".format(bpp))
+        stride=self.get_value("AOIStride")
+        if stride!=int(bpp*width):
+            raise AndorError("unexpected stride: expected {}x{}={}, got {}".format(width,bpp,int(width*bpp),stride))
+        if len(img)!=int(width*height*bpp):
+            exp_len=int(width*height*bpp)
+            rnd_len=((exp_len-1)//4+1)*4
+            if len(img)!=rnd_len: # exclude length rounding
+                raise AndorError("unexpected image byte size: expected {}x{}x{}={}, got {}".format(width,height,bpp,int(width*height*bpp),len(img)))
+        dtype=data_format.DataFormat(int(bpp),"u","<")
+        img=np.frombuffer(img,dtype=dtype.to_desc("numpy"),count=width*height).reshape(width,height)
+        return img,metadata
+
+    def get_data_dimensions(self):
+        return self.get_value("AOIWidth"),self.get_value("AOIHeight")
+    def get_detector_size(self):
+        """Get the detector size"""
+        return int(self.get_value("SensorWidth")),int(self.get_value("SensorHeight"))
+    def get_roi(self):
+        """
+        Get current ROI.
+
+        Return tuple ``(hstart, hend, vstart, vend, hbin, vbin)``.
+        """
+        hbin=int(self.get_value("AOIHBin"))
+        vbin=int(self.get_value("AOIVBin"))
+        hstart=int(self.get_value("AOILeft"))-1
+        hend=hstart+int(self.get_value("AOIWidth"))*hbin
+        vstart=int(self.get_value("AOITop"))-1
+        vend=vstart+int(self.get_value("AOIHeight"))*vbin
+        return (hstart,hend,vstart,vend,hbin,vbin)
+    def set_roi(self, hstart=0, hend=None, vstart=0, vend=None, hbin=1, vbin=1):
+        """
+        Set current ROI.
+
+        By default, all non-supplied parameters take extreme values. Binning is the same for both axes.
+        """
+        self._cleanup_ring_buffer()
+        det_size=self.get_detector_size()
+        hend=hend or det_size[0]
+        vend=vend or det_size[1]
+        minw=self.get_value_range("AOIWidth")[0]
+        minh=self.get_value_range("AOIHeight")[0]
+        self.set_value("AOIWidth",minw)
+        self.set_value("AOIHeight",minh)
+        self.set_value("AOILeft",1)
+        self.set_value("AOITop",1)
+        self.set_value("AOIHBin",hbin)
+        self.set_value("AOIVBin",vbin)
+        self.set_value("AOILeft",hstart+1)
+        self.set_value("AOITop",vstart+1)
+        self.set_value("AOIWidth",max((hend-hstart)//hbin,minw))
+        self.set_value("AOIHeight",max((vend-vstart)//vbin,minh))
+        return self.get_roi()
+
+    def get_new_images_range(self):
+        """
+        Get the range of the new images.
+        
+        Return tuple ``(first, last)`` with images range (inclusive).
+        If no images are available, return ``None``.
+        """
+        acq_frames,read_frames,_=self._frame_counter.get_status()
+        if acq_frames>read_frames:
+            return (read_frames,acq_frames-1)
+        else:
+            return None
+            
+    def read_multiple_images(self, rng=None, return_metadata=False):
+        """Read multiple images specified by `rng` (by default, all un-read images)."""
+        if rng is None:
+            rng=self.get_new_images_range()
+        dim=self.get_data_dimensions()
+        if rng is None:
+            images,metadata=np.zeros((0,dim[0],dim[1])),[]
+        else:
+            acq_frames,read_frames,_=self._frame_counter.get_status()
+            rng=max(rng[0],read_frames),min(rng[1],acq_frames-1)
+            for _ in range(read_frames,rng[0]):
+                self._skip_next_image(timeout=0.1)
+            frames=[self._parse_image(self._get_next_image(timeout=0.1)) for _ in range(rng[1]-rng[0]+1)]
+            images,metadata=list(zip(*frames))
+            images=np.asarray(images)
+        return (images,metadata) if return_metadata else images
+
+    ### Combined functions ###
+    def snap(self):
+        """Snap a single image (with preset image read mode parameters)"""
+        self.start_acquisition("snap",1)
+        self.wait_for_frame()
+        img=self.read_multiple_images()[0]
+        self.stop_acquisition()
+        return img
