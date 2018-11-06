@@ -74,8 +74,13 @@ class TMCM1100(backend.IBackendWrapper):
         """Get a given axis parameter"""
         return self.query(6,parameter,0,result_format=result_format,addr=addr).value
     def set_axis_parameter(self, parameter, value, addr=0):
-        """Set a given axis parameter"""
+        """Set a given axis parameter (volatile; resets on power cycling)"""
         return self.query(5,parameter,value,addr=addr)
+    def store_axis_parameter(self, parameter, value=None, addr=0):
+        """Store a given axis parameter in EEPROM (by defauly, value is the current value)"""
+        if value is not None:
+            self.set_axis_parameter(parameter,value,addr=addr)
+        return self.query(7,parameter,value,addr=addr)
     def get_global_parameter(self, parameter, result_format="i4", bank=0, addr=0):
         """Get a given global parameter"""
         return self.query(10,parameter,0,result_format=result_format,bank=bank,addr=addr).value

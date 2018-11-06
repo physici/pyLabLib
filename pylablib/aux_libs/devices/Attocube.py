@@ -221,12 +221,11 @@ ANCDevice=ANC300
 
 class ANC350(backend_mod.IBackendWrapper):
     """
-    Generic Attocube ANC controller.
+    Attocube ANC350 controller.
 
     Args:
-        conn: connection parameters; for Ethernet connection is a tuple ``(addr, port)`` or a string ``"addr:port"``
-        backend(str): communication backend; by default, try to determine from the communication parameters
-        pwd(str): connection password for Ethernet connection (default is ``"123456"``)
+        conn: connection parameters - index of the Attocube ANC350 in the system (for a single controller leave 0)
+        timeout(float): default operation timeout
     """
     def __init__(self, conn=0, timeout=5.):
         if isinstance(conn,int):
@@ -306,7 +305,7 @@ class ANC350(backend_mod.IBackendWrapper):
             pass
     def set_value(self, address, index, value, ack=False, return_reason=False):
         """
-        Set device value
+        Set device value at the given address and index.
         
         If ``ack==True``, request ACK responds and return its value; otherwise, return immediately after set.
         If ``return_reason==True``, return tuple ``(result, reason)``; otherwise, simply return result.
@@ -321,7 +320,7 @@ class ANC350(backend_mod.IBackendWrapper):
             self._write(0,address,index,value)
     def get_value(self, address, index, as_int=True, return_reason=False):
         """
-        Get device value
+        Get device value at the given address and index.
         
         If ``as_int==True``, convert the result into a signed integer; otherwise return raw byte string.
         If ``return_reason==True``, return tuple ``(result, reason)``; otherwise, simply return result.
