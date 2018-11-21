@@ -2,6 +2,61 @@ import numpy as np
 from ..utils import funcargparse
 
 
+_default_indexing={"rc":"rcb","xy":"xyt"}
+def convert_shape_indexing(shape, src, dst):
+    """
+    Convert image indexing style.
+
+    `shape` is the source image shape (2-tuple), `src` and `dst` are current format and desired format.
+    Formats can be ``"rcb"`` (first index is row, second is column, rows count from the bottom), ``"rct"`` (same, but rows count from the top).
+    ``"xyb"`` (first index is column, second is row, rows count from the bottom), or ``"xyt"`` (same but rows count form the top).
+    ``"rc"`` is interpreted as ``"rct"``, ``"xy"`` as ``"xyt"``
+    """
+    src=_default_indexing.get(src,src)
+    dst=_default_indexing.get(dst,dst)
+    funcargparse.check_parameter_range(src,"src",["rcb","rct","xyb","xyt"])
+    funcargparse.check_parameter_range(dst,"dst",["rcb","rct","xyb","xyt"])
+    if src[:2]==dst[:2]:
+        return shape
+    else:
+        return shape[::-1]
+    
+
+def convert_image_indexing(img, src, dst):
+    """
+    Convert image indexing style.
+
+    `img` is the source image (2D numpy array), `src` and `dst` are current format and desired format.
+    Formats can be ``"rcb"`` (first index is row, second is column, rows count from the bottom), ``"rct"`` (same, but rows count from the top).
+    ``"xyb"`` (first index is column, second is row, rows count from the bottom), or ``"xyt"`` (same but rows count form the top).
+    ``"rc"`` is interpreted as ``"rct"``, ``"xy"`` as ``"xyt"``
+    """
+    src=_default_indexing.get(src,src)
+    dst=_default_indexing.get(dst,dst)
+    funcargparse.check_parameter_range(src,"src",["rcb","rct","xyb","xyt"])
+    funcargparse.check_parameter_range(dst,"dst",["rcb","rct","xyb","xyt"])
+    if src==dst:
+        return img
+    if src[:2]==dst[:2]: # same order, different row direction
+        return img[::-1,:] if src[:2]=="rc" else img[:,::-1]
+    if src[2]==dst[2]: # same row direction, different order
+        if src[2]=="t":
+            return img.T
+        if src=="rcb":
+            return (img[::-1,:].T)[:,::-1]
+        else:
+            return (img[:,::-1].T)[::-1,:]
+    # different row direction, different order
+    if src=="rcb": # dst=="xyt"
+        return img[::-1,:].T
+    if src=="rct": # dst=="xyb"
+        return img.T[:,::-1]
+    if src=="xyb": # dst=="rct"
+        return img[:,::-1].T
+    if src=="xyt": # dst=="rcb"
+        return img.T[::-1,:]
+    
+
 class ROI(object):
     def __init__(self, imin=0, imax=None, jmin=0, jmax=None):
         object.__init__(self)

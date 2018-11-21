@@ -1,5 +1,6 @@
 from ...core.devio.interface import IDevice
 from ...core.utils import py3, funcargparse, dictionary
+from ...core.dataproc import image as image_utils
 
 _depends_local=[".DCAM_lib","...core.devio.interface"]
 
@@ -41,6 +42,7 @@ class DCAMCamera(IDevice):
         self._default_nframes=100
         self._acq_mode=None
         self.open()
+        self.image_indexing="rct"
         self._last_frame=None
         self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
 
@@ -232,7 +234,8 @@ class DCAMCamera(IDevice):
         else:
             raise DCAMError("can't convert data with {} BBP into an array".format(bpp))
         data=ct.from_address(buffer.buf)
-        return np.array(data).reshape((buffer.height,buffer.width))
+        img=np.array(data).reshape((buffer.height,buffer.width))
+        return image_utils.convert_image_indexing(img,"rct",self.image_indexing)
     def get_ring_buffer_size(self):
         """Get the size of the allocated ring buffer (0 if no buffer is allocated)"""
         return self._alloc_nframes
@@ -243,6 +246,7 @@ class DCAMCamera(IDevice):
 
         If ``return_info==True``, return tuple ``(data, info)``, where info is the :class:`FrameInfo` instance
         describing frame index and timestamp, camera stamp, frame location on the sensor, and pixel type.
+        Does not advance the read frames counter.
         """
         sframe=self._read_buffer(buffer)
         info=self.FrameInfo(sframe.framestamp,sframe.timestamp[0]*10**6+sframe.timestamp[1],sframe.camerastamp,sframe.left,sframe.top,sframe.pixeltype)
@@ -252,10 +256,11 @@ class DCAMCamera(IDevice):
 
     def get_data_dimensions(self):
         """Get the current data dimension (taking ROI and binning into account)"""
-        return (int(self.get_value("IMAGE HEIGHT")),int(self.get_value("IMAGE WIDTH")))
+        dim=(int(self.get_value("IMAGE WIDTH")),int(self.get_value("IMAGE HEIGHT")))
+        return image_utils.convert_shape_indexing(dim,"xy",self.image_indexing)
     def get_detector_size(self):
-        """Get the detector size"""
-        return (int(self.properties["SUBARRAY VSIZE"].max),int(self.properties["SUBARRAY HSIZE"].max))
+        """Get camera detector size (in pixels) as a tuple ``(width, height)``"""
+        return (int(self.properties["SUBARRAY HSIZE"].max),int(self.properties["SUBARRAY VSIZE"].max))
     def get_roi(self):
         """
         Get current ROI.
@@ -368,14 +373,14 @@ class DCAMCamera(IDevice):
             rng=self.get_new_images_range()
         dim=self.get_data_dimensions()
         if rng is None:
-            return np.zeros((0,dim[1],dim[0]))
+            return np.zeros((0,dim[0],dim[1]))
         frames=[self.get_frame(n%self._alloc_nframes,return_info=True) for n in range(rng[0],rng[1]+1)]
         images,infos=list(zip(*frames))
         images=np.array(images)
         if not peek:
             self._last_frame=rng[1]
         return (images,infos) if return_info else images
-    def wait_for_frame(self, since="lastwait", timeout=20.):
+    def wait_for_frame(self, since="lastread", timeout=20.):
         """
         Wait for a new camera frame.
 
@@ -395,7 +400,7 @@ class DCAMCamera(IDevice):
                 else:
                     raise
         elif since=="lastread":
-            while not self.get_new_images_range():
+            while self.get_new_images_range() is None:
                 self.wait_for_frame(since="lastwait",timeout=timeout)
         else:
             rng=self.get_new_images_range()
@@ -406,8 +411,13 @@ class DCAMCamera(IDevice):
                 if rng and (last_img is None or rng[1]>last_img):
                     return
 
-    def snap(self, return_info=False):
+    def snap(self, nframes=None, return_info=False):
         """Snap a single image (with preset image read mode parameters)"""
-        self.start_acquisition("snap",nframes=1)
-        self.wait_for_frame()
-        return self.get_frame(0,return_info=return_info)
+        readframes=nframes or 1
+        self.start_acquisition("snap",nframes=readframes)
+        while self.get_new_images_range()!=(0,readframes-1):
+            self.wait_for_frame(since="lastwait")
+        frames=self.read_multiple_images(return_info=return_info)
+        if nframes is None:
+            frames=(frames[0][0],frames[1][0]) if return_info else frames[0]
+        return frames

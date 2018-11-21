@@ -4,6 +4,7 @@ from .AndorSDK3_lib import lib as lib3, AndorSDK3LibError, AndorSDK3_feature_typ
 from ...core.devio import data_format
 from ...core.devio.interface import IDevice
 from ...core.utils import funcargparse, py3, dictionary, strpack, general
+from ...core.dataproc import image as image_utils
 
 _depends_local=[".Andor_lib",".AndorSDK3_lib","...core.devio.interface"]
 
@@ -44,6 +45,7 @@ class AndorCamera(IDevice):
         self.ini_path=ini_path
         self.handle=None
         self.open()
+        self.image_indexing="rct"
         
         self._nodes_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
         self._add_full_info_node("model_data",self.get_model_data)
@@ -650,7 +652,7 @@ class AndorCamera(IDevice):
 
     ### Image settings and transfer controls ###
     def get_detector_size(self):
-        """Get camera detector size (in pixels)"""
+        """Get camera detector size (in pixels) as a tuple ``(width, height)``"""
         self._camsel()
         if not self._check_option("get","AC_GETFUNCTION_DETECTORSIZE"): return
         return lib.GetDetector()
@@ -742,8 +744,7 @@ class AndorCamera(IDevice):
         self.setup_image_mode(hstart,hend,vstart,vend,hbin,vbin)
         self.set_read_mode("image")
 
-    def get_data_dimensions(self, mode=None, params=None):
-        """Get readout data dimensions for given read mode and read parameters (current by default)"""
+    def _get_data_dimensions_rc(self, mode=None, params=None):
         if mode is None:
             mode=self.read_mode
         if params is None:
@@ -758,34 +759,36 @@ class AndorCamera(IDevice):
         if mode=="image":
             (hstart,hend,vstart,vend,hbin,vbin)=params
             return (vend-vstart)//vbin,(hend-hstart)//hbin
-    def read_newest_image(self, dim=None, peek=False):
+    def get_data_dimensions(self, mode=None, params=None):
+        """Get readout data dimensions for given read mode and read parameters (current by default)"""
+        return image_utils.convert_shape_indexing(self._get_data_dimensions_rc(mode=mode,params=params),"rc",self.image_indexing)
+    def read_newest_image(self, peek=False):
         """
         Read the newest image.
 
-        `dim` specifies image dimensions (by default use dimensions corresponding to the current camera settings).
         If ``peek==True``, return the image but not mark it as read.
         """
-        if dim is None:
-            dim=self.get_data_dimensions()
+        dim=self._get_data_dimensions_rc()
         self._camsel()
         if peek:
             data=lib.GetMostRecentImage16(dim[0]*dim[1])
-            return data.reshape((dim[0],dim[1])).transpose()
+            img=data.reshape((dim[0],dim[1]))
+            return image_utils.convert_image_indexing(img,"rcb",self.image_indexing)
         else:
             rng=self.get_new_images_range()
             if rng:
-                return self.read_multiple_images([rng[1],rng[1]],dim=dim)[0,:,:]
-    def read_oldest_image(self, dim=None):
+                return self.read_multiple_images([rng[1],rng[1]])[0,:,:]
+    def read_oldest_image(self):
         """
         Read the oldest un-read image in the buffer.
 
         `dim` specifies image dimensions (by default use dimensions corresponding to the current camera settings).
         """
-        if dim is None:
-            dim=self.get_data_dimensions()
+        dim=self._get_data_dimensions_rc()
         self._camsel()
         data=lib.GetOldestImage16(dim[0]*dim[1])
-        return data.reshape((dim[0],dim[1])).transpose()
+        img=data.reshape((dim[0],dim[1]))
+        return image_utils.convert_image_indexing(img,"rcb",self.image_indexing)
     def get_ring_buffer_size(self):
         """Get the size of the image ring buffer"""
         self._camsel()
@@ -805,7 +808,7 @@ class AndorCamera(IDevice):
             if e.text_code=="DRV_NO_NEW_DATA":
                 return None
             raise
-    def read_multiple_images(self, rng=None, dim=None):
+    def read_multiple_images(self, rng=None):
         """
         Read multiple images specified by `rng` (by default, all un-read images).
 
@@ -814,12 +817,12 @@ class AndorCamera(IDevice):
         self._camsel()
         if rng is None:
             rng=self.get_new_images_range()
-        if dim is None:
-            dim=self.get_data_dimensions()
+        dim=self._get_data_dimensions_rc()
         if rng is None:
-            return np.zeros((0,dim[1],dim[0]))
+            return np.zeros((0,dim[0],dim[1]))
         data,vmin,vmax=lib.GetImages16(rng[0]+1,rng[1]+1,dim[0]*dim[1]*(rng[1]-rng[0]+1))
-        return np.transpose(data.reshape((-1,dim[0],dim[1])),axes=[0,2,1])
+        imgs=data.reshape((-1,dim[0],dim[1]))
+        return np.asarray([image_utils.convert_image_indexing(im,"rcb",self.image_indexing) for im in imgs])
 
     def flush_buffer(self):
         """Flush the camera buffer (restart the acquisition)"""
@@ -883,6 +886,7 @@ class AndorSDK3Camera(IDevice):
         self._wait_thread_event=threading.Event()
         self._wait_thread_cnt=0
         self.open()
+        self.image_indexing="rct"
         self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
 
         self._nodes_ignore_error={"get":(AndorNotSupportedError,),"set":(AndorNotSupportedError,)}
@@ -1369,7 +1373,7 @@ class AndorSDK3Camera(IDevice):
             self._ring_buffer.advance()
             self._frame_counter.read()
     def _parse_image(self, img):
-        width,height=self.get_value("AOIWidth"),self.get_value("AOIHeight")
+        width,height=self._get_data_dimensions_rc()
         metadata_enabled=self.get_value("MetadataEnable",default=False)
         imlen=len(img)
         if metadata_enabled:
@@ -1398,13 +1402,17 @@ class AndorSDK3Camera(IDevice):
             if len(img)!=rnd_len: # exclude length rounding
                 raise AndorError("unexpected image byte size: expected {}x{}x{}={}, got {}".format(width,height,bpp,int(width*height*bpp),len(img)))
         dtype=data_format.DataFormat(int(bpp),"u","<")
-        img=np.frombuffer(img,dtype=dtype.to_desc("numpy"),count=width*height).reshape(width,height)
+        img=np.frombuffer(img,dtype=dtype.to_desc("numpy"),count=width*height).reshape(height,width)
+        img=image_utils.convert_image_indexing(img,"rct",self.image_indexing)
         return img,metadata
 
+    def _get_data_dimensions_rc(self):
+        return self.get_value("AOIHeight"),self.get_value("AOIWidth")
     def get_data_dimensions(self):
-        return self.get_value("AOIWidth"),self.get_value("AOIHeight")
+        """Get readout data dimensions"""
+        return image_utils.convert_shape_indexing(self._get_data_dimensions_rc(),"rc",self.image_indexing)
     def get_detector_size(self):
-        """Get the detector size"""
+        """Get camera detector size (in pixels) as a tuple ``(width, height)``"""
         return int(self.get_value("SensorWidth")),int(self.get_value("SensorHeight"))
     def get_roi(self):
         """

@@ -1,5 +1,6 @@
 from ...core.utils import dictionary, py3, general
 from ...core.devio import data_format, interface
+from ...core.dataproc import image as image_utils
 
 import numpy as np
 import contextlib
@@ -132,6 +133,7 @@ class IMAQdxCamera(interface.IDevice):
         self.default_visibility=default_visibility
         self.sid=None
         self.open()
+        self.image_indexing="rct"
         try:
             attrs=self.list_attributes()
             self.attributes=dictionary.Dictionary(dict([ (a.name.replace("::","/"),a) for a in attrs ]))
@@ -259,17 +261,19 @@ class IMAQdxCamera(interface.IDevice):
         cam_info=self.v["CameraInformation"]
         return self.ModelData(cam_info["VendorName"],cam_info["ModelName"],(cam_info["SerialNumberHigh"],cam_info["SerialNumberLow"]),cam_info["BusType"])
 
+    def _get_data_dimensions_rc(self):
+        return self.v["Height"],self.v["Width"]
     def get_data_dimensions(self):
         """Get the current data dimension (taking ROI and binning into account)"""
-        return self.v["Width"],self.v["Height"]
+        return image_utils.convert_shape_indexing(self._get_data_dimensions_rc(),"rc",self.image_indexing)
     def get_detector_size(self):
-        """Get camera detector size (in pixels)"""
+        """Get camera detector size (in pixels) as a tuple ``(width, height)``"""
         return self.attributes["Width"].max,self.attributes["Height"].max
     def get_roi(self):
         """
         Get current ROI.
 
-        Return tuple ``(hstart, hend, vstart, vend,)``.
+        Return tuple ``(hstart, hend, vstart, vend)``.
         """
         ox=self.v.get("OffsetX",0)
         oy=self.v.get("OffsetY",0)
@@ -484,10 +488,11 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
                 pass
         raise IMAQdxError("unrecognized pixel format: {}".format(pform))
     def _bytes_to_frame(self, raw_data):
-        dim=self.get_data_dimensions()
+        dim=self._get_data_dimensions_rc()
         bpp=self._get_bpp()
         dtype=data_format.DataFormat(bpp,"i","<")
-        return np.fromstring(raw_data,dtype=dtype.to_desc("numpy")).reshape((dim[1],dim[0]))
+        img=np.fromstring(raw_data,dtype=dtype.to_desc("numpy")).reshape((dim[0],dim[1]))
+        return image_utils.convert_image_indexing(img,"rct",self.image_indexing)
     def peek_frame(self, mode="last", buffer_num=0):
         """
         Read a frame without marking it as read
@@ -524,7 +529,6 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
             frame_bytes=self.v["PayloadSize"]
             dim=self.get_data_dimensions()
             for i in range(rng[0],rng[1]+1):
-                _,buff=self.read_data_raw(0,"number",i)
                 raw_data,buffer_num=self.read_data_raw(frame_bytes,mode="number",buffer_num=i)
                 frame=self._bytes_to_frame(raw_data)
                 if buffer_num==i:
@@ -535,6 +539,8 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
                     frames.append(np.zeros(dim))
         if not peek:
             self.frame_counter=max(self.frame_counter,rng[1]+1)
+        if missing_frame!="none":
+            frames=np.asarray(frames)
         return frames
 
     def snap(self, timeout=None):
@@ -543,7 +549,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
         self.setup_acqusition(False,1)
         self.start_acquisition()
         self.wait_for_frame(timeout=timeout)
-        frame=self.read_frames()[0]
+        frame=self.read_multiple_images()[0]
         self.stop_acquisition()
         self.clear_acquisition()
         return frame
