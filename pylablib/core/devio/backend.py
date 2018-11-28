@@ -445,12 +445,12 @@ try:
             general.retry_wait(self.instr.close, self._open_retry_times, 0.3)
         def open(self):
             """Open the connection."""
-            if not self._connect_on_operation:
+            if not self._connect_on_operation and not self.opened:
                 self._do_open()
             self.opened=True
         def close(self):
             """Close the connection."""
-            if not self._connect_on_operation:
+            if not self._connect_on_operation and self.opened:
                 self._do_close()
             self.opened=False
         def is_opened(self):
