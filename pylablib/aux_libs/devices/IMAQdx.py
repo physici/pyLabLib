@@ -279,8 +279,8 @@ class IMAQdxCamera(interface.IDevice):
         oy=self.v.get("OffsetY",0)
         w=self.v["Width"]
         h=self.v["Height"]
-        return ox+1,ox+w,oy+1,oy+h
-    def set_roi(self, hstart=1, hend=None, vstart=1, vend=None):
+        return ox,ox+w,oy,oy+h
+    def set_roi(self, hstart=0, hend=None, vstart=0, vend=None):
         """
         Setup camera ROI.
 
@@ -297,10 +297,10 @@ class IMAQdxCamera(interface.IDevice):
         with self.pausing_acuisition():
             self.v["Width"]=self.attributes["Width"].min
             self.v["Height"]=self.attributes["Height"].min
-            self.v["OffsetX"]=hstart-1
-            self.v["OffsetY"]=vstart-1
-            self.v["Width"]=hend-hstart+1
-            self.v["Height"]=vend-vstart+1
+            self.v["OffsetX"]=hstart
+            self.v["OffsetY"]=vstart
+            self.v["Width"]=hend-hstart
+            self.v["Height"]=vend-vstart
         return self.get_roi()
     
 

@@ -19,6 +19,11 @@ class Lakeshore218(SCPI.SCPIDevice):
         self._add_settings_node("enabled",self.is_enabled,self.set_enabled,mux=(range(8),0))
         self._add_settings_node("sensor_type",self.get_sensor_type,self.set_sensor_type,mux=("AB",1))
         self._add_status_node("temperature",self.get_all_temperatures)
+        try:
+            self.get_id(timeout=2.)
+        except self.instr.Error as e:
+            self.close()
+            raise self.instr.BackendOpenError(e) from None
     
     def is_enabled(self, channel):
         """Check if a given channel is enabled"""
@@ -64,6 +69,11 @@ class Lakeshore370(SCPI.SCPIDevice):
     """
     def __init__(self, conn):
         SCPI.SCPIDevice.__init__(self,conn)
+        try:
+            self.get_id(timeout=2.)
+        except self.instr.Error as e:
+            self.close()
+            raise self.instr.BackendOpenError(e) from None
     
     def get_resistance(self, channel):
         """Get resistance readings (in Ohm) on a given channel"""

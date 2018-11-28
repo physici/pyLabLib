@@ -22,6 +22,11 @@ class TPG261(backend.IBackendWrapper):
         backend.IBackendWrapper.__init__(self,instr)
         self._add_status_node("pressure",self.get_pressure,ignore_error=(PfeifferError,))
         self._add_status_node("channel_status",self.get_channel_status)
+        try:
+            self.query("BAU")
+        except self.instr.Error as e:
+            self.close()
+            raise self.instr.BackendOpenError(e) from None
     
     def comm(self, msg):
         """Send a command to the device"""

@@ -134,6 +134,11 @@ class MDT69xA(ThorlabsInterface):
         ThorlabsInterface.__init__(self,conn)
         self._add_settings_node("voltage",self.get_voltage,self.set_voltage,mux=("xyz",1))
         self._add_status_node("voltage_range",self.get_voltage_range)
+        try:
+            self.get_id(timeout=2.)
+        except self.instr.Error as e:
+            self.close()
+            raise self.instr.BackendOpenError(e) from None
 
     _id_comm="I"
     def get_voltage(self, channel="x"):

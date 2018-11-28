@@ -198,9 +198,9 @@ class SCPIDevice(backend_module.IBackendWrapper):
                 
     
     _id_comm="*IDN?" 
-    def get_id(self):
+    def get_id(self, timeout=None):
         """Get the device IDN. (query SCPI ``'*IDN?'`` command)."""
-        return self.ask(self._id_comm)
+        return self.ask(self._id_comm,timeout=timeout)
     _reset_comm="*RST"
     def reset(self):
         """Reset the device"""
