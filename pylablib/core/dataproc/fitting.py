@@ -141,7 +141,7 @@ class Fitter(object):
         unaccounted_names=set.difference(self.func.get_mandatory_args(),supplied_names)
         return unaccounted_names
     
-    def fit(self, x, y, fit_parameters=None, fixed_parameters=None, scale=None, limits=None, weight=1., parscore=None, return_stderr=False, return_residual=False, **kwargs):
+    def fit(self, x=None, y=0, fit_parameters=None, fixed_parameters=None, scale=None, limits=None, weight=1., parscore=None, return_stderr=False, return_residual=False, **kwargs):
         """
         Fit the data.
         
@@ -158,12 +158,16 @@ class Fitter(object):
                 Note: for compound data types (such as lists) the entries are still tuples of 2 elements,
                 each of which is either ``None`` (no bound for any sub-element) or has the same structure as the full parameter.
                 Note: for complex parameters limits must also be complex numbers (or ``None``), with re and im parts of the limits variable corresponding to the limits of the re and im part.
-            weight: Can be an array-like object that determines the relative weight of y-points.
+            weight (array-like): Determines the weights of y-points.
+                Can be either an array broadcastable to `y` (e.g., a scalar or an array with the same shape as `y`),
+                in which case it's interpreted as list of individual point weights (which multiply residuals before they are squared).
+                Or it can be an array with number of elements which is square of the number of elements in `y`,
+                in which case it's interpreted as a weight matrix (which matrix-multiplies residuals before they are squared).
             parscore(callable): parameter score function, whose value is added to the mean-square error (sum of all residuals squared) after applying weights.
-                Takes the same parameters as the fit function, only without the x-arguments. Can be used for, e.g., 'soft' fit parameter constraining.
+                Takes the same parameters as the fit function, only without the x-arguments, and return an array-like value. Can be used for, e.g., 'soft' fit parameter constraining.
             return_stderr (bool): If ``True``, append `stderr` to the output.
             return_residual: If not ``False``, append `residual` to the output.
-            **kwargs: arguments passed to :func:`scipy.optimize.least_squares` function
+            **kwargs: arguments passed to :func:`scipy.optimize.least_squares` function.
         
         Returns:
             tuple: ``(params, bound_func[, stderr][, residual])``:
@@ -171,8 +175,9 @@ class Fitter(object):
                 - `bound_func`: the fit function with all the parameters bound (i.e., it only requires x parameters).
                 - `stderr`: a dictionary ``{name: error}`` of standard deviation for fit parameters to the return parameters.
                     If the fitting routine returns no residuals (usually for a bad or an underconstrained fit), all residuals are set to NaN.
-                - `residual`: either a full array of residuals ``func(x,**params)-y`` (if ``return_residual=='full'``) or
-                    a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``).
+                - `residual`: either a full array of residuals ``func(x,**params)-y`` (if ``return_residual=='full'``),
+                    a mean magnitude of the residuals ``mean(abs(func(x,**params)-y)**2)`` (if ``return_residual==True`` or ``return_residual=='mean'``),
+                    or the total residuals including weights ``mean(abs((func(x,**params)-y)*weight)**2)`` (if ``return_residual=='weighted'``).
         """
         # Applying order: self.fixed_parameters < self.fit_parameters < fixed_parameters < fit_parameters
         fit_parameters=self._prepare_parameters(fit_parameters)
@@ -188,6 +193,20 @@ class Fitter(object):
         else:
             x=[np.asarray(e) for e in x]
         y=np.asarray(y)
+        weight=np.asarray(weight)
+        wkind=None
+        try:
+            if y.shape==(y*weight).shape:
+                wkind="point"
+        except ValueError:
+            pass
+        if wkind is None:
+            if np.prod(weight.shape)==np.prod(y.shape)**2:
+                wkind="matrix"
+                wmat_dim=np.prod(y.shape)
+                wmat=weight.reshape((wmat_dim,wmat_dim))
+            else:
+                raise ValueError("weight shape {} is incompatible with y shape {}".format(weight.shape,y.shape))
         p_names=list(fit_parameters.keys())
         bound_func=self.func.bind_namelist(self.xarg_name+p_names,**fixed_parameters)
         props=[fit_parameters[name] for name in p_names]
@@ -220,9 +239,15 @@ class Fitter(object):
             kwargs.setdefault("bounds",p_bounds)
         if parscore:
             parscore=callable.to_callable(parscore)
+        def calc_residuals(raw_res):
+            if wkind=="point":
+                return (np.asarray(raw_res)*weight).flatten()
+            elif wkind=="matrix":
+                y_diff_uw=np.asarray(raw_res).flatten()
+                return np.dot(wmat,y_diff_uw)
         def fit_func(fit_p):
             up=x+unpacker(fit_p)
-            y_diff=(np.asarray(y-np.asarray(bound_func(*up)))*weight).flatten()
+            y_diff=calc_residuals(y-np.asarray(bound_func(*up)))
             if np.iscomplexobj(y_diff):
                 y_diff=np.concatenate((y_diff.real,y_diff.imag))
             if parscore:
@@ -252,6 +277,9 @@ class Fitter(object):
         if return_residual:
             if return_residual=="full":
                 residual=y-bound_func(*x)
+            elif return_residual=="weighted":
+                residual_w=calc_residuals(y-np.asarray(bound_func(*x)))
+                residual=(abs(residual_w)**2).sum()
             else:
                 residual=(abs(y-bound_func(*x))**2).mean()
             return_val=return_val+(residual,)
