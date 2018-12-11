@@ -115,7 +115,10 @@ class ClientSocket(object):
         self.sock=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         if self.nodelay:
             self.sock.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
-        self.sock.settimeout(self._default_wait_callback_timeout)
+        if self.wait_callback:
+            self.sock.settimeout(self._default_wait_callback_timeout)
+        elif self.timeout is not None:
+            self.sock.settimeout(self.timeout)
         if self.wait_callback:
             self.wait_callback()
     def connect(self, host, port):
@@ -126,8 +129,14 @@ class ClientSocket(object):
         return _wait_sock_func(sock_func,self.timeout,self._connect_callback)
     def close(self):
         """Close the connection."""
-        self.sock.shutdown(socket.SHUT_RDWR)
-        self.sock.close()
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
+        try:
+            self.sock.close()
+        except socket.error:
+            pass
         self.connected=False
     def is_connected(self):
         """Check if the connection is opened"""

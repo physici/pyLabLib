@@ -12,6 +12,8 @@ class DeviceThread(controller.QTaskThread):
         self._full_info_job=False
         self._full_info_nodes=None
         self.rpyc=False
+        self.retry_device_connect=False
+        self._tried_device_connect=False
         
     def finalize_task(self):
         self.close_device()
@@ -32,6 +34,8 @@ class DeviceThread(controller.QTaskThread):
     def open_device(self):
         if self.device is not None and self.device.is_opened():
             return True
+        if self.device is None and self._tried_device_connect and not self.retry_device_connect:
+            return False
         self.update_status("connection","opening","Connecting...")
         if self.device is None:
             self.connect_device()
@@ -41,6 +45,7 @@ class DeviceThread(controller.QTaskThread):
             if self.device.is_opened():
                 self.update_status("connection","opened","Connected")
                 return True
+        self._tried_device_connect=True
         self.update_status("connection","closed","Disconnected")
         return False
     def close_device(self):

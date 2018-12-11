@@ -55,7 +55,11 @@ class M2ICE(IDevice):
     def open(self):
         self.close()
         self.socket=net.ClientSocket(send_method="fixedlen",recv_method="fixedlen",timeout=self.timeout)
-        self.socket.connect(*self.conn)
+        try:
+            self.socket.connect(*self.conn)
+        except net.socket.error:
+            self.socket.close()
+            raise
         self._last_status={}
     def close(self):
         if self.socket is not None:
@@ -63,6 +67,10 @@ class M2ICE(IDevice):
             self.socket=None
     def is_opened(self):
         return self.socket.is_connected()
+    def set_timeout(self, timeout):
+        """Set timeout for connecting or sending/receiving."""
+        self.timeout=timeout
+        self.socket.set_timeout(timeout)
 
     def _build_message(self, op, params, tx_id=None):
         if tx_id is None:
