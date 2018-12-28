@@ -10,7 +10,7 @@ import sys
 class ArcusError(RuntimeError):
     """Generic Arcus error."""
 
-HANDLE=ctypes.c_int
+HANDLE=ctypes.c_void_p
 BOOL=ctypes.c_int
 DWORD=ctypes.c_int
 
@@ -65,11 +65,12 @@ class PerformaxStage(IDevice):
         """Open the connection to the stage"""
         self.close()
         self.dll.fnPerformaxComSetTimeouts(5000,5000)
-        handle=ctypes.create_string_buffer(8)
+        handle=ctypes.create_string_buffer(b"\x00"*8)
+        hlen=ctypes.sizeof(ctypes.c_void_p)
         for _ in range(5):
-            code=self.dll.fnPerformaxComOpen(DWORD(int(0)),handle)
+            code=self.dll.fnPerformaxComOpen(DWORD(int(self.idx)),handle)
             if code:
-                self.handle=int.from_bytes(handle.raw[:4],sys.byteorder,signed=True)
+                self.handle=int.from_bytes(handle.raw[:hlen],sys.byteorder,signed=False)
                 return
             time.sleep(0.3)
         raise ArcusError("can't connect to the stage with index {}, return code {}".format(self.idx,code))
