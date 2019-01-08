@@ -14,9 +14,9 @@ HANDLE=ctypes.c_void_p
 BOOL=ctypes.c_int
 DWORD=ctypes.c_int
 
-class PerformaxStage(IDevice):
+class GenericPerformaxStage(IDevice):
     """
-    Arcus Performax translation stage.
+    Generic Arcus Performax translation stage.
 
     Args:
         lib_path(str): path to the PerformaxCom.dll (default is to use the library supplied with the package)
@@ -41,16 +41,7 @@ class PerformaxStage(IDevice):
         self.handle=None
         self.rbuff=ctypes.create_string_buffer(65536)
         self.open()
-        self.set_absolute_mode()
-        self.enable_all_outputs()
-        self.ignore_limit_errors()
         self._add_full_info_node("device_id",self.get_device_id)
-        self._add_settings_node("ignore_limit_errors",self.is_ignoring_limit_errors,self.ignore_limit_errors)
-        self._add_status_node("positions",self.get_position,mux=("XYZU",))
-        self._add_settings_node("global_speed",self.get_speed,self.set_speed)
-        self._add_settings_node("axis_speed",self.get_axis_speed,self.set_axis_speed,mux=("XYZU",0))
-        self._add_status_node("axis_status",self.get_status,mux=("XYZU",0))
-        self._add_status_node("moving",self.is_moving,mux=("XYZU",0))
 
 
     @staticmethod
@@ -104,6 +95,27 @@ class PerformaxStage(IDevice):
             return py3.as_str(self.rbuff.value)
         else:
             raise ArcusError("error sending command {}".format(comm))
+
+
+class Performax4EXStage(GenericPerformaxStage):
+    """
+    Arcus Performax 4EX translation stage.
+
+    Args:
+        lib_path(str): path to the PerformaxCom.dll (default is to use the library supplied with the package)
+        idx(int): stage index
+    """
+    def __init__(self, lib_path=None, idx=0):
+        GenericPerformaxStage.__init__(self,lib_path=lib_path,idx=idx)
+        self.set_absolute_mode()
+        self.enable_all_outputs()
+        self.ignore_limit_errors()
+        self._add_settings_node("ignore_limit_errors",self.is_ignoring_limit_errors,self.ignore_limit_errors)
+        self._add_status_node("positions",self.get_position,mux=("XYZU",))
+        self._add_settings_node("global_speed",self.get_speed,self.set_speed)
+        self._add_settings_node("axis_speed",self.get_axis_speed,self.set_axis_speed,mux=("XYZU",0))
+        self._add_status_node("axis_status",self.get_status,mux=("XYZU",0))
+        self._add_status_node("moving",self.is_moving,mux=("XYZU",0))
 
     @staticmethod
     def _check_axis(axis):
@@ -237,3 +249,5 @@ class PerformaxStage(IDevice):
         """Clear axis limit errors"""
         axis=self._check_axis(axis)
         self.query("CLR"+axis)
+
+PerformaxStage=Performax4EXStage # for backwards compatibility
