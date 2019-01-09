@@ -1,3 +1,4 @@
+pip install wheel twine
 del /Q build
 del /Q dist
 python setup.py sdist

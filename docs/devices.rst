@@ -90,7 +90,7 @@ Agilent HP8712B, HP8722D               Vector network analyzers          :mod:`p
 Tektronix DPO2014, TDS2000, MDO3000    Oscilloscopes                     :mod:`pylablib.aux_libs.devices.Tektronix`
 NI DAQ interface                       NI DAQ devices                    :mod:`pylablib.aux_libs.devices.NI`                    Wrapper around the :mod:`nidaqmx` package. Tested with NI USB-6008 and NI PCIe-6323
 Zurich Instruments HF2 / UHF           Lock-in amplifiers                :mod:`pylablib.aux_libs.devices.ZurichInstruments`
-Arcus PerforMax                        Translation stage                 :mod:`pylablib.aux_libs.devices.Arcus`
+Arcus PerforMax                        Translation stage                 :mod:`pylablib.aux_libs.devices.Arcus`                 Tested with PMX-4EX-SA stage.
 SmarAct SCU3D                          Translation stage                 :mod:`pylablib.aux_libs.devices.SmarAct`
 Attocube ANC300                        Piezo slider controller           :mod:`pylablib.aux_libs.devices.Attocube`
 Trinamic TMCM1110                      Stepper motor controller          :mod:`pylablib.aux_libs.devices.Trinamic`
@@ -117,7 +117,7 @@ Second, some devices need dlls supplied by the manufacturer:
     - HighFinesse WS/6 and WS/7 wavemeters: require `wlmData.dll`. Each device needs a unique dll supplied by the manufacturer. Currently generic version for WS/6 and WS/7 are given, but they might not work properly.
     - SmarAct SCU3D translation stage controller: requires `SCU3DControl.dll` (currently supplied only for x64).
 
-Many of these are supplied with this library, but they can be removed in future versions (e.g., for compatibility or legal reasons), and not all of them are present for x86 applications.
+Many of these are supplied with this library (only on GitHub), but they can be removed in future versions (e.g., for compatibility or legal reasons), and not all of them are present for x86 applications. If you installed the library using pip, you can download the dll's on GitHub (they are located in ``pylablib/aux_libs/devices/libs/``) and place them into the package folder (correspondingly, into ``aux_libs/devices/libs/`` inside the main package folder, which is usually something like ``Python36/Lib/site-packages/pylablib/``).
 
 Third, some devices need additional software installed:
 
@@ -130,4 +130,4 @@ Third, some devices need additional software installed:
     - Arcus PerforMax sofrware: Arcus Drivers and Tools, Arcus USB Series and Arcus Performax Series software (needed to install device drivers).
     - Zurich Instruments: manufacturer provided software and Python libraries.
 
-The list might be incomplete, and it does not include drivers for USB devices.
+The list might be incomplete, and it does not include drivers for all USB devices.
