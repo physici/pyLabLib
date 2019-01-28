@@ -155,6 +155,7 @@ class IMAQdxCamera(interface.IDevice):
         self._add_status_node("data_dimensions",self.get_data_dimensions)
         self._add_full_info_node("detector_size",self.get_detector_size)
         self._add_settings_node("roi",self.get_roi,self.set_roi)
+        self._add_status_node("roi_limits",self.get_roi_limits)
         self._add_status_node("last_frame",self._last_buffer)
         self._add_status_node("read_frames",lambda: self.frame_counter)
 
@@ -299,9 +300,21 @@ class IMAQdxCamera(interface.IDevice):
             self.v["Height"]=self.attributes["Height"].min
             self.v["OffsetX"]=hstart
             self.v["OffsetY"]=vstart
-            self.v["Width"]=hend-hstart
-            self.v["Height"]=vend-vstart
+            self.v["Width"]=max(self.v["Width"],hend-hstart)
+            self.v["Height"]=max(self.v["Height"],vend-vstart)
         return self.get_roi()
+    def get_roi_limits(self):
+        """
+        Get the minimal and maximal ROI parameters.
+
+        Return tuple ``(min_roi, max_roi)``, where each element is in turn 4-tuple describing the ROI.
+        """
+        params=["OffsetX","OffsetY","Width","Height"]
+        minp=tuple([self.attributes[p].min for p in params])
+        maxp=tuple([self.attributes[p].max for p in params])
+        min_roi=(0,0)+minp[2:]
+        max_roi=maxp
+        return (min_roi,max_roi)
     
 
     def setup_acqusition(self, continuous, frames):

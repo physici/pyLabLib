@@ -56,6 +56,7 @@ class DCAMCamera(IDevice):
         self._add_status_node("data_dimensions",self.get_data_dimensions)
         self._add_full_info_node("detector_size",self.get_detector_size)
         self._add_settings_node("roi",self.get_roi,self.set_roi)
+        self._add_status_node("roi_limits",self.get_roi_limits)
         self._add_status_node("acq_status",self.get_status)
         self._add_status_node("transfer_info",self.get_transfer_info)
         
@@ -283,14 +284,29 @@ class DCAMCamera(IDevice):
             self.set_value("SUBARRAY MODE",2)
             hend=hend or self.properties["SUBARRAY HSIZE"].max
             vend=vend or self.properties["SUBARRAY VSIZE"].max
-            self.set_value("SUBARRAY HSIZE",self.properties["SUBARRAY HSIZE"].min)
+            min_roi,max_roi=self.get_roi_limits()
+            self.set_value("SUBARRAY HSIZE",min_roi[2])
             self.set_value("SUBARRAY HPOS",hstart)
-            self.set_value("SUBARRAY HSIZE",hend-hstart)
-            self.set_value("SUBARRAY VSIZE",self.properties["SUBARRAY VSIZE"].min)
+            self.set_value("SUBARRAY HSIZE",max(hend-hstart,min_roi[2]))
+            self.set_value("SUBARRAY VSIZE",min_roi[3])
             self.set_value("SUBARRAY VPOS",vstart)
-            self.set_value("SUBARRAY VSIZE",vend-vstart)
-            self.set_value("BINNING",bin)
+            self.set_value("SUBARRAY VSIZE",max(vend-vstart,min_roi[3]))
+            if bin==3:
+                bin=2
+            self.set_value("BINNING",min(bin,max_roi[4]))
         return self.get_roi()
+    def get_roi_limits(self):
+        """
+        Get the minimal and maximal ROI parameters.
+
+        Return tuple ``(min_roi, max_roi)``, where each element is in turn 5-tuple describing the ROI.
+        """
+        params=["SUBARRAY HPOS","SUBARRAY VPOS","SUBARRAY HSIZE","SUBARRAY VSIZE","BINNING"]
+        minp=tuple([self.properties[p].min for p in params])
+        maxp=tuple([self.properties[p].max for p in params])
+        min_roi=(0,0)+minp[2:]
+        max_roi=maxp
+        return (min_roi,max_roi)
 
     def start_acquisition(self, mode="sequence", nframes=None):
         """

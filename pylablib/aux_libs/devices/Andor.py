@@ -78,6 +78,8 @@ class AndorCamera(IDevice):
         self._add_settings_node("read_parameters/multi_track",lambda:self.read_params["multi_track"],self.setup_multi_track_mode)
         self._add_settings_node("read_parameters/random_track",lambda:self.read_params["random_track"],self.setup_random_track_mode)
         self._add_settings_node("read_parameters/image",lambda:self.read_params["image"],self.setup_image_mode)
+        self._add_settings_node("roi",self.get_roi,self.set_roi)
+        self._add_status_node("roi_limits",self.get_roi_limits)
         self._add_settings_node("read_mode",lambda:self.read_mode,self.set_read_mode)
         self._add_status_node("data_dimensions",self.get_data_dimensions)
         self._add_status_node("ring_buffer_size",self.get_ring_buffer_size,ignore_error=AndorLibError)
@@ -743,6 +745,18 @@ class AndorCamera(IDevice):
         """
         self.setup_image_mode(hstart,hend,vstart,vend,hbin,vbin)
         self.set_read_mode("image")
+    def get_roi_limits(self):
+        """
+        Get the minimal and maximal ROI parameters.
+
+        Return tuple ``(min_roi, max_roi)``, where each element is in turn 6-tuple describing the ROI.
+        """
+        xdet,ydet=self.get_detector_size()
+        roi=self.get_roi()
+        min_roi=(0,0,roi[4]*3,roi[5]*3,1,1)
+        maxbin=int(min(xdet//3,ydet//3,128))
+        max_roi=(xdet-min_roi[2],xdet-min_roi[3],xdet,xdet,maxbin)
+        return (min_roi,max_roi)
 
     def _get_data_dimensions_rc(self, mode=None, params=None):
         if mode is None:
@@ -898,6 +912,7 @@ class AndorSDK3Camera(IDevice):
         self._add_status_node("timings",self.get_timings)
         self._add_status_node("data_dimensions",self.get_data_dimensions)
         self._add_settings_node("roi",self.get_roi,self.set_roi)
+        self._add_status_node("roi_limits",self.get_roi_limits)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
         self._add_settings_node("readout_time",self.get_readout_time,self.set_readout_time)
         self._add_status_node("ring_buffer_size",self.get_ring_buffer_size)
@@ -1450,6 +1465,18 @@ class AndorSDK3Camera(IDevice):
         self.set_value("AOIWidth",max((hend-hstart)//hbin,minw))
         self.set_value("AOIHeight",max((vend-vstart)//vbin,minh))
         return self.get_roi()
+    def get_roi_limits(self):
+        """
+        Get the minimal and maximal ROI parameters.
+
+        Return tuple ``(min_roi, max_roi)``, where each element is in turn 6-tuple describing the ROI.
+        """
+        params=["AOILeft","AOITop","AOIWidth","AOIHeight","AOIHBin","AOIVBin"]
+        minp=tuple([self.get_value_range(p)[0] for p in params])
+        maxp=tuple([self.get_value_range(p)[1] for p in params])
+        min_roi=(0,0)+minp[2:]
+        max_roi=(maxp[0]-1,maxp[1]-1,maxp[2]-1,maxp[3]-1,maxp[4],maxp[5])
+        return (min_roi,max_roi)
 
     def get_new_images_range(self):
         """

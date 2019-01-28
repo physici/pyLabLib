@@ -28,8 +28,9 @@ class BinROICtl(QtWidgets.QWidget):
         vbin=limit_to_range(rng.bin,1,maxbin)
         return self.AxisParams(int(vmin),int(vmax),int(vbin))
     def validateROI(self, xparams, yparams):
-        xparams=self._limit_range(xparams,self.xlim,self.maxbin,self.minsize)
-        yparams=self._limit_range(yparams,self.ylim,self.maxbin,self.minsize)
+        xminsize,yminsize=self.minsize if isinstance(self.minsize,tuple) else (self.minsize,self.minsize)
+        xparams=self._limit_range(xparams,self.xlim,self.maxbin,xminsize)
+        yparams=self._limit_range(yparams,self.ylim,self.maxbin,yminsize)
         if self.validate:
             xparams,yparams=self.validate((xparams,yparams))
             xparams=self.AxisParams(*xparams)

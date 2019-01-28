@@ -193,8 +193,11 @@ class ImageView(QtWidgets.QWidget):
                 draw_img=draw_img[::-1,:]
             if params.v["flip_y"]:
                 draw_img=draw_img[:,::-1]
+            img_shape=draw_img.shape
+            if img_shape==(1,1): # ImageView can't plot 1x1 images
+                draw_img=np.zeros((2,2),dtype=np.asarray(draw_img).dtype)+draw_img[0,0]
             autoscale=params.v["normalize"]
-            if np.all(draw_img==draw_img[0,0]):
+            if np.all(draw_img==draw_img[0,0]): # IamgeView can't plot images of constant color
                 draw_img=draw_img.copy()
                 draw_img[0,0]+=1
             if self.isVisible():
@@ -208,7 +211,7 @@ class ImageView(QtWidgets.QWidget):
                 self.imageWindow.getHistogramWidget().autoHistogramRange()
             params.i["minlim"]=self.imageWindow.levelMin
             params.i["maxlim"]=self.imageWindow.levelMax
-            params.v["size"]="{} x {}".format(*draw_img.shape)
+            params.v["size"]="{} x {}".format(*img_shape)
             show_lines=params.v["show_lines"]
             for ln in [self.imgVLine,self.imgHLine]:
                 ln.setPen("g" if show_lines else None)
