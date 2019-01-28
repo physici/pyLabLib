@@ -33,16 +33,16 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.add_check_box("show_lines","Show lines",value=True)
         self.settings_table.add_num_edit("vlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="X line:")
         self.settings_table.add_num_edit("hlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="Y line:")
-        self.settings_table.add_button("center_lines","Center lines").clicked.connect(view.center_lines)
+        self.settings_table.add_button("center_lines","Center lines").value_changed_signal().connect(view.center_lines)
         self.settings_table.value_changed.connect(lambda: self.view.update_image(update_controls=False))
         self.settings_table.add_spacer(10)
         self.settings_table.add_button("update_image","Updating",checkable=True)
-        self.settings_table.add_button("single","Single").clicked.connect(self.view.arm_single)
+        self.settings_table.add_button("single","Single").value_changed_signal().connect(self.view.arm_single)
         self.settings_table.add_padding()
 
     def set_img_maxlim(self, maxlim):
-        self.settings_table["minlim"].set_number_limit(0,maxlim,"coerce","int")
-        self.settings_table["maxlim"].set_number_limit(0,maxlim,"coerce","int")
+        self.settings_table.w["minlim"].set_number_limit(0,maxlim,"coerce","int")
+        self.settings_table.w["maxlim"].set_number_limit(0,maxlim,"coerce","int")
     def get_all_values(self):
         return self.settings_table.get_all_values()
     def set_all_values(self, params):

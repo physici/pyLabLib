@@ -26,8 +26,9 @@ class ParamTable(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(ParamTable, self).__init__(parent)
         self.params={}
-        self.v=dictionary.ItemAccessor(self.get_param,self.set_param)
+        self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
         self.i=dictionary.ItemAccessor(self.get_indicator,self.set_indicator)
+        self.w=dictionary.ItemAccessor(self.get_widget)
 
     def setupUi(self, name, add_indicator=False, display_table=None, display_table_root=None):
         self.name=name
@@ -38,8 +39,12 @@ class ParamTable(QtWidgets.QWidget):
         self.formLayout.setObjectName(_fromUtf8("formLayout"))
         self.add_indicator=add_indicator
         self.change_focused_control=False
-        self.display_table=display_table
-        self.display_table_root=display_table_root if display_table_root is not None else self.name
+        if display_table is None:
+            self.display_table=values_module.IndicatorValuesTable()
+            self.display_table_root=""
+        else:
+            self.display_table=display_table
+            self.display_table_root=display_table_root if display_table_root is not None else self.name
 
     value_changed=QtCore.pyqtSignal("PyQt_PyObject","PyQt_PyObject")
 
@@ -53,10 +58,9 @@ class ParamTable(QtWidgets.QWidget):
     ParamRow=collections.namedtuple("ParamRow",["widget","label","value_handler","indicator_handler"])
     def _add_widget(self, name, params):
         self.params[name]=params
-        if self.display_table:
-            path=(self.display_table_root,name)
-            self.display_table.add_handler(path,params.value_handler)
-            self.display_table.add_indicator_handler(path,params.indicator_handler)
+        path=(self.display_table_root,name)
+        self.display_table.add_handler(path,params.value_handler)
+        self.display_table.add_indicator_handler(path,params.indicator_handler)
         changed_signal=params.value_handler.value_changed_signal()
         if changed_signal:
             changed_signal.connect(lambda value: self.value_changed.emit(name,value))
@@ -86,7 +90,7 @@ class ParamTable(QtWidgets.QWidget):
         else:
             self.formLayout.addWidget(widget,row,col+1,rowspan,1 if add_indicator else 2)
         self._add_widget(name,self.ParamRow(widget,wlabel,value_handler,indicator_handler))
-        return widget
+        return value_handler
 
     def add_custom_widget(self, name, widget, value_handler=None, indicator_handler=None, location=(None,0,1,None)):
         if name in self.params:
@@ -96,7 +100,7 @@ class ParamTable(QtWidgets.QWidget):
         value_handler=value_handler or values_module.get_default_value_handler(widget)
         indicator_handler=indicator_handler or values_module.get_default_indicator_handler(widget)
         self._add_widget(name,self.ParamRow(widget,None,value_handler,indicator_handler))
-        return widget
+        return value_handler
 
     def add_button(self, name, caption, checkable=False, value=False, label=None, add_indicator=None, location=(None,0)):
         widget=QtWidgets.QPushButton(self)
@@ -168,44 +172,36 @@ class ParamTable(QtWidgets.QWidget):
         for name in names:
             self.params[name].widget.setEnabled(not locked)
 
-    def get_param(self, name):
-        return self.params[name].value_handler.get_value()
-    def set_param(self, name, value):
+    def get_value(self, name):
+        return self.display_table.get_value((self.display_table_root,name))
+    def set_value(self, name, value):
         par=self.params[name]
         if self.change_focused_control or not par.widget.hasFocus():
-            return par.value_handler.set_value(value)
+            return self.display_table.set_value((self.display_table_root,name),value)
     def get_all_values(self):
-        values={}
-        for n in self.params:
-            values[n]=self.params[n].value_handler.get_value()
-        return values
+        return self.display_table.get_all_values(root=self.display_table_root)
     def set_all_values(self, values):
-        for n in values:
-            if n in self.params:
-                self.params[n].value_handler.set_value(values[n])
+        return self.display_table.set_all_values(values,root=self.display_table_root)
 
     def get_handler(self, name):
         return self.params[name].value_handler
+    def get_widget(self, name):
+        return self.params[name].widget
+    def changed_event(self, name):
+        return self.params[name].value_handler.value_changed_signal()
 
     def get_indicator(self, name):
-        indicator_handler=self.params[name].indicator_handler
-        if indicator_handler:
-            return indicator_handler.get_value()
+        return self.display_table.get_indicator((self.display_table_root,name))
     def set_indicator(self, name, value):
-        indicator_handler=self.params[name].indicator_handler
-        if indicator_handler:
-            return indicator_handler.set_value(value)
+        return self.display_table.set_indicator((self.display_table_root,name),value)
     def update_indicators(self):
-        for name in self.params:
-            value=self.get_param(name)
-            self.set_indicator(name,value)
+        return self.display_table.update_indicators(root=self.display_table_root)
 
     def clear(self):
-        if self.display_table:
-            for name in self.params:
-                path=(self.display_table_root,name)
-                self.display_table.remove_handler(path)
-                self.display_table.remove_indicator_handler(path)
+        for name in self.params:
+            path=(self.display_table_root,name)
+            self.display_table.remove_handler(path)
+            self.display_table.remove_indicator_handler(path)
         self.params={}
         utils.clean_layout(self.formLayout,delete_layout=True)
         self.formLayout = QtWidgets.QGridLayout(self)
@@ -215,7 +211,7 @@ class ParamTable(QtWidgets.QWidget):
 
     
     def __getitem__(self, name):
-        return self.params[name].widget
+        return self.get_handler(name)
     def __contains__(self, name):
         return name in self.params
 

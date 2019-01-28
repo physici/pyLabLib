@@ -42,8 +42,12 @@ class IValueHandler(object):
         self.widget=widget
     def get_value(self, name=None):
         raise NotImplementedError("IValueHandler.get_value")
+    def get_all_values(self):
+        return self.get_value()
     def set_value(self, value, name=None):
         raise NotImplementedError("IValueHandler.set_value")
+    def set_all_values(self, value):
+        return self.set_value(value)
     def repr_value(self, value, name=None):
         return str(value)
     def value_changed_signal(self):
@@ -70,23 +74,30 @@ class IDefaultValueHandler(IValueHandler):
         if not name:
             if self.get_value_kind=="simple":
                 return self.widget.get_value()
-            elif self.get_all_values_kind=="simple":
-                return self.widget.get_all_values()
             elif self.get_value_kind=="named":
                 return self.widget.get_value(self.default_name)
+            else:
+                return self.widget.get_all_values()
         else:
             if self.get_value_kind=="named":
                 return self.widget.get_value(name)
             elif self.get_all_values_kind=="simple":
                 return self.widget.get_all_values()[name]
         raise ValueError("can't find getter for widget {} with name {}".format(self.widget,name))
+    def get_all_values(self):
+        if self.get_all_values_kind=="simple":
+            return self.widget.get_all_values()
+        elif self.get_value_kind=="simple":
+            return self.widget.get_value()
+        else:
+            return self.widget.get_value(self.default_name)
     def set_value(self, value, name=None):
         if not name:
             if self.set_value_kind=="simple":
                 return self.widget.set_value(value)
             elif self.set_value_kind=="named":
                 return self.widget.set_value(self.default_name,value)
-            elif self.set_all_values_kind=="simple":
+            else:
                 return self.widget.set_all_values(value)
         else:
             if self.set_value_kind=="named":
@@ -96,6 +107,13 @@ class IDefaultValueHandler(IValueHandler):
                     name="/".join(name)
                 return self.widget.set_all_values({name:value})
         raise ValueError("can't find setter for widget {} with name {}".format(self.widget,name))
+    def set_all_values(self, value):
+        if self.set_all_values_kind=="simple":
+            return self.widget.set_all_values(value)
+        elif self.set_value_kind=="simple":
+            return self.widget.set_value(value)
+        else:
+            return self.widget.set_value(self.default_name,value)
     def repr_value(self, value, name=None):
         if not name:
             if self.repr_value_kind=="simple":
@@ -165,7 +183,10 @@ class PushButtonValueHandler(IBoolValueHandler):
         elif value:
             return self.widget.click()
     def value_changed_signal(self):
-        return self.widget.toggled
+        if self.widget.isCheckable():
+            return self.widget.toggled
+        else:
+            return self.widget.clicked
     def repr_single_value(self, value):
         if not self.widget.isCheckable():
             return ""
@@ -231,6 +252,18 @@ class ValuesTable(object):
         return handler
     def remove_handler(self, name):
         del self.handlers[name]
+    def get_handler(self, name):
+        return self.handlers[name]
+
+    def __getitem__(self, name):
+        return self.get_handler(name)
+    def __setitem__(self, name, value):
+        return self.add_handler(name,value)
+    def __delitem__(self, name):
+        return self.remove_handler(name)
+    def __contains__(self, name):
+        return name in self.handlers
+
     def add_widget(self, name, widget):
         return self.add_handler(name,get_default_value_handler(widget))
     def add_table(self, name, table):
@@ -255,20 +288,20 @@ class ValuesTable(object):
         if path is None:
             raise KeyError("missing handler {}".format(name))
         return self.handlers[path].get_value(subpath)
-    def get_all_values(self):
+    def get_all_values(self, root=""):
         values=dictionary.Dictionary()
-        for n in self.handlers.paths():
-            values[n]=self.get_value(n)
+        for n in self.handlers[root].paths():
+            values[n]=self.handlers[(root,n)].get_all_values()
         return values
     def set_value(self, name, value):
         path,subpath=self.handlers.get_max_prefix(name,kind="leaf")
         if path is None:
             raise KeyError("missing handler {}".format(name))
         return self.handlers[path].set_value(value,subpath)
-    def set_all_values(self, values):
+    def set_all_values(self, values, root=""):
         for n,v in dictionary.as_dictionary(values).iternodes(to_visit="all",topdown=True,include_path=True):
-            if self.handlers.has_entry(n,kind="leaf"):
-                self.handlers[n].set_value(v)
+            if self.handlers[root].has_entry(n,kind="leaf"):
+                self.handlers[(root,n)].set_all_values(v)
             
     def repr_value(self, name, value):
         path,subpath=self.handlers.get_max_prefix(name,kind="leaf")
@@ -414,7 +447,8 @@ class IndicatorValuesTable(ValuesTable):
         if len(subpath)>0:
             return self.indicator_handlers[path].get_indicator(subpath,ind_name=ind_name)
         return self.indicator_handlers[path][ind_name].get_value()
-    def update_indicators(self):
-        for n in self.handlers.paths():
-            if n in self.indicator_handlers:
-                self.set_indicator(n,self.get_value(n))
+    def update_indicators(self, root=""):
+        for n in self.handlers[root].paths():
+            p=(root,n)
+            if p in self.indicator_handlers:
+                self.set_indicator(p,self.get_value(p))
