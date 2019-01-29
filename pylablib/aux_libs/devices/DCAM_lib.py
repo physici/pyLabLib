@@ -12,7 +12,7 @@ class DCAMLibError(RuntimeError):
         self.func=func
         self.code=code
         self.text_code,self.text_desc=const.DCAMERR.get(code,("UNKNOWN",""))
-        msg="function '{}' raised error {} ({}): ".format(func,code,self.text_code,self.text_desc)
+        msg="function '{}' raised error {} ({}): {}".format(func,code,self.text_code,self.text_desc)
         RuntimeError.__init__(self,msg)
 
 def errcheck(passing=None):
@@ -289,6 +289,7 @@ class DCAMLib(object):
         self.dcamwait_close=wrapper(lib.dcamwait_close, [HDCAMWAIT], ["hwait"])
         def dcamwait_start_prep(_, eventmask, timeout):
             cstruct=CDCAMWAIT_START()
+            cstruct.eventhappened=0
             cstruct.eventmask=eventmask
             cstruct.timeout=timeout
             return cstruct.to_struct()

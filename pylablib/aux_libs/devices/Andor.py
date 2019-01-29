@@ -724,7 +724,9 @@ class AndorCamera(IDevice):
         if (hstart,hend,vstart,vend)!=(0,hdet,0,vdet):
             if not self._check_option("read","AC_READMODE_SUBIMAGE"): return
         hend-=(hend-hstart)%hbin # make size divisible by bin
+        hend=max(hend,hstart+hbin*3)
         vend-=(vend-vstart)%vbin
+        vend=max(vend,vstart+vbin*3)
         lib.SetImage(hbin,vbin,hstart+1,hend,vstart+1,vend)
         self.read_params["image"]=(hstart,hend,vstart,vend,hbin,vbin)
     

@@ -295,7 +295,7 @@ class IMAQdxCamera(interface.IDevice):
             hend=det_size[0]
         if vend is None:
             vend=det_size[1]
-        with self.pausing_acuisition():
+        with self.pausing_acquisition():
             self.v["Width"]=self.attributes["Width"].min
             self.v["Height"]=self.attributes["Height"].min
             self.v["OffsetX"]=hstart
@@ -358,7 +358,7 @@ class IMAQdxCamera(interface.IDevice):
         return last_buffer if last_buffer<2**31 else -1
     
     @contextlib.contextmanager
-    def pausing_acuisition(self):
+    def pausing_acquisition(self):
         """
         Context manager which temporarily pauses acquisition during execution of ``with`` block.
 
@@ -418,7 +418,8 @@ class IMAQdxCamera(interface.IDevice):
                 return
             if since=="lastwait" and since_last_wait>0:
                 return
-            time.sleep(min(period,ctd.time_left()))
+            tl=ctd.time_left()
+            time.sleep(period if tl is None else min(period,tl))
         raise IMAQdxError()
         
 
@@ -472,7 +473,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
         return self.v["CameraAttributes/AcquisitionControl/ExposureTime"]*1E-6
     def set_exposure(self, exposure):
         """Set current exposure"""
-        with self.pausing_acuisition():
+        with self.pausing_acquisition():
             self.v["CameraAttributes/AcquisitionControl/ExposureTime"]=exposure*1E6
         return self.get_exposure()
 
@@ -556,7 +557,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
             frames=np.asarray(frames)
         return frames
 
-    def snap(self, timeout=None):
+    def snap(self, timeout=20.):
         """Snap a single image (with preset image read mode parameters)"""
         self.refresh_acquisition()
         self.setup_acqusition(False,1)

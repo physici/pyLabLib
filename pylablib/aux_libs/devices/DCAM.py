@@ -1,5 +1,5 @@
 from ...core.devio.interface import IDevice
-from ...core.utils import py3, funcargparse, dictionary
+from ...core.utils import py3, funcargparse, dictionary, general
 from ...core.dataproc import image as image_utils
 
 _depends_local=[".DCAM_lib","...core.devio.interface"]
@@ -8,6 +8,7 @@ import numpy as np
 import collections
 import ctypes
 import contextlib
+import time
 
 from .DCAM_lib import lib, DCAMLibError
 
@@ -285,14 +286,14 @@ class DCAMCamera(IDevice):
             hend=hend or self.properties["SUBARRAY HSIZE"].max
             vend=vend or self.properties["SUBARRAY VSIZE"].max
             min_roi,max_roi=self.get_roi_limits()
-            self.set_value("SUBARRAY HSIZE",min_roi[2])
-            self.set_value("SUBARRAY HPOS",hstart)
-            self.set_value("SUBARRAY HSIZE",max(hend-hstart,min_roi[2]))
-            self.set_value("SUBARRAY VSIZE",min_roi[3])
-            self.set_value("SUBARRAY VPOS",vstart)
-            self.set_value("SUBARRAY VSIZE",max(vend-vstart,min_roi[3]))
             if bin==3:
                 bin=2
+            self.set_value("SUBARRAY HSIZE",min_roi[2])
+            self.set_value("SUBARRAY HPOS",(hstart//4)*4)
+            self.set_value("SUBARRAY HSIZE",(max(hend-hstart,min_roi[2])//4)*4)
+            self.set_value("SUBARRAY VSIZE",min_roi[3])
+            self.set_value("SUBARRAY VPOS",(vstart//4)*4)
+            self.set_value("SUBARRAY VSIZE",(max(vend-vstart,min_roi[3])//4)*4)
             self.set_value("BINNING",min(bin,max_roi[4]))
         return self.get_roi()
     def get_roi_limits(self):
@@ -396,7 +397,7 @@ class DCAMCamera(IDevice):
         if not peek:
             self._last_frame=rng[1]
         return (images,infos) if return_info else images
-    def wait_for_frame(self, since="lastread", timeout=20.):
+    def wait_for_frame(self, since="lastread", timeout=20., period=1E-3):
         """
         Wait for a new camera frame.
 
@@ -407,14 +408,18 @@ class DCAMCamera(IDevice):
         """
         funcargparse.check_parameter_range(since,"since",{"lastread","lastwait","now"})
         if since=="lastwait":
-            timeout=int(timeout*1e3) if timeout is not None else 0x80000000
-            try:
-                lib.dcamwait_start(self.dcamwait.hwait,0x02,timeout)
-            except DCAMLibError as e:
-                if e.text_code=="DCAMERR_TIMEOUT":
-                    raise DCAMTimeoutError
-                else:
-                    raise
+            ctd=general.Countdown(timeout)
+            while True:
+                try:
+                    lib.dcamwait_start(self.dcamwait.hwait,0x02,0) # default timeout doesn't work, it's either 0 (for timeout=0) or infinite (for timeout>0)
+                    return
+                except DCAMLibError as e:
+                    if e.text_code=="DCAMERR_TIMEOUT":
+                        if ctd.passed():
+                            raise DCAMTimeoutError from None
+                    else:
+                        raise
+                time.sleep(period)
         elif since=="lastread":
             while self.get_new_images_range() is None:
                 self.wait_for_frame(since="lastwait",timeout=timeout)
