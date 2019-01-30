@@ -1,7 +1,9 @@
 from .misc import default_lib_folder, load_lib
 from ...core.devio.interface import IDevice
+from ...core.utils import general
 
 import os.path
+import time
 import ctypes
 
 
@@ -16,7 +18,7 @@ class WS(IDevice):
         lib_path(str): path to the wlmData6.dll or wlmData7.dll (default is to use the library supplied with the package)
         idx(int): wavemeter input index
     """
-    def __init__(self, lib_path=None, idx=0):
+    def __init__(self, lib_path=None, idx=0, serv_path=None, version=None, hide_app=False, timeout=10.):
         IDevice.__init__(self)
         if lib_path==6:
             lib_path=os.path.join(default_lib_folder,"wlmData6.dll")
@@ -25,6 +27,10 @@ class WS(IDevice):
         self.dll=load_lib(lib_path)
         self.dll.Instantiate.restype=ctypes.c_long
         self.dll.Instantiate.argtypes=[ctypes.c_long,ctypes.c_long,ctypes.c_long,ctypes.c_long]
+        self.dll.ControlWLM.restype=ctypes.c_long
+        self.dll.ControlWLM.argtypes=[ctypes.c_long,ctypes.c_char_p,ctypes.c_long]
+        self.dll.Operation.restype=ctypes.c_long
+        self.dll.Operation.argtypes=[ctypes.c_short]
         self.dll.GetFrequencyNum.restype=ctypes.c_double
         self.dll.GetFrequencyNum.argtypes=[ctypes.c_long,ctypes.c_double]
         self.dll.GetExposureModeNum.restype=ctypes.c_bool
@@ -36,13 +42,25 @@ class WS(IDevice):
         self.dll.SetExposureNum.restype=ctypes.c_long
         self.dll.SetExposureNum.argtypes=[ctypes.c_long,ctypes.c_long,ctypes.c_long]
         self.idx=idx
+        self.serv_path=serv_path
+        self.version=version
+        self.hide_app=hide_app
+        self.timeout=timeout
         self.open()
         self._add_status_node("frequency",self.get_frequency)
         self._add_settings_node("exposure_mode",self.get_exposure_mode,self.set_exposure_mode)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
 
     def open(self):
-        self.dll.Instantiate(-1,0,0,0)
+        self.dll.ControlWLM(2 if self.hide_app else 1,self.serv_path,self.version or 0)
+        ctd=general.Countdown(self.timeout)
+        while True:
+            if self.dll.Instantiate(-1,0,0,0):
+                break
+            time.sleep(0.1)
+            if ctd.passed():
+                raise HFError("Timeout on application start")
+        self.start_measurement()
     
     _GetFunc_err={  0:"ErrNoValue: No value",
                             -1:"ErrNoSignal: No signal detected",
@@ -103,6 +121,11 @@ class WS(IDevice):
                     return "over"
             self._check_getfunc_error("GetFrequencyNum",err)
         return res*1E12
+
+    def start_measurement(self):
+        self.dll.Operation(2)
+    def stop_measurement(self):
+        self.dll.Operation(0)
 
     def get_exposure_mode(self):
         """Get the exposure mode (0 for manual, 1 for auto)"""
