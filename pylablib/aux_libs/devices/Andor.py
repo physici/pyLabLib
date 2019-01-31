@@ -51,7 +51,7 @@ class AndorCamera(IDevice):
         self._add_full_info_node("model_data",self.get_model_data)
         self._add_full_info_node("capabilities",self.get_capabilities)
         self._add_full_info_node("amp_modes",self.get_all_amp_modes,ignore_error=AndorLibError)
-        self._add_settings_node("temperature",lambda: self.temperature_setpoint,self.set_temperature)
+        self._add_settings_node("temperature",self.get_temperature_setpoint,self.set_temperature)
         self._add_status_node("temperature_monitor",self.get_temperature,ignore_error=AndorLibError)
         self._add_status_node("temperature_status",self.get_temperature_status,ignore_error=AndorLibError)
         self._add_settings_node("cooler",self.is_cooler_on,self.set_cooler,ignore_error=AndorLibError)
@@ -268,6 +268,8 @@ class AndorCamera(IDevice):
         lib.SetTemperature(self.temperature_setpoint)
         if enable_cooler:
             self.set_cooler(True)
+    def get_temperature_setpoint(self):
+        return self.temperature_setpoint
     
     ### Amplifiers/shift speeds controls ###
     def get_all_amp_modes(self):
@@ -898,7 +900,7 @@ class AndorSDK3Camera(IDevice):
         self._reg_cb=None
         self._image_lock=threading.RLock()
         self._wait_thread_lock=threading.RLock()
-        self._wait_thread=threading.Thread(target=self._wait_skip_images,daemon=True)
+        self._wait_thread=None
         self._wait_thread_event=threading.Event()
         self._wait_thread_cnt=0
         self.open()
@@ -910,6 +912,9 @@ class AndorSDK3Camera(IDevice):
         self._add_full_info_node("values",self.get_all_values)
         self._add_settings_node("trigger_mode",self.get_trigger_mode,self.set_trigger_mode)
         self._add_settings_node("shutter",self.get_shutter,self.set_shutter)
+        self._add_settings_node("temperature",self.get_temperature_setpoint,self.set_temperature)
+        self._add_status_node("temperature_monitor",self.get_temperature)
+        self._add_settings_node("cooler",self.is_cooler_on,self.set_cooler)
         self._add_status_node("is_acquiring",self.is_acquiring)
         self._add_status_node("timings",self.get_timings)
         self._add_status_node("data_dimensions",self.get_data_dimensions)
@@ -956,6 +961,7 @@ class AndorSDK3Camera(IDevice):
         lib3.AT_InitialiseLibrary()
         self.handle=lib3.AT_Open(self.idx)
         self._open_cams+=1
+        self._wait_thread=threading.Thread(target=self._wait_skip_images,daemon=True)
         self._wait_thread.start()
         self._register_frame_counter()
     def close(self):
@@ -963,6 +969,7 @@ class AndorSDK3Camera(IDevice):
         if self.handle is not None:
             self._req_wait_thread_stop()
             self._wait_thread.join()
+            self._wait_thread=None
             self._unregister_frame_counter()
             lib3.AT_Close(self.handle)
             self._open_cams-=1
@@ -982,9 +989,9 @@ class AndorSDK3Camera(IDevice):
     def is_feature_writable(self, name):
         """Check if given feature is available"""
         return lib3.AT_IsImplemented(self.handle,name) and lib3.AT_IsWritable(self.handle,name) 
-    def _check_feature(self, name):
-        if not self.is_feature_available(name):
-            raise AndorNotSupportedError("feature {} is not supported by camera {}",name,self.get_model_data().camera_model)
+    def _check_feature(self, name, writable=False):
+        if not self.is_feature_available(name) or (writable and not self.is_feature_writable(name)):
+            raise AndorNotSupportedError("feature {} is not supported by camera {}".format(name,self.get_model_data().camera_model))
     def get_value(self, name, kind="auto", enum_str=True, default="error"):
         """
         Get current value of the given feature.
@@ -1161,6 +1168,41 @@ class AndorSDK3Camera(IDevice):
         self.set_value("ShutterMode",self._shutter_modes[mode])
         return self.get_shutter()
 
+
+    ### Cooler controls ###
+    def is_cooler_on(self):
+        """Check if the cooler is on"""
+        self._check_feature("SensorCooling")
+        return self.get_value("SensorCooling")
+    def set_cooler(self, on=True):
+        """Set the cooler on or off"""
+        self._check_feature("SensorCooling")
+        self.set_value("SensorCooling",on)
+        return self.get_value("SensorCooling")
+
+    def get_temperature(self):
+        """Get the current camera temperature"""
+        self._check_feature("SensorTemperature")
+        return self.get_value("SensorTemperature")
+    def get_temperature_setpoint(self):
+        """Get current temperature setpoint."""
+        self._check_feature("TargetSensorTemperature")
+        return self.get_value("TargetSensorTemperature")
+    def set_temperature(self, temperature, enable_cooler=True):
+        """
+        Change the temperature setpoint.
+
+        If ``enable_cooler==True``, turn the cooler on automatically.
+        """
+        self._check_feature("TargetSensorTemperature")
+        if self.get_value("TargetSensorTemperature")!=temperature:
+            self._check_feature("TargetSensorTemperature",writable=True)
+            self.set_value("TargetSensorTemperature",temperature)
+        if enable_cooler:
+            self.set_cooler(True)
+        return self.get_value("TargetSensorTemperature")
+
+
     def get_exposure(self):
         """Get current exposure"""
         return self.get_value("ExposureTime")
@@ -1176,7 +1218,7 @@ class AndorSDK3Camera(IDevice):
             return
         fr_rng=self.get_value_range("FrameRate")
         ro_rng=1./fr_rng[1],1./fr_rng[0]
-        readout_time=min(max(readout_time,ro_rng[1]),ro_rng[0])
+        readout_time=max(min(readout_time,ro_rng[1]),ro_rng[0])
         self.set_value("FrameRate",1./readout_time)
         return self.get_readout_time()
     AcqTimes=collections.namedtuple("AcqTimes",["exposure","accum_cycle_time","kinetic_cycle_time"])
@@ -1390,7 +1432,7 @@ class AndorSDK3Camera(IDevice):
             self._ring_buffer.advance()
             self._frame_counter.read()
     def _parse_image(self, img):
-        width,height=self._get_data_dimensions_rc()
+        height,width=self._get_data_dimensions_rc()
         metadata_enabled=self.get_value("MetadataEnable",default=False)
         imlen=len(img)
         if metadata_enabled:
@@ -1474,10 +1516,16 @@ class AndorSDK3Camera(IDevice):
         Return tuple ``(min_roi, max_roi)``, where each element is in turn 6-tuple describing the ROI.
         """
         params=["AOILeft","AOITop","AOIWidth","AOIHeight","AOIHBin","AOIVBin"]
-        minp=tuple([self.get_value_range(p)[0] for p in params])
-        maxp=tuple([self.get_value_range(p)[1] for p in params])
-        min_roi=(0,0)+minp[2:]
-        max_roi=(maxp[0]-1,maxp[1]-1,maxp[2]-1,maxp[3]-1,maxp[4],maxp[5])
+        minp,maxp=[list(p) for p in zip(*[self.get_value_range(p) for p in params])]
+        bin=[self.get_value(p) for p in params[-2:]]
+        for i in range(2):
+            minp[i]-=1
+            maxp[i]-=1
+        for i in range(4):
+            minp[i]*=bin[i%2]
+            maxp[i]*=bin[i%2]
+        min_roi=(0,0)+tuple(minp[2:])
+        max_roi=(maxp[2]-minp[2],maxp[3]-minp[3],maxp[2],maxp[3],maxp[4],maxp[5])
         return (min_roi,max_roi)
 
     def get_new_images_range(self):

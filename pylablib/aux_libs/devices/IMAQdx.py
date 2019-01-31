@@ -310,8 +310,8 @@ class IMAQdxCamera(interface.IDevice):
         Return tuple ``(min_roi, max_roi)``, where each element is in turn 4-tuple describing the ROI.
         """
         params=["OffsetX","OffsetY","Width","Height"]
-        minp=tuple([self.attributes[p].min for p in params])
-        maxp=tuple([self.attributes[p].max for p in params])
+        minp=tuple([(self.attributes[p].min if p in self.attributes else 0) for p in params])
+        maxp=tuple([(self.attributes[p].max if p in self.attributes else 0) for p in params])
         min_roi=(0,0)+minp[2:]
         max_roi=maxp
         return (min_roi,max_roi)
