@@ -44,6 +44,8 @@ class AndorCamera(IDevice):
         self.idx=idx
         self.ini_path=ini_path
         self.handle=None
+        self._minh=0
+        self._minv=0
         self.open()
         self.image_indexing="rct"
         
@@ -125,6 +127,8 @@ class AndorCamera(IDevice):
             self.setup_multi_track_mode()
             self.setup_random_track_mode()
             self.flush_buffer()
+            self._minh=self._find_min_roi_end("h")
+            self._minv=self._find_min_roi_end("v")
         finally:
             self._strict_option_check=True
 
@@ -726,9 +730,9 @@ class AndorCamera(IDevice):
         if (hstart,hend,vstart,vend)!=(0,hdet,0,vdet):
             if not self._check_option("read","AC_READMODE_SUBIMAGE"): return
         hend-=(hend-hstart)%hbin # make size divisible by bin
-        hend=max(hend,hstart+hbin*3)
+        hend=max(hend,hstart+hbin*self._minh)
         vend-=(vend-vstart)%vbin
-        vend=max(vend,vstart+vbin*3)
+        vend=max(vend,vstart+vbin*self._minv)
         lib.SetImage(hbin,vbin,hstart+1,hend,vstart+1,vend)
         self.read_params["image"]=(hstart,hend,vstart,vend,hbin,vbin)
     
@@ -749,6 +753,21 @@ class AndorCamera(IDevice):
         """
         self.setup_image_mode(hstart,hend,vstart,vend,hbin,vbin)
         self.set_read_mode("image")
+    def _find_min_roi_end(self, kind="h"):
+        roi=self.get_roi()
+        smin,smax=0,self.get_detector_size()[0 if kind=="h" else 1]
+        while smin<smax-1:
+            smid=(smin+smax)//2
+            try:
+                if kind=="h":
+                    self.set_roi(hend=smid)
+                else:
+                    self.set_roi(vend=smid)
+                smax=smid
+            except AndorLibError:
+                smin=smid
+        self.set_roi(*roi)
+        return smax
     def get_roi_limits(self):
         """
         Get the minimal and maximal ROI parameters.
@@ -757,9 +776,9 @@ class AndorCamera(IDevice):
         """
         xdet,ydet=self.get_detector_size()
         roi=self.get_roi()
-        min_roi=(0,0,roi[4]*3,roi[5]*3,1,1)
-        maxbin=int(min(xdet//3,ydet//3,128))
-        max_roi=(xdet-min_roi[2],xdet-min_roi[3],xdet,xdet,maxbin)
+        min_roi=(0,0,roi[4]*self._minh,roi[5]*self._minv,1,1)
+        maxbin=int(min(xdet//self._minh,ydet//self._minv,32)) if (self._minh and self._minv) else 32
+        max_roi=(xdet-min_roi[2],xdet-min_roi[3],xdet,ydet,maxbin,maxbin)
         return (min_roi,max_roi)
 
     def _get_data_dimensions_rc(self, mode=None, params=None):

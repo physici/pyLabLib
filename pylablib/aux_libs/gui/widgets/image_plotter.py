@@ -178,6 +178,16 @@ class ImageView(QtWidgets.QWidget):
         params.v["minlim"],params.v["maxlim"]=levels
         params.v["vlinepos"]=self.imgVLine.getPos()[0]
         params.v["hlinepos"]=self.imgHLine.getPos()[1]
+    def _sanitize_img(self, img, targetImageSize=20): # PyQtGraph histgram has an unfortuinate failure mode
+        steps=(int(np.ceil(img.shape[0] / targetImageSize)), int(np.ceil(img.shape[1] / targetImageSize)))
+        step_img=img[::steps[0],::steps[1]] # ImageView only uses stepped image for plotting
+        if np.all(step_img==step_img[0,0]): # ImageView can't plot images of constant color
+            img=img.copy()
+            if img[0,0]==0:
+                img[0,0]+=1
+            else:
+                img[0,0]-=1
+        return img
     # Update image plot
     @controller.exsafe
     def update_image(self, update_controls=False):
@@ -194,12 +204,10 @@ class ImageView(QtWidgets.QWidget):
             if params.v["flip_y"]:
                 draw_img=draw_img[:,::-1]
             img_shape=draw_img.shape
-            if img_shape==(1,1): # ImageView can't plot 1x1 images
-                draw_img=np.zeros((2,2),dtype=np.asarray(draw_img).dtype)+draw_img[0,0]
+            if np.prod(img_shape)<=1: # ImageView can't plot images with less than 1 px
+                draw_img=np.zeros((2,2),dtype=np.asarray(draw_img).dtype)+(draw_img[0,0] if np.prod(draw_img.shape) else 0)
             autoscale=params.v["normalize"]
-            if np.all(draw_img==draw_img[0,0]): # IamgeView can't plot images of constant color
-                draw_img=draw_img.copy()
-                draw_img[0,0]+=1
+            draw_img=self._sanitize_img(draw_img)
             if self.isVisible():
                 self.imageWindow.setImage(draw_img,autoLevels=autoscale,autoHistogramRange=autoscale)
             if update_controls:
