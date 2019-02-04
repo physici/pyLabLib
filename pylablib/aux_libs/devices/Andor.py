@@ -755,7 +755,7 @@ class AndorCamera(IDevice):
         self.set_read_mode("image")
     def _find_min_roi_end(self, kind="h"):
         roi=self.get_roi()
-        smin,smax=0,self.get_detector_size()[0 if kind=="h" else 1]
+        smin,smax=1,self.get_detector_size()[0 if kind=="h" else 1]
         while smin<smax-1:
             smid=(smin+smax)//2
             try:

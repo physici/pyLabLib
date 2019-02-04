@@ -286,6 +286,8 @@ class IMAQdxLib(object):
         self.IMAQdxGetImageData_lib=wrapper(lib.IMAQdxGetImageData,
             [IMAQdxSession,ctypes.c_voidp,ctypes.c_uint32,IMAQdxBufferNumberMode,ctypes.c_uint32,ctypes.POINTER(ctypes.c_uint32)],
             ["sid","buff_ptr","size","mode","buffer_num","buffer_num_ptr"])
+
+        self._initialized=True
         
 
 

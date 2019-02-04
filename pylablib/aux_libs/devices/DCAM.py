@@ -395,7 +395,7 @@ class DCAMCamera(IDevice):
         images,infos=list(zip(*frames))
         images=np.array(images)
         if not peek:
-            self._last_frame=rng[1]
+            self._last_frame=max(self._last_frame,rng[1])
         return (images,infos) if return_info else images
     def wait_for_frame(self, since="lastread", timeout=20., period=1E-3):
         """

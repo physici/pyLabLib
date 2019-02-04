@@ -23,7 +23,7 @@ class IMAQdxAttribute(object):
     Object representing an IMAQdx camera parameter.
 
     Allows to query and set values and get additional information.
-    Usually created automatically by an :class:`IMAQdxCamera` instance, should be created manually.
+    Usually created automatically by an :class:`IMAQdxCamera` instance, but could be created manually.
 
     Attributes:
         name: attirbute name
