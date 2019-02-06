@@ -317,7 +317,7 @@ class IMAQdxCamera(interface.IDevice):
         return (min_roi,max_roi)
     
 
-    def setup_acqusition(self, continuous, frames):
+    def setup_acquisition(self, continuous, frames):
         """
         Setup acquisition mode.
 
@@ -333,7 +333,7 @@ class IMAQdxCamera(interface.IDevice):
         self.buffers_num=0
     def start_acquisition(self):
         if self.acq_params is None:
-            self.setup_acqusition(True,100)
+            self.setup_acquisition(True,100)
         lib.IMAQdxStartAcquisition(self.sid)
         self.frame_counter=0
         self.last_wait_frame=-1
@@ -348,7 +348,7 @@ class IMAQdxCamera(interface.IDevice):
         """Stop and restart the acquisition, waiting `delay` seconds in between"""
         self.stop_acquisition()
         self.clear_acquisition()
-        self.setup_acqusition(0,1)
+        self.setup_acquisition(0,1)
         self.start_acquisition()
         time.sleep(delay)
         self.stop_acquisition()
@@ -372,7 +372,7 @@ class IMAQdxCamera(interface.IDevice):
             yield
         finally:
             if acq_params:
-                self.setup_acqusition(*acq_params)
+                self.setup_acquisition(*acq_params)
             if acq_in_progress:
                 self.start_acquisition()
 
@@ -477,7 +477,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
             self.v["CameraAttributes/AcquisitionControl/ExposureTime"]=exposure*1E6
         return self.get_exposure()
 
-    def setup_acqusition(self, continuous, frames):
+    def setup_acquisition(self, continuous, frames):
         """
         Setup acquisition mode.
 
@@ -485,7 +485,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
         (note that :meth:`acquision_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
         """
-        IMAQdxCamera.setup_acqusition(self,continuous,frames)
+        IMAQdxCamera.setup_acquisition(self,continuous,frames)
         if continuous:
             self.buffers_num=frames//2 # seems to be the case
 
@@ -560,7 +560,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
     def snap(self, timeout=20.):
         """Snap a single image (with preset image read mode parameters)"""
         self.refresh_acquisition()
-        self.setup_acqusition(False,1)
+        self.setup_acquisition(False,1)
         self.start_acquisition()
         self.wait_for_frame(timeout=timeout)
         frame=self.read_multiple_images()[0]

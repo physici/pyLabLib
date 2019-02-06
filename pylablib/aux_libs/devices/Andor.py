@@ -524,7 +524,7 @@ class AndorCamera(IDevice):
         self.set_acquisition_mode("cont")
         lib.SetKineticCycleTime(cycle_time)
         self.acq_params["cont"]=cycle_time
-    def _setup_acqusition(self, acq_mode=None, params=None):
+    def _setup_acquisition(self, acq_mode=None, params=None):
         acq_mode=acq_mode or self.acq_mode
         params=params or self.acq_params[self.acq_mode]
         if acq_mode=="accum":
@@ -589,7 +589,7 @@ class AndorCamera(IDevice):
         """
         self._camsel()
         if setup:
-            self._setup_acqusition()
+            self._setup_acquisition()
         lib.StartAcquisition()
     def stop_acquisition(self):
         """Stop acquisition"""

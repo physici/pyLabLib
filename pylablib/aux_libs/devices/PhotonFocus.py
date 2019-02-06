@@ -166,12 +166,9 @@ class PhotonFocusIMAQCamera(IMAQCamera):
     """
     def __init__(self, imaq_name="img0", pfcam_port=0):
         self.pfcam_port=pfcam_port
+        self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
         try:
             IMAQCamera.__init__(self)
-            props=self.list_properties()
-            self.properties=dictionary.Dictionary(dict([ (p.name.replace(".","/"),p) for p in props ]))
-            self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
-            self._update_imaq()
         except Exception:
             self.close()
             raise
@@ -180,14 +177,24 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         self._add_full_info_node("interface_name",lambda: self.name)
         self._add_full_info_node("pfcam_port",lambda: self.pfcam_port)
         self._add_status_node("properties",self.get_all_properties)
+        self._add_settings_node("trigger_interleave",self.get_trigger_interleave,self.set_trigger_interleave)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
-        
+        self._add_settings_node("frame_time",self.get_frame_time,self.set_frame_time)
+    
+    def setup_baudrate(self):
+        brs=[57600,33600,19200,9600,4800,3200,1600]
+        for br in brs:
+            if lib.pfIsBaudRateSupported(self.pfcam_port,br):
+                lib.pfSetBaudRate(self.pfcam_port,br)
+                return
     def open(self):
         """Open connection to the camera"""
         IMAQCamera.open(self)
         lib.pfPortInit()
         lib.pfDeviceOpen(self.pfcam_port)
-        self.post_open()
+        self.setup_baudrate()
+        self.properties=dictionary.Dictionary(dict([ (p.name.replace(".","/"),p) for p in self.list_properties() ]))
+        self._update_imaq()
     def close(self):
         """Close connection to the camera"""
         IMAQCamera.close(self)
@@ -360,3 +367,12 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         with self.pausing_acquisition():
             self.v["FrameTime"]=frame_time*1E3
         return self.get_frame_time()
+
+    def get_trigger_interleave(self):
+        """Check if the trigger interleave is on"""
+        return self.v.get("Trigger/Interleave",False)
+    def set_trigger_interleave(self, interleave):
+        """Set the trigger interleave option on or off"""
+        if "Trigger/Interleave" in self.properties:
+            self.v["Trigger/Interleave"]=interleave
+        return self.v.get("Trigger/Interleave",False)

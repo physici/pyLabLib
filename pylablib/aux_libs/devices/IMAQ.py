@@ -30,7 +30,7 @@ def list_cameras():
     cameras=[]
     i=0
     try:
-        while Ture:
+        while True:
             if_name=lib.imgInterfaceQueryNames(i)
             cameras.append(py3.as_str(if_name))
             i+=1
@@ -52,16 +52,19 @@ class IMAQCamera(interface.IDevice):
         self.name=name
         self.ifid=None
         self.sid=None
-        self.open()
         self.image_indexing="rct"
         self._buffers=[]
+        self._buffer_allocation_size=2**20
+        self._frame_size=None
+        self._buffer_frames=None
         self._last_read_frame=None
         self._start_acq_count=None
         self._last_wait_frame=None
         self._lost_frames=None
         self._acq_params=None
-        self.post_open()
         self.init_done=True
+
+        self.open()
 
         self._add_full_info_node("model_data",self.get_model_data)
         self._add_full_info_node("interface_name",lambda: self.name)
@@ -124,7 +127,7 @@ class IMAQCamera(interface.IDevice):
             if default is None:
                 raise e from None
             return default
-    def get_float_value(self, attr):
+    def set_float_value(self, attr, value):
         """Set value of a floating point attribute with a given name"""
         lib.imgSetAttribute2_double(self.sid,self._norm_attr(attr),value)
         return lib.imgGetAttribute_double(self.sid,self._norm_attr(attr))
@@ -188,35 +191,29 @@ class IMAQCamera(interface.IDevice):
 
     def _get_ctypes_buffer(self):
         if self._buffers:
-            buffs=(ctypes.c_char_p*len(self._buffers))()
+            cbuffs=(ctypes.c_char_p*self._buffer_frames)()
+            frames_per_buff=len(self._buffers[0])//self._frame_size
             for i,b in enumerate(self._buffers):
-                buffs[i]=b
-            return buffs
+                for j in range(frames_per_buff):
+                    cbuffs[i*frames_per_buff+j]=ctypes.addressof(b)+j*self._frame_size
+            return cbuffs
         else:
             return None
     def _deallocate_buffers(self):
-        if self._buffers:
-            for b in self._buffers:
-                lib.imgDisposeBuffer(b)
         self._buffers=[]
+        self._buffer_frames=None
+        self._frame_size=None
         self._last_read_frame=None
         self._start_acq_count=None
         self._lost_frames=None
     def _allocate_buffers(self, n):
         self._deallocate_buffers()
-        buffer_size=self._get_buffer_size()
-        for _ in range(n):
-            b=lib.imgCreateBuffer(self.sid,0,buffer_size)
-            self._buffers.append(b)
-    @contextlib.contextmanager
-    def _reset_buffers(self):
-        nframes=len(self._buffers)
-        self._deallocate_buffer()
-        try:
-            yield
-        finally:
-            if nframes:
-                self._allocate_buffer(nframes)
+        self._frame_size=self._get_buffer_size()
+        frames_per_buff=max(self._buffer_allocation_size//self._frame_size,1)
+        buffer_size=frames_per_buff*self._frame_size
+        nbuffs=(n-1)//frames_per_buff+1
+        self._buffers=[ctypes.create_string_buffer(buffer_size) for _ in range(nbuffs)]
+        self._buffer_frames=nbuffs*frames_per_buff
     def _acquired_frames(self):
         if self._start_acq_count is None:
             return 0
@@ -224,26 +221,26 @@ class IMAQCamera(interface.IDevice):
     def _get_buffer_num(self, frame):
         if not self._buffers:
             return -1
-        return (frame+self._start_acq_count)%len(self._buffers)
+        return (frame+self._start_acq_count)%self._buffer_frames
         
 
 
-    def setup_acqusition(self, continuous, frames):
+    def setup_acquisition(self, continuous, frames):
         """
         Setup acquisition mode.
 
         `continuous` determines whether acquisition runs continuously, or stops after the given number of frames
         (note that :meth:`acquision_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
-        If ``start==True``, start acqusition directly after setup.
+        If ``start==True``, start acquisition directly after setup.
         """
         self._allocate_buffers(frames)
         cbuffs=self._get_ctypes_buffer()
         if continuous:
-            lib.imgRingSetup(self.sid,len(self._buffers),cbuffs,0,0)
+            lib.imgRingSetup(self.sid,len(cbuffs),cbuffs,0,0)
         else:
             skips=(ctypes.c_uint32*frames)(0)
-            lib.imgSequenceSetup(self.sid,len(self._buffers),cbuffs,skips,0,0)
+            lib.imgSequenceSetup(self.sid,len(cbuffs),cbuffs,skips,0,0)
         self._acq_params=(continuous,frames)
         self._last_read_frame=-1
         self._start_acq_count=0
@@ -254,11 +251,12 @@ class IMAQCamera(interface.IDevice):
         self.stop_acquisition()
         lib.imgSessionAbort(self.sid)
         self._deallocate_buffers()
+        self._acq_params=None
     def start_acquisition(self):
         """Start acquistion"""
         self.stop_acquisition()
         if self._acq_params is None:
-            self.setup_acqusition(True,100)
+            self.setup_acquisition(True,100)
         self._start_acq_count=self.get_int_value("FRAME_COUNT",0)
         self._last_read_frame=-1
         self._lost_frames=0
@@ -285,7 +283,7 @@ class IMAQCamera(interface.IDevice):
             yield
         finally:
             if acq_params:
-                self.setup_acqusition(*acq_params)
+                self.setup_acquisition(*acq_params)
             if acq_in_progress:
                 self.start_acquisition()
 
@@ -299,12 +297,11 @@ class IMAQCamera(interface.IDevice):
         """
         rng=self.get_new_images_range()
         unread=0 if rng is None else rng[1]-rng[0]+1
-        buff_size=len(self._buffers)
         if rng is not None:
-            lost_frames=self._lost_frames+max(0,rng[1]-buff_size-self._last_read_frame)
+            lost_frames=self._lost_frames+max(0,rng[1]-self._buffer_frames-self._last_read_frame)
         else:
             lost_frames=0
-        return self.TBufferStatus(unread,lost_frames,buff_size)
+        return self.TBufferStatus(unread,lost_frames,self._buffer_frames)
     def get_new_images_range(self):
         """
         Get the range of the new images.
@@ -317,9 +314,8 @@ class IMAQCamera(interface.IDevice):
             return None
         if self._last_read_frame+1>=frame_cnt:
             return None
-        buff_size=len(self._buffers)
-        if self._last_read_frame<frame_cnt-buff_size:
-            return (frame_cnt-buff_size,frame_cnt-1)
+        if self._last_read_frame<frame_cnt-self._buffer_frames:
+            return (frame_cnt-self._buffer_frames,frame_cnt-1)
         return (self._last_read_frame+1,frame_cnt-1)
     def wait_for_frame(self, since="lastread", timeout=20.):
         """
@@ -339,7 +335,7 @@ class IMAQCamera(interface.IDevice):
             self._last_wait_frame=last_acq_frame
             return
         if since=="lastwait" and last_acq_frame>self._last_wait_frame:
-            self._last_wait_frame=acq_flast_acq_framerames
+            self._last_wait_frame=last_acq_frame
             return
         try:
             lib.imgSessionWaitSignal2(self.sid,4,11,0,int(timeout*1000))
@@ -354,28 +350,45 @@ class IMAQCamera(interface.IDevice):
         return
         
 
-    def _read_data_raw(self, size_bytes, buffer_num=0):
-        """Return raw bytes string from the given buffer number"""
-        return ctypes.string_at(self._buffers[buffer_num],size_bytes)
+    def _read_frame_data_raw(self, buffer_frame_num):
+        """Return raw bytes string corresponding to the given buffer frame number"""
+        frames_per_buff=len(self._buffers[0])//self._frame_size
+        ibuff=buffer_frame_num//frames_per_buff
+        jbuff=buffer_frame_num%frames_per_buff
+        return self._buffers[ibuff][jbuff*self._frame_size:jbuff*self._frame_size+self._frame_size]
+    def _read_buff_data_raw(self, buffer_frame_num, max_nframes):
+        """
+        Read raw bytes string containing one or several frames starting with the given buffer frame number.
+        
+        Read all the frames up to the end of the buffer containing given frame, or up to `max_nframes` frames, whichever is smaller.
+        Return tuple ``(number_returned, raw_data)``, where `number_returned` is the total number of returned frames (between 1 and `max_n_frames`),
+        and `raw_data` is a binary string of the size ``self._frame_size*number_returned``.
+
+        Function exists only to speed up reading of large number of small frames.
+        """
+        frames_per_buff=len(self._buffers[0])//self._frame_size
+        ibuff=buffer_frame_num//frames_per_buff
+        jbuff=buffer_frame_num%frames_per_buff
+        nread=min(max_nframes,frames_per_buff-jbuff)
+        return nread,self._buffers[ibuff][jbuff*self._frame_size:(jbuff+nread)*self._frame_size]
     
     def _get_buffer_bpp(self):
         return self.get_int_value("BYTESPERPIXEL",1)
     def _get_buffer_dtype(self):
-        bpp=self.get_int_value("BYTESPERPIXEL",1)
         return "<u{}".format(self._get_buffer_bpp())
     def _get_buffer_size(self):
         bpp=self._get_buffer_bpp()
         roi=self.get_roi()
         w,h=roi[1]-roi[0],roi[3]-roi[2]
         return w*h*bpp
-    def _parse_buffer(self, buffer):
-        r,c=self._get_data_dimensions_rc()
-        bpp=self.get_int_value("BYTESPERPIXEL",1)
-        if len(buffer)!=r*c*bpp:
-            raise ValueError("wrong buffer size: expected {}x{}x{}={}, got {}".format(r,c,bpp,r*c*bpp,len(buffer)))
+    def _parse_buffer(self, buffer, dim=None, bpp=None, nframes=1):
+        r,c=dim or self._get_data_dimensions_rc()
+        bpp=bpp or self.get_int_value("BYTESPERPIXEL",1)
+        if len(buffer)!=nframes*r*c*bpp:
+            raise ValueError("wrong buffer size: expected {}x{}x{}x{}={}, got {}".format(nframes,r,c,bpp,nframes*r*c*bpp,len(buffer)))
         dt="<u{}".format(bpp)
-        return np.frombuffer(buffer,dtype=dt).reshape((r,c))
-    def _read_multiple_images_raw(self, size_bytes, rng=None, peek=False, missing_frame="skip"):
+        return np.frombuffer(buffer,dtype=dt).reshape((nframes,r,c))
+    def _read_multiple_images_raw(self, rng=None, peek=False, missing_frame="skip"):
         """
         Read multiple images specified by `rng` (by default, all un-read images).
 
@@ -387,14 +400,14 @@ class IMAQCamera(interface.IDevice):
         if not self._buffers:
             return None
         last_acq_frame=self._acquired_frames()-1
-        last_valid_buffer=last_acq_frame-len(self._buffers)
+        last_valid_buffer=last_acq_frame-self._buffer_frames
         if rng is None:
             rng=self.get_new_images_range()
         if rng[1]<last_valid_buffer:
             read_rng=0,-1
         else:
             read_rng=max(rng[0],last_valid_buffer),rng[1]
-        raw_frames=[self._read_data_raw(size_bytes,self._get_buffer_num(n)) for n in range(read_rng[0],read_rng[1]+1)]
+        raw_frames=[self._read_frame_data_raw(self._get_buffer_num(n)) for n in range(read_rng[0],read_rng[1]+1)]
         if missing_frame=="none":
             raw_frames=[None]*(rng[1]-rng[0]-len(raw_frames))+raw_frames
         if not peek:
@@ -405,6 +418,40 @@ class IMAQCamera(interface.IDevice):
                     self._lost_frames+=passed_frames-read_frames
                 self._last_read_frame=rng[1]
         return raw_frames
+    def _read_multiple_images_raw_fastbuff(self, rng=None):
+        """
+        Read multiple images specified by `rng` (by default, all un-read images).
+
+        Some frames in the result are "stuck together" in a single buffer, if their memory locations are continuous.
+        Return list ``[(number_of_frames, raw_data)]``, where `number_of_frames` specifies number of frames in a given array element,
+        and `raw_data` is the binary string corresponding to these frames (of the size ``self._frame_size*number_returned``).
+        Compared to :func:`_read_multiple_images_raw`, always assumes ``peek==False`` and ``missing_frame="skip"`` (default values).
+
+        Function exists only to speed up reading of large number of small frames.
+        """
+        if not self._buffers:
+            return None
+        last_acq_frame=self._acquired_frames()-1
+        last_valid_buffer=last_acq_frame-self._buffer_frames
+        if rng is None:
+            rng=self.get_new_images_range()
+        if rng[1]<last_valid_buffer:
+            read_rng=0,-1
+        else:
+            read_rng=max(rng[0],last_valid_buffer),rng[1]
+        raw_frames=[]
+        i=rng[0]
+        while i<rng[1]+1:
+            nread,data=self._read_buff_data_raw(self._get_buffer_num(i),rng[1]+1-i)
+            i+=nread
+            raw_frames.append((nread,data))
+        if rng[1]>self._last_read_frame:
+            passed_frames=rng[1]-self._last_read_frame
+            read_frames=read_rng[1]-read_rng[0]+1
+            if passed_frames>read_frames:
+                self._lost_frames+=passed_frames-read_frames
+            self._last_read_frame=rng[1]
+        return raw_frames
     def read_multiple_images(self, rng=None, peek=False, missing_frame="skip"):
         """
         Read multiple images specified by `rng` (by default, all un-read images).
@@ -414,15 +461,37 @@ class IMAQCamera(interface.IDevice):
         can be ``"none"`` (replacing them with ``None``), ``"zero"`` (replacing them with zero-filled frame),
         or ``"skip"`` (skipping them).
         """
-        img_size=self._get_buffer_size()
-        raw_data=self._read_multiple_images_raw(img_size,rng=rng,peek=peek,missing_frame=missing_frame)
+        raw_data=self._read_multiple_images_raw(rng=rng,peek=peek,missing_frame=missing_frame)
         if raw_data is None:
             return None
-        parsed_data=[(self._parse_buffer(b) if b is not None else None) for b in raw_data]
+        dim=self._get_data_dimensions_rc()
+        bpp=self.get_int_value("BYTESPERPIXEL",1)
+        parsed_data=[(self._parse_buffer(b,dim=dim,bpp=bpp) if b is not None else None) for b in raw_data]
         if missing_frame=="zero":
             dt=self._get_buffer_dtype()
-            parsed_data=[(np.zeros(img_size,dtype=dt) if f is None else f) for f in parsed_data]
-        return [(None if f is None else image_utils.convert_image_indexing(f,"rct",self.image_indexing)) for f in parsed_data]
+            parsed_data=[(np.zeros(dim,dtype=dt) if f is None else f) for f in parsed_data]
+        if self.image_indexing!="rct":
+            parsed_data=[(None if f is None else image_utils.convert_image_indexing(f,"rct",self.image_indexing)) for f in parsed_data]
+        return parsed_data
+    def read_multiple_images_fastbuff(self, rng=None):
+        """
+        Read multiple images specified by `rng` (by default, all un-read images).
+        
+        Some frames in the result are "stuck together" in a single buffer, if their memory locations are continuous.
+        Return list ``[(number_of_frames, raw_data)]``, where `number_of_frames` specifies number of frames in a given array element,
+        and `raw_data` is the binary string corresponding to these frames (of the size ``self._frame_size*number_returned``).
+        Compared to :func:`read_multiple_images`, always assumes ``peek==False`` and ``missing_frame="skip"`` (default values).
+        Also, always return frames in ``"rct"`` format (row-first indexing, going from the top).
+
+        Function exists only to speed up reading of large number of small frames.
+        """
+        raw_data=self._read_multiple_images_raw_fastbuff(rng=rng)
+        if raw_data is None:
+            return None
+        dim=self._get_data_dimensions_rc()
+        bpp=self.get_int_value("BYTESPERPIXEL",1)
+        parsed_data=[(nread,self._parse_buffer(b,dim=dim,bpp=bpp,nframes=nread)) for (nread,b) in raw_data]
+        return parsed_data
 
     def snap(self, timeout=20.):
         """Snap a single image (with preset image read mode parameters)"""
@@ -440,7 +509,7 @@ class IMAQCamera(interface.IDevice):
         """
         buff_frames=min(n,buff_frames)
         frames=[]
-        self.setup_acqusition(1 if buff_frames<n else 0,buff_frames)
+        self.setup_acquisition(1 if buff_frames<n else 0,buff_frames)
         self.start_acquisition()
         try:
             while len(frames)<n:
