@@ -9,7 +9,7 @@ import collections
 import re
 
 from .IMAQdx import IMAQdxPhotonFocusCamera as PhotonFocusIMAQdxCamera
-from .IMAQ import IMAQCamera, IMAQError
+from .IMAQ import IMAQCamera, IMAQError, lib as IMAQ_lib
 from . import pfcam_lib
 lib=pfcam_lib.lib
 try:
@@ -133,12 +133,17 @@ def query_camera_name(port):
     """Query cameras name at a given port in pfcam interface"""
     lib.pfPortInit()
     try:
-        raw_name=lib.pfProperty_GetName(port,lib.pfDevice_GetRoot(port))
-        return py3.as_str(raw_name) if raw_name is not None else None
-    except pfcam_lib.PfcamLibError:
         lib.pfDeviceOpen(port)
-        value=query_camera_name(port)
+        raw_name=lib.pfProperty_GetName(port,lib.pfDevice_GetRoot(port))
+        value=py3.as_str(raw_name) if raw_name is not None else None
         lib.pfDeviceClose(port)
+        return value
+    except PfcamError:
+        try:
+            lib.pfDeviceClose(port)
+        except PfcamError:
+            pass
+    return None
 def list_cameras(supported=False):
     """
     List all cameras available through pfcam interface
@@ -178,6 +183,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         self._add_full_info_node("pfcam_port",lambda: self.pfcam_port)
         self._add_status_node("properties",self.get_all_properties)
         self._add_settings_node("trigger_interleave",self.get_trigger_interleave,self.set_trigger_interleave)
+        self._add_settings_node("status_line",self.is_status_line_enabled,self.enable_status_line)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
         self._add_settings_node("frame_time",self.get_frame_time,self.set_frame_time)
     
@@ -194,6 +200,8 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         lib.pfDeviceOpen(self.pfcam_port)
         self.setup_baudrate()
         self.properties=dictionary.Dictionary(dict([ (p.name.replace(".","/"),p) for p in self.list_properties() ]))
+        if "Trigger/CFR" in self.properties:
+            self.v["Trigger/CFR"]=True
         self._update_imaq()
     def close(self):
         """Close connection to the camera"""
@@ -287,6 +295,8 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         return self.ModelData(model,serial_number)
 
 
+    def get_detector_size(self):
+        return self.properties["Window/W"].max,self.properties["Window/H"].max
     def _get_pf_data_dimensions_rc(self):
         return self.v["Window/H"],self.v["Window/W"]
     def _update_imaq(self):
@@ -313,6 +323,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
             if a not in self.properties or not self.properties[a].writable:
                 return
         det_size=self.get_detector_size()
+        imaq_detector_size=IMAQCamera.get_detector_size(self)
         if hend is None:
             hend=det_size[0]
         if vend is None:
@@ -322,8 +333,8 @@ class PhotonFocusIMAQCamera(IMAQCamera):
             self.v["Window/H"]=self.properties["Window/H"].min
             self.v["Window/X"]=hstart
             self.v["Window/Y"]=vstart
-            self.v["Window/W"]=max(self.v["Window/W"],hend-hstart)
-            self.v["Window/H"]=max(self.v["Window/H"],vend-vstart)
+            self.v["Window/W"]=min(max(self.v["Window/W"],hend-hstart),imaq_detector_size[0])
+            self.v["Window/H"]=min(max(self.v["Window/H"],vend-vstart),imaq_detector_size[1])
             self._update_imaq()
         return self.get_roi()
     def get_roi_limits(self):
@@ -349,6 +360,10 @@ class PhotonFocusIMAQCamera(IMAQCamera):
             if m:
                 bpp=(int(m.group(1))-1)//8+1
         return bpp
+    def _get_data_dimensions_rc(self):
+        roi=self.get_roi()
+        w,h=roi[1]-roi[0],roi[3]-roi[2]
+        return h,w
 
     def get_exposure(self):
         """Get current exposure"""
@@ -361,11 +376,15 @@ class PhotonFocusIMAQCamera(IMAQCamera):
 
     def get_frame_time(self):
         """Get current frame time"""
-        return self.v["FrameTime"]*1E-3
+        if "FrameTime" in self.properties:
+            return self.v["FrameTime"]*1E-3
+        else:
+            return 1./float(self.v["FrameRate"])
     def set_frame_time(self, frame_time):
         """Set current frame time"""
-        with self.pausing_acquisition():
-            self.v["FrameTime"]=frame_time*1E3
+        if "FrameTime" in self.properties:
+            with self.pausing_acquisition():
+                self.v["FrameTime"]=frame_time*1E3
         return self.get_frame_time()
 
     def get_trigger_interleave(self):
@@ -376,3 +395,91 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         if "Trigger/Interleave" in self.properties:
             self.v["Trigger/Interleave"]=interleave
         return self.v.get("Trigger/Interleave",False)
+
+    def is_status_line_enabled(self):
+        """Check if the status line is on"""
+        return self.v.get("EnStatusLine",False)
+    def enable_status_line(self, enabled=True):
+        """Enable or disable status line"""
+        if "EnStatusLine" in self.properties:
+            self.v["EnStatusLine"]=enabled
+        return self.v.get("EnStatusLine",False)
+
+
+
+
+
+
+status_line_magic=0x55AA00FF
+def check_magic(line):
+    """Check if the status line satisfies the magic 4-byte requirement"""
+    if line.ndim==1:
+        return line[0]==status_line_magic
+    else:
+        return np.all(line[:,0]==status_line_magic)
+def _extract_line(frames, preferred_line=True):
+    if frames.ndim==2:
+        lsz=min(frames.shape[1]//4,6)
+        if (frames.shape[1]>=36) == preferred_line:
+            return np.frombuffer(frames[-1,:lsz*4].astype("<u1").tobytes(),"<u4")
+        else:
+            return np.frombuffer(frames[-2,:lsz*4].astype("<u1").tobytes(),"<u4")
+    else:
+        lsz=min(frames.shape[2]//4,6)
+        if (frames.shape[2]>=36) == preferred_line:
+            return np.frombuffer((frames[:,-1,:lsz*4].astype("<u1").tobytes()),"<u4").reshape((-1,lsz))
+        else:
+            return np.frombuffer((frames[:,-2,:lsz*4].astype("<u1").tobytes()),"<u4").reshape((-1,lsz))
+def get_status_lines(frames, check_transposed=True):
+    """
+    Extract status lines from the given frames.
+    
+    `frames` can be 2D array (one frame), 3D array (stack of frames, first index is frame number), or list of array.
+    Automatically check if the status line is present; return ``None`` if it's not.
+    If ``check_transposed==Treu``, check for the case where the image is transposed (i.e., line becomes a column).
+    """
+    if isinstance(frames,list):
+        return [get_status_lines(f,check_transposed=check_transposed) for f in frames]
+    lines=_extract_line(frames,True)
+    if check_magic(lines):
+        return lines
+    lines=_extract_line(frames,False)
+    if check_magic(lines):
+        return lines
+    if check_transposed:
+        tframes=frames.T if frames.ndim==2 else frames.transpose((0,2,1))
+        return get_status_lines(tframes,check_transposed=False)
+    return None
+def get_status_line_position(frame, check_transposed=True):
+    """
+    Check whether status line is present in the frame, and return its location.
+    
+    Return tuple ``(row, transposed)``, where `row` is the status line row (can be ``-1`` or ``-2``)
+    and `transposed` is ``True`` if the line is present in the transposed image.
+    If no status line is found, return ``None``.
+    If ``check_transposed==True``, check for the case where the image is transposed (i.e., line becomes a column).
+    """
+    line=_extract_line(frame,True)
+    if check_magic(line):
+        return (-1 if frame.shape[1]>=36 else -2),False
+    lines=_extract_line(frame,False)
+    if check_magic(lines):
+        return (-2 if frame.shape[1]>=36 else -1),False
+    if check_transposed:
+        res=get_status_line_position(frame.T,check_transposed=False)
+        if res:
+            return res[0],True
+    return None
+
+
+def find_skipped_frames(lines):
+    """
+    Check if there are skipped frames based on status line reading.
+
+    If there are, return list ``[(idx, skipped)]``, where `idx` is the index after which `skipped` frames were skipped.
+    Otherwise, return ``None``.
+    """
+    dfs=lines[1:,1]-lines[:-1,1]
+    skipped_idx=(dfs!=1)&(dfs<2**31) # accounting for counter overflow
+    skipped_idx=skipped_idx.nonzero()[0]
+    return list(zip(skipped_idx,dfs[skipped_idx])) if len(skipped_idx) else None
