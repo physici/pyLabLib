@@ -61,7 +61,7 @@ class SignalPool(object):
                 return False
             return filt(src,dst,tag,value) if (filt is not None) else True
         return self._pool.add_observer(callback,name=id,filt=full_filt,priority=priority,cacheable=(filt is None))
-    def subscribe(self, callback, srcs="any", dsts="any", tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, dest_controller=None, id=None):
+    def subscribe(self, callback, srcs="any", dsts="any", tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, dest_controller=None, add_call_info=False, id=None):
         """
         Subscribe synchronous callback to a signal.
 
@@ -83,11 +83,12 @@ class SignalPool(object):
             limit_period(float): limits the minimal time between two call to the subscribed callback
                 (if the signal is sent less than `limit_period` after the previous signal, ignore it).
             id(int): subscription ID (by default, generate a new unique name).
+            add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`synchronizing.TSignalSynchronizerInfo` for details).
 
         Returns:
             subscription ID, which can be used to unsubscribe later.
         """
-        sync_callback=synchronizing.SignalSynchronizer(callback,limit_queue=limit_queue,limit_period=limit_period,dest_controller=dest_controller)
+        sync_callback=synchronizing.SignalSynchronizer(callback,limit_queue=limit_queue,limit_period=limit_period,add_call_info=add_call_info,dest_controller=dest_controller)
         return self.subscribe_nonsync(sync_callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,id=id)
     def unsubscribe(self, id):
         """Unsubscribe from a subscription with a given ID."""

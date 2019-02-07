@@ -2,7 +2,7 @@ from . import threadprop
 from ....mthread import notifier
 from ....utils import general
 
-import threading, time
+import threading, time, collections
 
 
 class QThreadNotifier(notifier.ISkippableNotifier):
@@ -176,9 +176,9 @@ class QSyncCall(object):
         return self.synchronizer.done_wait()
 
 
-
+TSignalSynchronizerInfo=collections.namedtuple("TSignalSynchronizerInfo",["call_time"])
 class SignalSynchronizer(object):
-    def __init__(self, func, limit_queue=1, limit_period=0, dest_controller=None):
+    def __init__(self, func, limit_queue=1, limit_period=0, add_call_info=False, dest_controller=None):
         dest_controller=dest_controller or threadprop.current_controller()
         def call(*args):
             dest_controller.call_in_thread_callback(func,args,callback=self._call_done)
@@ -186,6 +186,7 @@ class SignalSynchronizer(object):
         self.limit_queue=limit_queue
         self.queue_size=0
         self.limit_period=limit_period
+        self.add_call_info=add_call_info
         self.last_call_time=None
         self.lock=threading.Lock()
     def _call_done(self, _):
@@ -194,12 +195,16 @@ class SignalSynchronizer(object):
             
     def __call__(self, src, tag, value):
         with self.lock:
+            t=time.time()
             if self.limit_queue and self.queue_size>=self.limit_queue:
                 return
             if self.limit_period:
-                t=time.time()
                 if (self.last_call_time is not None) and (self.last_call_time+self.limit_period>t):
                     return
                 self.last_call_time=t
             self.queue_size+=1
-        self.call(src,tag,value)
+        if self.add_call_info:
+            call_info=TSignalSynchronizerInfo(t)
+            self.call(src,tag,value,call_info)
+        else:
+            self.call(src,tag,value)

@@ -388,7 +388,7 @@ class QThreadController(QtCore.QObject):
 
 
     ### Managing signal pool interaction ###
-    def subscribe(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, id=None):
+    def subscribe(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, add_call_info=False, id=None):
         """
         Subscribe synchronous callback to a signal.
 
@@ -397,7 +397,7 @@ class QThreadController(QtCore.QObject):
         """
         if self._signal_pool:
             uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,
-                limit_queue=limit_queue,limit_period=limit_period,dest_controller=self,id=id)
+                limit_queue=limit_queue,limit_period=limit_period,add_call_info=add_call_info,dest_controller=self,id=id)
             self._signal_pool_uids.append(uid)
             return uid
     def subscribe_nonsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, id=None):

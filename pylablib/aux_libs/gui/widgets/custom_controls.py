@@ -17,7 +17,7 @@ class BinROICtl(QtWidgets.QWidget):
         self.maxbin=None
         self.minsize=0
 
-    def _limit_range(self, rng, lim, maxbin, minsize):
+    def _limit_range(self, rng, lim, maxbin, minsize, maxsize):
         vmin=limit_to_range(rng.min,*lim)
         vmax=limit_to_range(rng.max,*lim)
         vmin,vmax=min(vmin,vmax),max(vmin,vmax)
@@ -25,19 +25,23 @@ class BinROICtl(QtWidgets.QWidget):
             vmax=limit_to_range(vmin+minsize,*lim)
         if vmax-vmin<minsize: # try decrease lower limit
             vmin=limit_to_range(vmax-minsize,*lim)
+        if maxsize and (vmax-vmin>minsize):
+            vmax=vmin+maxsize
         vbin=limit_to_range(rng.bin,1,maxbin)
         return self.AxisParams(int(vmin),int(vmax),int(vbin))
     def validateROI(self, xparams, yparams):
         xminsize,yminsize=self.minsize if isinstance(self.minsize,tuple) else (self.minsize,self.minsize)
-        xparams=self._limit_range(xparams,self.xlim,self.maxbin,xminsize)
-        yparams=self._limit_range(yparams,self.ylim,self.maxbin,yminsize)
+        xmaxsize,ymaxsize=self.maxsize if isinstance(self.maxsize,tuple) else (self.maxsize,self.maxsize)
+        xparams=self._limit_range(xparams,self.xlim,self.maxbin,xminsize,xmaxsize)
+        yparams=self._limit_range(yparams,self.ylim,self.maxbin,yminsize,ymaxsize)
         if self.validate:
             xparams,yparams=self.validate((xparams,yparams))
             xparams=self.AxisParams(*xparams)
             yparams=self.AxisParams(*yparams)
         return xparams,yparams
-    def setupUi(self, name, xlim=(0,None), ylim=None, maxbin=None, minsize=0, validate=None):
+    def setupUi(self, name, xlim=(0,None), ylim=None, maxbin=None, minsize=0, maxsize=None, kind="minmax", validate=None):
         self.name=name
+        self.kind=kind
         self.setObjectName(self.name)
         self.setMinimumSize(QtCore.QSize(232, 83))
         self.setMaximumSize(QtCore.QSize(16777215, 83))
@@ -53,7 +57,7 @@ class BinROICtl(QtWidgets.QWidget):
         self.gridLayout.addWidget(self.labelMin, 0, 1, 1, 1)
         self.labelMax = QtWidgets.QLabel(self)
         self.labelMax.setObjectName("labelMax")
-        self.labelMax.setText("Max")
+        self.labelMax.setText("Max" if kind=="minmax" else "Size")
         self.gridLayout.addWidget(self.labelMax, 0, 2, 1, 1)
         self.labelBin = QtWidgets.QLabel(self)
         self.labelBin.setObjectName("labelBin")
@@ -100,10 +104,10 @@ class BinROICtl(QtWidgets.QWidget):
             v.set_value(1)
         for v in [self.x_min,self.x_max,self.x_bin,self.y_min,self.y_max,self.y_bin]:
             v.value_changed.connect(self._on_edit)
-        self.set_limits(xlim,ylim,maxbin=maxbin,minsize=minsize)
+        self.set_limits(xlim,ylim,maxbin=maxbin,minsize=minsize,maxsize=maxsize)
 
 
-    def set_limits(self, xlim="keep", ylim="keep", maxbin="keep", minsize="keep"):
+    def set_limits(self, xlim="keep", ylim="keep", maxbin="keep", minsize="keep", maxsize="keep"):
         if xlim!="keep":
             self.xlim=xlim
         if ylim!="keep":
@@ -112,6 +116,8 @@ class BinROICtl(QtWidgets.QWidget):
             self.maxbin=maxbin
         if minsize!="keep":
             self.minsize=minsize
+        if maxsize!="keep":
+            self.maxsize=maxsize
         for v in [self.x_min,self.x_max]:
             v.set_number_limit(self.xlim[0],self.xlim[1],"coerce","int")
         for v in [self.y_min,self.y_max]:
@@ -127,15 +133,25 @@ class BinROICtl(QtWidgets.QWidget):
         self.value_changed.emit(params)
 
     def get_value(self):
-        xparams=self.AxisParams(self.x_min.get_value(),self.x_max.get_value(),self.x_bin.get_value())
-        yparams=self.AxisParams(self.y_min.get_value(),self.y_max.get_value(),self.y_bin.get_value())
+        if self.kind=="minmax":
+            xparams=self.AxisParams(self.x_min.get_value(),self.x_max.get_value(),self.x_bin.get_value())
+            yparams=self.AxisParams(self.y_min.get_value(),self.y_max.get_value(),self.y_bin.get_value())
+        else:
+            xmin=self.x_min.get_value()
+            ymin=self.y_min.get_value()
+            xparams=self.AxisParams(xmin,xmin+self.x_max.get_value(),self.x_bin.get_value())
+            yparams=self.AxisParams(ymin,ymin+self.y_max.get_value(),self.y_bin.get_value())
         return self.validateROI(xparams,yparams)
     def _show_values(self, xparams, yparams):
+        if self.kind=="minmax":
+            xmax,ymax=xparams.max,yparams.max
+        else:
+            xmax,ymax=xparams.max-xparams.min,yparams.max-yparams.min
         self.x_min.set_value(xparams.min,notify_value_change=False)
-        self.x_max.set_value(xparams.max,notify_value_change=False)
+        self.x_max.set_value(xmax,notify_value_change=False)
         self.x_bin.set_value(xparams.bin,notify_value_change=False)
         self.y_min.set_value(yparams.min,notify_value_change=False)
-        self.y_max.set_value(yparams.max,notify_value_change=False)
+        self.y_max.set_value(ymax,notify_value_change=False)
         self.y_bin.set_value(yparams.bin,notify_value_change=False)
     def set_value(self, roi, notify_value_change=True):
         roi=self.AxisParams(*roi[0]),self.AxisParams(*roi[1])
