@@ -210,6 +210,7 @@ class IMAQCamera(interface.IDevice):
         self._deallocate_buffers()
         self._frame_size=self._get_buffer_size()
         frames_per_buff=max(self._buffer_allocation_size//self._frame_size,1)
+        nbuffs=(n-1)//frames_per_buff+1
         self._buffers=[ctypes.create_string_buffer(frames_per_buff*self._frame_size) for _ in range(nbuffs)]
         self._buffer_frames=nbuffs*frames_per_buff
     def _acquired_frames(self):
