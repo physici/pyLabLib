@@ -49,8 +49,8 @@ class PfcamProperty(object):
         if self._type not in pfcam_lib.ValuePropertyTypes|{"PF_COMMAND"}:
             raise PFGenericError("property type {} not supported".format(self._type))
         self._flags=lib.pfProperty_GetFlags(port,self._token)
-        if self._flags&0x42:
-            raise PFGenericError("propery {} is private or invalid".format(self.name))
+        if self._flags&0x02:
+            raise PFGenericError("propery {} is private".format(self.name))
         self.is_command=self._type=="PF_COMMAND"
         self.readable=not (self._flags&0x20 or self.is_command)
         self.writable=not (self._flags&0x10 or self.is_command)
@@ -185,10 +185,11 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         self._add_settings_node("trigger_interleave",self.get_trigger_interleave,self.set_trigger_interleave)
         self._add_settings_node("status_line",self.is_status_line_enabled,self.enable_status_line)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
+        self._add_settings_node("cfr",self.is_CFR_enabled,self.enable_CFR)
         self._add_settings_node("frame_time",self.get_frame_time,self.set_frame_time)
     
-    def setup_baudrate(self):
-        brs=[57600,33600,19200,9600,4800,3200,1600]
+    def setup_max_baudrate(self):
+        brs=[115200,57600,38400,19200,9600,4800,2400,1200]
         for br in brs:
             if lib.pfIsBaudRateSupported(self.pfcam_port,br):
                 lib.pfSetBaudRate(self.pfcam_port,br)
@@ -198,10 +199,8 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         IMAQCamera.open(self)
         lib.pfPortInit()
         lib.pfDeviceOpen(self.pfcam_port)
-        self.setup_baudrate()
+        self.setup_max_baudrate()
         self.properties=dictionary.Dictionary(dict([ (p.name.replace(".","/"),p) for p in self.list_properties() ]))
-        if "Trigger/CFR" in self.properties:
-            self.v["Trigger/CFR"]=True
         self._update_imaq()
     def close(self):
         """Close connection to the camera"""
@@ -290,7 +289,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
 
         Return tuple ``(model, serial_number)``.
         """
-        model=query_camera_name(self.pfcam_port)
+        model=py3.as_str(lib.pfProperty_GetName(self.pfcam_port,lib.pfDevice_GetRoot(self.pfcam_port)))
         serial_number=self.get_value("Header.Serial",0)
         return self.ModelData(model,serial_number)
 
@@ -328,14 +327,11 @@ class PhotonFocusIMAQCamera(IMAQCamera):
             hend=det_size[0]
         if vend is None:
             vend=det_size[1]
-        with self.pausing_acquisition():
-            self.v["Window/W"]=self.properties["Window/W"].min
-            self.v["Window/H"]=self.properties["Window/H"].min
-            self.v["Window/X"]=hstart
-            self.v["Window/Y"]=vstart
-            self.v["Window/W"]=min(max(self.v["Window/W"],hend-hstart),imaq_detector_size[0])
-            self.v["Window/H"]=min(max(self.v["Window/H"],vend-vstart),imaq_detector_size[1])
-            self._update_imaq()
+        self.v["Window/W"]=min(hend-hstart,imaq_detector_size[0])
+        self.v["Window/H"]=min(vend-vstart,imaq_detector_size[1])
+        self.v["Window/X"]=hstart
+        self.v["Window/Y"]=vstart
+        self._update_imaq()
         return self.get_roi()
     def get_roi_limits(self):
         """
@@ -370,8 +366,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         return self.v["ExposureTime"]*1E-3
     def set_exposure(self, exposure):
         """Set current exposure"""
-        with self.pausing_acquisition():
-            self.v["ExposureTime"]=exposure*1E3
+        self.v["ExposureTime"]=exposure*1E3
         return self.get_exposure()
 
     def get_frame_time(self):
@@ -383,27 +378,32 @@ class PhotonFocusIMAQCamera(IMAQCamera):
     def set_frame_time(self, frame_time):
         """Set current frame time"""
         if "FrameTime" in self.properties:
-            with self.pausing_acquisition():
-                self.v["FrameTime"]=frame_time*1E3
+            self.v["FrameTime"]=frame_time*1E3
         return self.get_frame_time()
+
+    def is_CFR_enabled(self):
+        """Check if the constant frame rate mode is enabled"""
+        return self.get_value("Trigger/CFR",False)
+    def enable_CFR(self, enabled=True):
+        """Enable constant frame rate mode"""
+        self.set_value("Trigger/CFR",enabled,ignore_missing=True)
+        return self.is_CFR_enabled()
 
     def get_trigger_interleave(self):
         """Check if the trigger interleave is on"""
-        return self.v.get("Trigger/Interleave",False)
-    def set_trigger_interleave(self, interleave):
+        return self.get_value("Trigger/Interleave",False)
+    def set_trigger_interleave(self, enabled):
         """Set the trigger interleave option on or off"""
-        if "Trigger/Interleave" in self.properties:
-            self.v["Trigger/Interleave"]=interleave
-        return self.v.get("Trigger/Interleave",False)
+        self.set_value("Trigger/Interleave",enabled,ignore_missing=True)
+        return self.get_trigger_interleave()
 
     def is_status_line_enabled(self):
         """Check if the status line is on"""
-        return self.v.get("EnStatusLine",False)
+        return self.get_value("EnStatusLine",False)
     def enable_status_line(self, enabled=True):
         """Enable or disable status line"""
-        if "EnStatusLine" in self.properties:
-            self.v["EnStatusLine"]=enabled
-        return self.v.get("EnStatusLine",False)
+        self.set_value("EnStatusLine",enabled,ignore_missing=True)
+        return self.is_status_line_enabled()
 
 
 

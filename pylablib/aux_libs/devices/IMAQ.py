@@ -68,8 +68,9 @@ class IMAQCamera(interface.IDevice):
 
         self._add_full_info_node("model_data",self.get_model_data)
         self._add_full_info_node("interface_name",lambda: self.name)
-        self._add_status_node("buffer_size",lambda: self.buffer_status().size)
-        self._add_status_node("buffer_status",self.buffer_status)
+        self._add_status_node("buffer_size",lambda: self.get_buffer_status().size)
+        self._add_status_node("buffer_status",self.get_buffer_status)
+        self._add_settings_node("acquisition_parameters",self.get_acquisition_parameters,self.setup_acquisition)
         self._add_status_node("data_dimensions",self.get_data_dimensions)
         self._add_full_info_node("detector_size",self.get_detector_size)
         self._add_settings_node("roi",self.get_roi,self.set_roi)
@@ -172,7 +173,7 @@ class IMAQCamera(interface.IDevice):
         if vend is None:
             vend=det_size[1]
         fit_roi=lib.imgSessionFitROI(self.sid,0,vstart,hstart,max(vend-vstart,1),max(hend-hstart,1))
-        with self.pausing_acquisition():
+        if lib.imgSessionGetROI(self.sid)!=fit_roi:
             lib.imgSessionConfigureROI(self.sid,*fit_roi)
         return self.get_roi()
     def get_roi_limits(self):
@@ -220,7 +221,7 @@ class IMAQCamera(interface.IDevice):
     def _get_buffer_num(self, frame):
         if not self._buffers:
             return -1
-        return (frame+self._start_acq_count)%self._buffer_frames
+        return frame%self._buffer_frames
         
 
 
@@ -233,6 +234,7 @@ class IMAQCamera(interface.IDevice):
         `frames` sets up number of frame buffers.
         If ``start==True``, start acquisition directly after setup.
         """
+        self.clear_acquisition()
         self._allocate_buffers(frames)
         cbuffs=self._get_ctypes_buffer()
         if continuous:
@@ -247,10 +249,14 @@ class IMAQCamera(interface.IDevice):
         self._last_wait_frame=-1
     def clear_acquisition(self):
         """Clear all acquisition details and free all buffers"""
-        self.stop_acquisition()
-        lib.imgSessionAbort(self.sid)
-        self._deallocate_buffers()
-        self._acq_params=None
+        if self._acq_params:
+            self.stop_acquisition()
+            lib.imgSessionAbort(self.sid)
+            self._deallocate_buffers()
+            self._acq_params=None
+    def get_acquisition_parameters(self):
+        """Return acquisition parameters ``(continuous, frames_buffer)``."""
+        return self._acq_params
     def start_acquisition(self):
         """Start acquistion"""
         self.stop_acquisition()
@@ -287,7 +293,7 @@ class IMAQCamera(interface.IDevice):
                 self.start_acquisition()
 
     TBufferStatus=collections.namedtuple("TBufferStatus",["unread","lost","size"])
-    def buffer_status(self):
+    def get_buffer_status(self):
         """
         Get buffer fill status.
 
@@ -514,6 +520,6 @@ class IMAQCamera(interface.IDevice):
             while len(frames)<n:
                 self.wait_for_frame(timeout=frame_timeout)
                 frames+=self.read_multiple_images(missing_frame=missing_frame)
-            return (frames[:n],self.buffer_status()) if return_buffer_status else frames[:n]
+            return (frames[:n],self.get_buffer_status()) if return_buffer_status else frames[:n]
         finally:
             self.clear_acquisition()

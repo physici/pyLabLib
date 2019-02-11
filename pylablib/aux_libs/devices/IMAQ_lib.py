@@ -75,6 +75,15 @@ class IMAQLib(object):
         self.imgSessionOpen=wrapper.wrap(lib.imgSessionOpen, [IMAQInterfaceID, IMAQSessionID], ["ifid", None])
         self.imgClose=wrapper.wrap(lib.imgClose, [ctypes.c_uint32], ["id"])
 
+        self.imgSessionSerialWrite=wrapper.wrap(lib.imgSessionSerialWrite, [IMAQSessionID,ctypes.c_char_p,ctypes.c_uint32,ctypes.c_uint32],
+            ["sid","message",None,"timeout"], rvprep=[lambda *args: ctypes.c_uint32(len(args[1]))])
+        self.imgSessionSerialRead=wrapper.wrap(lib.imgSessionSerialRead, [IMAQSessionID,ctypes.c_char_p,ctypes.c_uint32,ctypes.c_uint32],
+            ["sid",None,None,"timeout"], rvprep=[strprep, lambda *args: ctypes.c_uint32(IMAQ_MAX_API_STRING_LENGTH)], rvnames=["message","size"], rvref=[False,True])
+        self.imgSessionSerialReadBytes=wrapper.wrap(lib.imgSessionSerialReadBytes, [IMAQSessionID,ctypes.c_char_p,ctypes.c_uint32,ctypes.c_uint32],
+            ["sid",None,None,"timeout"], rvprep=[lambda *args: ctypes.create_string_buffer(args[-1]+1), lambda *args: ctypes.c_uint32(args[-1])],
+            rvnames=["message","size"], rvref=[False,True], addargs=["size"])
+        self.imgSessionSerialFlush=wrapper.wrap(lib.imgSessionSerialFlush, [IMAQSessionID], ["sid"])
+
         self.imgSessionGetROI=wrapper.wrap(lib.imgSessionGetROI, [IMAQSessionID]+[ctypes.c_uint32]*4, ["sid"]+[None]*4)
         self.imgSessionConfigureROI=wrapper.wrap(lib.imgSessionConfigureROI, [IMAQSessionID]+[ctypes.c_uint32]*4, ["sid","top","left","height","width"])
         self.imgSessionFitROI=wrapper.wrap(lib.imgSessionFitROI, [IMAQSessionID]+[ctypes.c_uint32]*9, ["sid","fit_mode","top","left","height","width"]+[None]*4)
@@ -86,11 +95,12 @@ class IMAQLib(object):
         self.imgCreateBuffer=wrapper.wrap(lib.imgCreateBuffer, [IMAQSessionID,ctypes.c_uint32,ctypes.c_uint32,ctypes.c_void_p], ["sid","where","buff_size",None])
         self.imgDisposeBuffer=wrapper.wrap(lib.imgDisposeBuffer, [ctypes.c_void_p], ["buffer"])
         self.imgSessionClearBuffer=wrapper.wrap(lib.imgSessionClearBuffer, [IMAQSessionID,ctypes.c_uint32,ctypes.c_uint8], ["sid","buff_num","value"])
+
         
         self.imgRingSetup=wrapper.wrap(lib.imgRingSetup, [IMAQSessionID,ctypes.c_uint32,ctypes.c_void_p,ctypes.c_uint32,ctypes.c_uint32],
             ["sid","buff_num","buffer","skip_count","start_now"])
         self.imgSequenceSetup=wrapper.wrap(lib.imgSequenceSetup, [IMAQSessionID,ctypes.c_uint32,ctypes.c_void_p,ctypes.POINTER(ctypes.c_uint32),ctypes.c_uint32,ctypes.c_uint32],
-            ["sid","buff_num","buffer","skip_counts","start_now","async"])
+            ["sid","buff_num","buffer","skip_counts","start_now","run_async"])
         self.imgSessionStartAcquisition=wrapper.wrap(lib.imgSessionStartAcquisition, [IMAQSessionID], ["sid"])
         self.imgSessionStopAcquisition=wrapper.wrap(lib.imgSessionStopAcquisition, [IMAQSessionID], ["sid"])
         self.imgSessionStatus=wrapper.wrap(lib.imgSessionStatus,[IMAQSessionID,ctypes.c_uint32,ctypes.c_uint32],["sid",None,None])
@@ -109,6 +119,17 @@ class IMAQLib(object):
 
         self.imgSessionWaitSignal2=wrapper.wrap(lib.imgSessionWaitSignal2, [IMAQSessionID,IMAQSignalType,ctypes.c_uint32,ctypes.c_uint32,ctypes.c_uint32],
             ["sid","signal_type","signal_id","signal_state","timeout"])
+        self.imgSessionTriggerConfigure2=wrapper.wrap(lib.imgSessionClearBuffer, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*4,
+            ["sid","trig_type","trig_num","polarity","timeout","action"])
+        self.imgSessionTriggerDrive2=wrapper.wrap(lib.imgSessionClearBuffer, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*3,
+            ["sid","trig_type","trig_num","polarity","source"])
+        self.imgSessionLineTrigSource2=wrapper.wrap(lib.imgSessionLineTrigSource2, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*3,
+            ["sid","trig_type","trig_num","polarity","skip_counts"])
+        self.imgSessionTriggerRead2=wrapper.wrap(lib.imgSessionTriggerRead2, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*3,
+            ["sid","trig_type","trig_num","polarity",None])
+        self.imgSessionTriggerRoute2=wrapper.wrap(lib.imgSessionTriggerRoute2, [IMAQSessionID,IMAQSignalType,ctypes.c_uint32,IMAQSignalType,ctypes.c_uint32],
+            ["sid","src_trig_type","src_trig_num","dst_trig_type","dst_trig_num"])
+        self.imgSessionTriggerClear=wrapper.wrap(lib.imgSessionTriggerClear, [IMAQSessionID], ["sid"])
         
 
         self._initialized=True
