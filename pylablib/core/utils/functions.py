@@ -77,8 +77,8 @@ class FunctionSignature(object):
             wrapped.__name__=self.name
         else:
             wrapped.__name__=func.__name__
-        if self.cls is not None:
-            wrapped=MethodType(wrapped,self.obj,self.cls)
+        if self.obj is not None:
+            wrapped=MethodType(wrapped,self.obj)
         return wrapped
     
     def mandatory_args_num(self):
@@ -126,48 +126,75 @@ class FunctionSignature(object):
             cls=None
             obj=None
         return FunctionSignature(args.args,defaults,args.varargs,args.keywords,cls,obj,func.__name__,func.__doc__)
+    def copy(self):
+        """Return a copy"""
+        return FunctionSignature(arg_names=self.arg_names,defaults=self.defaults,varg_name=self.varg_name,kwarg_name=self.kwarg_name,
+                cls=self.cls,obj=self.obj,name=self.name,doc=self.doc)
+    def as_simple_func(self):
+        """
+        Turn the signature into a simple function (as opposied to a bound method).
+
+        If the signature corresponds to a bound method, get rid of the first argument in the signature (``self``) and the bound object.
+        Otherwise, return unchanged.
+        """
+        if self.obj is None:
+            return self.copy()
+        else:
+            return FunctionSignature(arg_names=self.arg_names[1:],defaults=self.defaults,varg_name=self.varg_name,kwarg_name=self.kwarg_name,
+                cls=None,obj=None,name=self.name,doc=self.doc)
     @staticmethod
-    def merge(original, addition, add_place="front", merge_duplicates=True, overwrite=None):
+    def merge(inner, outer, add_place="front", merge_duplicates=True, overwrite=None, hide_outer_obj=False):
         """
         Merge two signatures (used for wrapping functions).
+
+        The signature describes the function would take arguments according to the `outer` signature and pass them accroding to the `inner` signature.
         
         The arguments are combined:
-            - if ``add_place=='front'``, the addition arguments are placed in the beginning, followed by original arguments not already listed;
-            - if ``add_place=='back'``,  the original arguments are placed in the beginning, followed by addition arguments not already listed.
+            - if ``add_place=='front'``, the outer arguments are placed in the beginning, followed by inner arguments not already listed;
+            - if ``add_place=='back'``,  the inner arguments are placed in the beginning, followed by outer arguments not already listed.
             
-        The default values are joined, with the original values superseding the addition values.
+        The default values are joined, with the outer values superseding the inner values.
         
-        `overwrite` is a set or a list specifying which original parameters are overwritten by the addition.
+        `overwrite` is a set or a list specifying which inner parameters are overwritten by the outer.
         It includes ``'name'``, ``'doc'``, ``'cls'``, ``'obj'``, ``'varg_name'`` and ``'kwarg_name'``;
-        the default value is ``{'varg_name','kwarg_name','doc'}``
+        the default value is all parameters.
+
+        If the inner signature is a bound method and ``hide_inner_obj==True``, treat it as a function (with ``self`` argument missing).
+        In this case, the wrapped signature ``.obj`` field will be ``None``.
         
         Returns:
             tuple: ``(signature, pass_order)``
             
-            `pass_order` is the order in which the arguments of the combined signature may be passed to the original signature;
-            it may be different from the signature order is ``add_place=='front'``.
+            `pass_order` is the order in which the arguments of the combined signature may be passed to the inner signature;
+            it may be different from the signature order if ``add_place=='front'``.
             If ``merge_duplicates==True``, duplicate entries in `pass_order` are omitted; otherwise, they're repeated.
         """
-        overwrite=overwrite or {"kwarg_name","varg_name"}
+        overwrite=overwrite or {"kwarg_name","varg_name","doc","name","cls","obj"}
+        if hide_outer_obj:
+            outer=outer.as_simple_func()
         if add_place=="back":
-            arg_names=original.arg_names+[a for a in addition.arg_names if not a in original.arg_names]
+            arg_names=inner.arg_names+[a for a in outer.arg_names if not a in inner.arg_names]
         elif add_place=="front":
-            arg_names=addition.arg_names+[a for a in original.arg_names if not a in addition.arg_names]
+            arg_names=outer.arg_names+[a for a in inner.arg_names if not a in outer.arg_names]
         else:
             raise ValueError("unrecognized add_place: {0}".format(add_place))
-        if merge_duplicates:
-            pass_order=original.arg_names+[a for a in addition.arg_names if not a in original.arg_names]
+        if (inner.obj is None) and (outer.obj is not None): # hide "self" argument from the inner function, as it will be bound later
+            out_arg_names=outer.arg_names[1:]
         else:
-            pass_order=original.arg_names+addition.arg_names
-        defaults=addition.defaults.copy()
-        defaults.update(original.defaults)
-        varg_name =addition.varg_name  if "varg_name"  in overwrite else original.varg_name
-        kwarg_name=addition.kwarg_name if "kwarg_name" in overwrite else original.kwarg_name
-        name=addition.name if "name" in overwrite else original.name
-        doc=addition.doc if ("doc" in overwrite or original.doc is None) else original.doc
-        ow_cls="cls" in overwrite or ("obj" in overwrite and addition.obj is not None)
-        cls=addition.cls if (ow_cls or original.cls is None) else original.cls
-        obj=addition.obj if ("obj" in overwrite or original.obj is None) else original.obj
+            out_arg_names=outer.arg_names
+        if merge_duplicates:
+            pass_order=inner.arg_names+[a for a in out_arg_names if not a in inner.arg_names]
+        else:
+            pass_order=inner.arg_names+out_arg_names
+        defaults=inner.defaults.copy()
+        defaults.update(outer.defaults)
+        varg_name =outer.varg_name  if "varg_name"  in overwrite else inner.varg_name
+        kwarg_name=outer.kwarg_name if "kwarg_name" in overwrite else inner.kwarg_name
+        name=outer.name if "name" in overwrite else inner.name
+        doc=outer.doc if ("doc" in overwrite or inner.doc is None) else inner.doc
+        ow_cls="cls" in overwrite or ("obj" in overwrite and outer.obj is not None)
+        cls=outer.cls if ow_cls or inner.cls is None else inner.cls
+        obj=outer.obj if "obj" in overwrite or inner.obj is None else inner.obj
         return FunctionSignature(arg_names,defaults,varg_name,kwarg_name,cls,obj,name,doc),pass_order
     
 def getargsfrom(source, **merge_params):
@@ -188,10 +215,10 @@ def getargsfrom(source, **merge_params):
         def g(*args): # Now g has the same signature as f, including parameter names and default values.
             return prod(args)
     """
-    add_sig=FunctionSignature.from_function(source)
+    out_sig=FunctionSignature.from_function(source)
     def wrapper(dest):
-        orig_sig=FunctionSignature.from_function(dest)
-        full_sig,pass_order=FunctionSignature.merge(orig_sig,add_sig,**merge_params)
+        in_sig=FunctionSignature.from_function(dest)
+        full_sig,pass_order=FunctionSignature.merge(in_sig,out_sig,**merge_params)
         return full_sig.wrap_function(dest,pass_order=pass_order)
     return wrapper
 

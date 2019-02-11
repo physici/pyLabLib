@@ -9,7 +9,7 @@ import time
 import sys, traceback
 import heapq
     
-_depends_local=[".signal_pool",".synchronizing"]
+_depends_local=[".signal_pool",".synchronizing","....utils.functions"]
 
 _default_signal_pool=spool.SignalPool()
 
@@ -53,7 +53,7 @@ def exint(error_msg_template="{}:"):
 def exsafe(func):
     """Decorator that intercepts exceptions raised by `func` and stops the execution in a controlled manner (quitting the main thread)"""
     error_msg_template="{{}} executing function '{}':".format(func.__name__)
-    @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
+    @func_utils.getargsfrom(func,hide_outer_obj=True) # PyQt slots don't work well with bound methods
     def safe_func(*args, **kwargs):
         with exint(error_msg_template=error_msg_template):
             return func(*args,**kwargs)
@@ -93,7 +93,7 @@ class QThreadControllerThread(QtCore.QThread):
 
 def remote_call(func):
     """Decorator that turns a controller method into a remote call (call from a different thread is passed synchronously)"""
-    @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
+    @func_utils.getargsfrom(func)
     def rem_func(self, *args, **kwargs):
         return self.call_in_thread_sync(func,args=(self,)+args,kwargs=kwargs,sync=True,same_thread_shortcut=True)
     return rem_func
@@ -101,7 +101,7 @@ def remote_call(func):
 def call_in_thread(thread_name):
     """Decorator that turns any function into a remote call in a thread with a given name (call from a different thread is passed synchronously)"""
     def wrapper(func):
-        @func_utils.getargsfrom(func,overwrite={'name','varg_name','kwarg_name','doc'})
+        @func_utils.getargsfrom(func)
         def rem_func(*args, **kwargs):
             thread=get_controller(thread_name)
             return thread.call_in_thread_sync(func,args=args,kwargs=kwargs,sync=True,same_thread_shortcut=True)
