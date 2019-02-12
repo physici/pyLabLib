@@ -1,6 +1,7 @@
 from ...core.utils import py3, ctypes_wrap
 from .misc import load_lib
 from .IMAQ_lib_const import IMAQ_errors, IMAQ_attrs_inv
+from .IMAQ_lib_const import IMAQ_signal_type_inv, IMAQ_int_signal_inv, IMAQ_signal_state_inv, IMAQ_trig_pol_inv, IMAQ_trig_action_inv, IMAQ_trig_drive_src_inv, IMAQInfiniteTimout
 
 import numpy as np
 import ctypes
@@ -119,9 +120,9 @@ class IMAQLib(object):
 
         self.imgSessionWaitSignal2=wrapper.wrap(lib.imgSessionWaitSignal2, [IMAQSessionID,IMAQSignalType,ctypes.c_uint32,ctypes.c_uint32,ctypes.c_uint32],
             ["sid","signal_type","signal_id","signal_state","timeout"])
-        self.imgSessionTriggerConfigure2=wrapper.wrap(lib.imgSessionClearBuffer, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*4,
+        self.imgSessionTriggerConfigure2=wrapper.wrap(lib.imgSessionTriggerConfigure2, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*4,
             ["sid","trig_type","trig_num","polarity","timeout","action"])
-        self.imgSessionTriggerDrive2=wrapper.wrap(lib.imgSessionClearBuffer, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*3,
+        self.imgSessionTriggerDrive2=wrapper.wrap(lib.imgSessionTriggerDrive2, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*3,
             ["sid","trig_type","trig_num","polarity","source"])
         self.imgSessionLineTrigSource2=wrapper.wrap(lib.imgSessionLineTrigSource2, [IMAQSessionID,IMAQSignalType]+[ctypes.c_uint32]*3,
             ["sid","trig_type","trig_num","polarity","skip_counts"])

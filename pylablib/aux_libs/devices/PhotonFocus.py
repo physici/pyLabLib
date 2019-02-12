@@ -410,13 +410,13 @@ class PhotonFocusIMAQCamera(IMAQCamera):
 
 
 
-status_line_magic=0x55AA00FF
-def check_magic(line):
+_status_line_magic=0x55AA00FF
+def _check_magic(line):
     """Check if the status line satisfies the magic 4-byte requirement"""
     if line.ndim==1:
-        return line[0]==status_line_magic
+        return line[0]==_status_line_magic
     else:
-        return np.all(line[:,0]==status_line_magic)
+        return np.all(line[:,0]==_status_line_magic)
 def _extract_line(frames, preferred_line=True):
     if frames.ndim==2:
         lsz=min(frames.shape[1]//4,6)
@@ -441,10 +441,10 @@ def get_status_lines(frames, check_transposed=True):
     if isinstance(frames,list):
         return [get_status_lines(f,check_transposed=check_transposed) for f in frames]
     lines=_extract_line(frames,True)
-    if check_magic(lines):
+    if _check_magic(lines):
         return lines
     lines=_extract_line(frames,False)
-    if check_magic(lines):
+    if _check_magic(lines):
         return lines
     if check_transposed:
         tframes=frames.T if frames.ndim==2 else frames.transpose((0,2,1))
@@ -460,10 +460,10 @@ def get_status_line_position(frame, check_transposed=True):
     If ``check_transposed==True``, check for the case where the image is transposed (i.e., line becomes a column).
     """
     line=_extract_line(frame,True)
-    if check_magic(line):
+    if _check_magic(line):
         return (-1 if frame.shape[1]>=36 else -2),False
     lines=_extract_line(frame,False)
-    if check_magic(lines):
+    if _check_magic(lines):
         return (-2 if frame.shape[1]>=36 else -1),False
     if check_transposed:
         res=get_status_line_position(frame.T,check_transposed=False)
@@ -479,7 +479,7 @@ def find_skipped_frames(lines):
     If there are, return list ``[(idx, skipped)]``, where `idx` is the index after which `skipped` frames were skipped.
     Otherwise, return ``None``.
     """
-    dfs=lines[1:,1]-lines[:-1,1]
-    skipped_idx=(dfs!=1)&(dfs<2**31) # accounting for counter overflow
+    dfs=(lines[1:,1]-lines[:-1,1])%(2**24) # the internal counter is only 24-bit
+    skipped_idx=(dfs!=1)
     skipped_idx=skipped_idx.nonzero()[0]
     return list(zip(skipped_idx,dfs[skipped_idx])) if len(skipped_idx) else None

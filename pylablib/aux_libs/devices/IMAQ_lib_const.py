@@ -519,3 +519,35 @@ IMAQ_signal_state = {
     4: "IMG_SIGNAL_STATE_HI_Z"
 }
 IMAQ_signal_state_inv=general.invert_dict(IMAQ_signal_state)
+
+IMAQ_trig_pol = {
+    0: "IMG_TRIG_POLAR_ACTIVEH",
+    1: "IMG_TRIG_POLAR_ACTIVEL"
+}
+IMAQ_trig_pol_inv=general.invert_dict(IMAQ_trig_pol)
+
+IMAQ_trig_action = {
+    0: "IMG_TRIG_ACTION_NONE",
+    1: "IMG_TRIG_ACTION_CAPTURE",
+    2: "IMG_TRIG_ACTION_BUFLIST",
+    3: "IMG_TRIG_ACTION_BUFFER",
+    4: "IMG_TRIG_ACTION_STOP"
+}
+IMAQ_trig_action_inv=general.invert_dict(IMAQ_trig_action)
+
+IMAQ_trig_drive_src = {
+    0: "IMG_TRIG_DRIVE_DISABLED",
+    1: "IMG_TRIG_DRIVE_AQ_IN_PROGRESS",
+    2: "IMG_TRIG_DRIVE_AQ_DONE",
+    3: "IMG_TRIG_DRIVE_PIXEL_CLK",
+    4: "IMG_TRIG_DRIVE_UNASSERTED",
+    5: "IMG_TRIG_DRIVE_ASSERTED",
+    6: "IMG_TRIG_DRIVE_HSYNC",
+    7: "IMG_TRIG_DRIVE_VSYNC",
+    8: "IMG_TRIG_DRIVE_FRAME_START",
+    9: "IMG_TRIG_DRIVE_FRAME_DONE",
+    10: "IMG_TRIG_DRIVE_SCALED_ENCODER"
+}
+IMAQ_trig_drive_src_inv=general.invert_dict(IMAQ_trig_drive_src)
+
+IMAQInfiniteTimout=0xFFFFFFFF

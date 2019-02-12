@@ -1,4 +1,4 @@
-from ...core.utils import dictionary, py3, general
+from ...core.utils import dictionary, py3, general, funcargparse
 from ...core.devio import data_format, interface
 from ...core.dataproc import image as image_utils
 
@@ -63,6 +63,8 @@ class IMAQCamera(interface.IDevice):
         self._lost_frames=None
         self._acq_params=None
         self.init_done=True
+        self._triggers_in={}
+        self._triggers_out={}
 
         self.open()
 
@@ -75,6 +77,8 @@ class IMAQCamera(interface.IDevice):
         self._add_full_info_node("detector_size",self.get_detector_size)
         self._add_settings_node("roi",self.get_roi,self.set_roi)
         self._add_status_node("roi_limits",self.get_roi_limits)
+        self._add_settings_node("triggers_in_cfg",self._get_triggers_in_cfg,self._set_triggers_in_cfg)
+        self._add_settings_node("triggers_out_cfg",self._get_triggers_out_cfg,self._set_triggers_out_cfg)
 
         
     def open(self):
@@ -187,7 +191,90 @@ class IMAQCamera(interface.IDevice):
         min_roi=(0,0)+minp[2:]
         max_roi=(detsize[0]-minp[2],detsize[1]-minp[3])+detsize
         return (min_roi,max_roi)
-    
+
+    _trigger_pol={"high":"IMG_TRIG_POLAR_ACTIVEH","low":"IMG_TRIG_POLAR_ACTIVEL"}
+    _trigger_type={"none":"IMG_SIGNAL_NONE","ext":"IMG_SIGNAL_EXTERNAL","rtsi":"IMG_SIGNAL_RTSI","iso_in":"IMG_SIGNAL_ISO_IN",
+        "iso_out":"IMG_SIGNAL_ISO_OUT","status":"IMG_SIGNAL_STATUS","software":"IMG_SIGNAL_SOFTWARE_TRIGGER"}
+    _trigger_action={"none":"IMG_TRIG_ACTION_NONE","capture":"IMG_TRIG_ACTION_CAPTURE",
+        "bufflist":"IMG_TRIG_ACTION_BUFLIST","buffer":"IMG_TRIG_ACTION_BUFFER","stop":"IMG_TRIG_ACTION_STOP"}
+    _trigger_drive={"disable":"IMG_TRIG_DRIVE_DISABLED","acq_in_progress":"IMG_TRIG_DRIVE_AQ_IN_PROGRESS","acq_done":"IMG_TRIG_DRIVE_AQ_DONE",
+        "unasserted":"IMG_TRIG_DRIVE_UNASSERTED","asserted":"IMG_TRIG_DRIVE_ASSERTED",
+        "hsync":"IMG_TRIG_DRIVE_HSYNC","vsync":"IMG_TRIG_DRIVE_VSYNC","frame_start":"IMG_TRIG_DRIVE_FRAME_START","frame_done":"IMG_TRIG_DRIVE_FRAME_DONE"}
+
+
+    def configure_trigger_in(self, trig_type, trig_line=0, trig_pol="high", action="none", timeout=None):
+        """
+        Configure input trigger.
+
+        Args:
+            trig_type(str): trigger source type; can be ``"ext"``, ``"rtsi"``, ``"iso_in"``, or ``"software"``
+            trig_line(int): trigger line number
+            trig_pol(str): trigger polarity; can be ``"high"`` or ``"low"``
+            action(str): trigger action; can be ``"none"`` (disable trigger), ``"capture"`` (start capturing), ``"stop"`` (stop capturing),
+                ``"buffer"`` (capture a single frame), or ``"bufflist"`` (capture the whole buffer list once)
+            timeout(float): timeout in seconds; ``None`` means not timeout.
+        """
+        funcargparse.check_parameter_range(trig_type,"trig_type",{"ext","rtsi","iso_in","software"})
+        funcargparse.check_parameter_range(trig_pol,"trig_pol",{"high","low"})
+        funcargparse.check_parameter_range(action,"action",list(self._trigger_action))
+        itrig_type=IMAQ_lib.IMAQ_signal_type_inv[self._trigger_type.get(trig_type,trig_type)]
+        itrig_pol=IMAQ_lib.IMAQ_trig_pol_inv[self._trigger_pol.get(trig_pol,trig_pol)]
+        iaction=IMAQ_lib.IMAQ_trig_action_inv[self._trigger_action.get(action,action)]
+        timeout=int(timeout*1E3) if timeout is not None else IMAQ_lib.IMAQInfiniteTimout
+        lib.imgSessionTriggerConfigure2(self.sid,itrig_type,trig_line,itrig_pol,timeout,iaction)
+        self._triggers_in[(trig_type,trig_line)]=(trig_pol,action,timeout)
+    def _get_triggers_in_cfg(self):
+        return sorted(list(self._triggers_in.items()))
+    def _set_triggers_in_cfg(self, cfg):
+        for (tt,tl),(tp,act,to) in cfg:
+            self.configure_trigger_in(tt,tl,tp,act,to)
+
+    def configure_trigger_out(self, trig_type, trig_line=0, trig_pol="high", trig_drive="disable"):
+        """
+        Configure trigger output.
+
+        Args:
+            trig_type(str): trigger drive destination type; can be ``"ext"``, ``"rtsi"``, or ``"iso_out"``
+            trig_line(int): trigger line number
+            trig_pol(str): trigger polarity; can be ``"high"`` or ``"low"``
+            trig_drive(str): trigger output signal; can be ``"disable"`` (disable drive),
+                ``"acq_in_progress"`` (asserted when acuqisition is started),``"acq_done"`` (asserted when acquisition is done),
+                ``"unasserted"`` (force unasserted level), ``"asserted"`` (force asserted level),
+                ``"hsync"`` (asserted on start of a single line start), ``"vsync"`` (asserted on start of a frame scan),
+                ``"frame_start"`` (asserted when a single frame is captured), or ``"frame_done"`` (asserted when a single frame is done)
+        """
+        funcargparse.check_parameter_range(trig_type,"trig_type",{"ext","rtsi","iso_out"})
+        funcargparse.check_parameter_range(trig_pol,"trig_pol",{"high","low"})
+        funcargparse.check_parameter_range(trig_drive,"trig_drive",list(self._trigger_drive))
+        itrig_type=IMAQ_lib.IMAQ_signal_type_inv[self._trigger_type.get(trig_type,trig_type)]
+        itrig_pol=IMAQ_lib.IMAQ_trig_pol_inv[self._trigger_pol.get(trig_pol,trig_pol)]
+        itrig_drive=IMAQ_lib.IMAQ_trig_drive_src_inv[self._trigger_drive.get(trig_drive,trig_drive)]
+        lib.imgSessionTriggerDrive2(self.sid,itrig_type,trig_line,itrig_pol,itrig_drive)
+        self._triggers_out[(trig_type,trig_line)]=(trig_pol,trig_drive)
+    def _get_triggers_out_cfg(self):
+        return sorted(list(self._triggers_out.items()))
+    def _set_triggers_out_cfg(self, cfg):
+        for (tt,tl),(tp,td) in cfg:
+            self.configure_trigger_out(tt,tl,tp,td)
+
+    def read_trigger(self, trig_type, trig_line=0, trig_pol="high"):
+        """
+        Read current value of a trigger (input or output).
+
+        Args:
+            trig_type(str): trigger drive destination type; can be ``"ext"``, ``"rtsi"``, ``"iso_in"``, or ``"iso_out"``
+            trig_line(int): trigger line number
+            trig_pol(str): trigger polarity; can be ``"high"`` or ``"low"``
+        """
+        funcargparse.check_parameter_range(trig_type,"trig_type",{"ext","rtsi","iso_in","iso_out"})
+        funcargparse.check_parameter_range(trig_pol,"trig_pol",{"high","low"})
+        itrig_type=IMAQ_lib.IMAQ_signal_type_inv[self._trigger_type.get(trig_type,trig_type)]
+        itrig_pol=IMAQ_lib.IMAQ_trig_pol_inv[self._trigger_pol.get(trig_pol,trig_pol)]
+        return lib.imgSessionTriggerRead2(self.sid,itrig_type,trig_line,itrig_pol)
+
+    def clear_all_triggers(self):
+        """Disable all triggers of the session"""
+        lib.imgSessionTriggerClear(self.sid)
 
 
     def _get_ctypes_buffer(self):
