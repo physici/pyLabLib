@@ -1005,6 +1005,22 @@ def get_controller(name=None, wait=True, timeout=None):
             if name in _stopped_threads:
                 raise threadprop.NoControllerThreadError("thread with name {} is stopped".format(name))
     return _running_threads_notifier.wait_until(wait_cond,timeout=timeout)
+def get_gui_controller(wait=False, timeout=None, create_if_missing=True):
+    """
+    Get GUI thread controller.
+
+    If the controller is not present and ``wait==True``, wait (with the given timeout) until the controller is running.
+    If the controller is still not present and ``create_if_missing==True``, initialize the standard GUI controller.
+    """
+    try:
+        gui_ctl=get_controller("gui",wait=wait,timeout=timeout)
+    except threadprop.NoControllerThreadError:
+        if create_if_missing:
+            gui_ctl=QThreadController("gui",kind="main")
+        else:
+            raise
+    return gui_ctl
+
 
 def stop_controller(name, code=0, sync=True, require_controller=False):
     """

@@ -171,6 +171,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
     """
     def __init__(self, imaq_name="img0", pfcam_port=0):
         self.pfcam_port=pfcam_port
+        self.pfcam_opened=False
         self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
         try:
             IMAQCamera.__init__(self)
@@ -197,15 +198,19 @@ class PhotonFocusIMAQCamera(IMAQCamera):
     def open(self):
         """Open connection to the camera"""
         IMAQCamera.open(self)
-        lib.pfPortInit()
-        lib.pfDeviceOpen(self.pfcam_port)
-        self.setup_max_baudrate()
-        self.properties=dictionary.Dictionary(dict([ (p.name.replace(".","/"),p) for p in self.list_properties() ]))
-        self._update_imaq()
+        if not self.pfcam_opened:
+            lib.pfPortInit()
+            lib.pfDeviceOpen(self.pfcam_port)
+            self.pfcam_opened=True
+            self.setup_max_baudrate()
+            self.properties=dictionary.Dictionary(dict([ (p.name.replace(".","/"),p) for p in self.list_properties() ]))
+            self._update_imaq()
     def close(self):
         """Close connection to the camera"""
         IMAQCamera.close(self)
-        lib.pfDeviceClose(self.pfcam_port)
+        if self.pfcam_opened:
+            lib.pfDeviceClose(self.pfcam_port)
+            self.pfcam_opened=False
 
     def post_open(self):
         """Action to automatically call on opening"""
@@ -418,18 +423,17 @@ def _check_magic(line):
     else:
         return np.all(line[:,0]==_status_line_magic)
 def _extract_line(frames, preferred_line=True):
+    lsz=min(frames.shape[-1]//4,6)
     if frames.ndim==2:
-        lsz=min(frames.shape[1]//4,6)
         if (frames.shape[1]>=36) == preferred_line:
-            return np.frombuffer(frames[-1,:lsz*4].astype("<u1").tobytes(),"<u4")
+            return np.frombuffer(frames[-1,:lsz*4].astype("<u1").tobytes(),"<u4") if frames.shape[0]>0 else np.zeros((lsz,1))
         else:
-            return np.frombuffer(frames[-2,:lsz*4].astype("<u1").tobytes(),"<u4")
+            return np.frombuffer(frames[-2,:lsz*4].astype("<u1").tobytes(),"<u4") if frames.shape[0]>1 else np.zeros((lsz,1))
     else:
-        lsz=min(frames.shape[2]//4,6)
         if (frames.shape[2]>=36) == preferred_line:
-            return np.frombuffer((frames[:,-1,:lsz*4].astype("<u1").tobytes()),"<u4").reshape((-1,lsz))
+            return np.frombuffer((frames[:,-1,:lsz*4].astype("<u1").tobytes()),"<u4").reshape((-1,lsz)) if frames.shape[1]>0 else np.zeros((len(frames),lsz,1))
         else:
-            return np.frombuffer((frames[:,-2,:lsz*4].astype("<u1").tobytes()),"<u4").reshape((-1,lsz))
+            return np.frombuffer((frames[:,-2,:lsz*4].astype("<u1").tobytes()),"<u4").reshape((-1,lsz)) if frames.shape[1]>1 else np.zeros((len(frames),lsz,1))
 def get_status_lines(frames, check_transposed=True):
     """
     Extract status lines from the given frames.
@@ -440,12 +444,13 @@ def get_status_lines(frames, check_transposed=True):
     """
     if isinstance(frames,list):
         return [get_status_lines(f,check_transposed=check_transposed) for f in frames]
-    lines=_extract_line(frames,True)
-    if _check_magic(lines):
-        return lines
-    lines=_extract_line(frames,False)
-    if _check_magic(lines):
-        return lines
+    if frames.shape[-1]>=4:
+        lines=_extract_line(frames,True)
+        if _check_magic(lines):
+            return lines
+        lines=_extract_line(frames,False)
+        if _check_magic(lines):
+            return lines
     if check_transposed:
         tframes=frames.T if frames.ndim==2 else frames.transpose((0,2,1))
         return get_status_lines(tframes,check_transposed=False)
@@ -459,12 +464,13 @@ def get_status_line_position(frame, check_transposed=True):
     If no status line is found, return ``None``.
     If ``check_transposed==True``, check for the case where the image is transposed (i.e., line becomes a column).
     """
-    line=_extract_line(frame,True)
-    if _check_magic(line):
-        return (-1 if frame.shape[1]>=36 else -2),False
-    lines=_extract_line(frame,False)
-    if _check_magic(lines):
-        return (-2 if frame.shape[1]>=36 else -1),False
+    if frame.shape[-1]>=4:
+        line=_extract_line(frame,True)
+        if _check_magic(line):
+            return (-1 if frame.shape[1]>=36 else -2),False
+        lines=_extract_line(frame,False)
+        if _check_magic(lines):
+            return (-2 if frame.shape[1]>=36 else -1),False
     if check_transposed:
         res=get_status_line_position(frame.T,check_transposed=False)
         if res:

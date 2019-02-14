@@ -48,6 +48,12 @@ class ImageViewController(QtWidgets.QWidget):
     def set_all_values(self, params):
         self.settings_table.set_all_values(params)
 
+
+builtin_cmaps={ "gray":([0,1.],[(0.,0.,0.),(1.,1.,1.)]),
+                "gray_sat":([0,0.999,1.],[(0.,0.,0.),(1.,1.,1.),(1.,0.,0.)]),
+                "hot":([0,0.3,0.7,1.],[(0.,0.,0.),(1.,0.,0.),(1.,1.,0.),(1.,1.,1.)]),
+                "hot_sat":([0,0.3,0.7,0.999,1.],[(0.,0.,0.),(1.,0.,0.),(1.,1.,0.),(1.,1.,1.),(0.,0.,1.)])
+            }
 class ImageView(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(ImageView, self).__init__(parent)
@@ -77,7 +83,7 @@ class ImageView(QtWidgets.QWidget):
             self.imageWindow.setMinimumSize(QtCore.QSize(*min_size))
         self.imageWindow.setObjectName("imageWindow")
         self.layout.addWidget(self.imageWindow)
-        self.imageWindow.setColorMap(pyqtgraph.ColorMap([0,0.3,0.7,0.999,1.],[(0.,0.,0.),(1.,0.,0.),(1.,1.,0.),(1.,1.,1.),(0.,0.,1.)]))
+        self.set_colormap("hot_sat")
         self.imageWindow.ui.roiBtn.hide()
         self.imageWindow.ui.menuBtn.hide()
         self.imgVLine=pyqtgraph.InfiniteLine(angle=90,movable=True,bounds=[0,None])
@@ -104,6 +110,12 @@ class ImageView(QtWidgets.QWidget):
                 "vlinepos":0,
                 "hlinepos":0,
                 "update_image":True})
+
+    def set_colormap(self, cmap):
+        cmap=builtin_cmaps.get(cmap,cmap)
+        if isinstance(cmap,(list,tuple)):
+            cmap=pyqtgraph.ColorMap(*cmap)
+        self.imageWindow.setColorMap(cmap)
     
     def _connect_signals(self):
         if not self._signals_connected:

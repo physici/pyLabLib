@@ -281,8 +281,6 @@ class DummyResource(object):
         def dummy_resource():
             yield
     """
-    def __init__(self):
-        object.__init__(self)
     def __enter__(self):
         return None
     def __exit__(self, etype, error, etrace):
@@ -661,6 +659,55 @@ class Timer(object):
             nack=min(npassed,n)
         self.next+=self.period*nack
         return nack
+
+### Stream redirection ###
+
+class StreamFileLogger(object):
+    """
+    Steam logger that replaces standard output stream (usually stdout or stderr) and logs them into a file.
+
+    Args:
+        path: path to the destination logfile. The file is always appended.
+        stream: an optional output stream into which the output will be duplicated; usually, the original stream which is being replaced
+        lock: a thread lock object, which is used for any file writing operation;
+            necessary if replacing standard streams (such as ``sys.stdout`` or ``sys.stderr``) in a multithreading envornment.
+
+    It is also possible to subclass the file and overload :meth:`write_header` method to write a header before the first file write operation during the execution.
+    
+    The intended use is to log stdout or stderr streams::
+
+        import sys, threading
+        sys.stderr = StreamFileLogger("error_log.txt", stream=sys.stderr, lock=threading.Lock())
+    """
+    def __init__(self, path, stream=None, lock=None):
+        object.__init__(self)
+        self.path=path
+        self.stream=stream
+        self.header_done=False
+        self.lock=lock or DummyResource()
+    def write_header(self, f):
+        """Write header to file stream `f`"""
+        pass
+    def write(self, s):
+        with self.lock:
+            try:
+                for t in RetryOnException(5,exceptions=IOError):
+                    with t:
+                        with open(self.path,"a") as f:
+                            if not self.header_done:
+                                self.write_header(f)
+                                self.header_done=True
+                            f.write(s)
+                        break
+                    time.sleep(0.1)
+            except IOError:
+                pass
+            if self.stream is not None:
+                self.stream.write(s)
+    def flush(self):
+        with self.lock:
+            if self.stream is not None:
+                self.stream.flush()
         
 ### Debugging ###
 

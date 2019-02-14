@@ -299,6 +299,8 @@ class IMAQCamera(interface.IDevice):
         self._frame_size=self._get_buffer_size()
         frames_per_buff=max(self._buffer_allocation_size//self._frame_size,1)
         nbuffs=(n-1)//frames_per_buff+1
+        if nbuffs==1:
+            frames_per_buff=n
         self._buffers=[ctypes.create_string_buffer(frames_per_buff*self._frame_size) for _ in range(nbuffs)]
         self._buffer_frames=nbuffs*frames_per_buff
     def _acquired_frames(self):
@@ -327,7 +329,7 @@ class IMAQCamera(interface.IDevice):
         if continuous:
             lib.imgRingSetup(self.sid,len(cbuffs),cbuffs,0,0)
         else:
-            skips=(ctypes.c_uint32*frames)(0)
+            skips=(ctypes.c_uint32*len(cbuffs))(0)
             lib.imgSequenceSetup(self.sid,len(cbuffs),cbuffs,skips,0,0)
         self._acq_params=(continuous,frames)
         self._last_read_frame=-1

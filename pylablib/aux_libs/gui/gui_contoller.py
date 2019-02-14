@@ -10,10 +10,7 @@ class IGUIController(QtCore.QObject):
         super(IGUIController, self).__init__()
         self.widgets_desc={}
         self.widgets={}
-        try:
-            self.ctl=controller.get_controller("gui",wait=False)
-        except threadprop.NoControllerThreadError:
-            self.ctl=controller.QThreadController("gui",kind="main")
+        self.ctl=controller.get_gui_controller()
         self.params_table=values_module.ValuesTable()
 
     TWidget=collections.namedtuple("TWidget",["params_path"])
