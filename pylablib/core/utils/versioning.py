@@ -126,13 +126,13 @@ class VersionConfig(object):
     
     @staticmethod
     def _join_list(l):
-        return "; ".join(l)
+        return "; ".join(sorted(l))
     @staticmethod
     def _split_list(s):
         return [e.strip() for e in s.split(";")]
     @staticmethod
     def _join_dict(d):
-        return "; ".join(["{}:{}".format(k,v) for k,v in d.items()])
+        return "; ".join(["{}:{}".format(k,v) for k,v in sorted(d.items())])
     @staticmethod
     def _split_dict(s):
         pairs=[e.split(":",1) for e in s.split(";")]

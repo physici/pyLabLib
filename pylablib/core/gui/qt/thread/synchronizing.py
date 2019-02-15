@@ -60,7 +60,7 @@ class QMultiThreadNotifier(object):
         object.__init__(self)
         self._lock=threading.Lock()
         self._cnt=0
-        self._notifiers=[]
+        self._notifiers={}
     def wait(self, state=1, timeout=None):
         """
         Wait until notifier counter is eqaul to at least `state`
@@ -71,7 +71,7 @@ class QMultiThreadNotifier(object):
             if self._cnt>=state:
                 return self._cnt+1
             n=QThreadNotifier()
-            self._notifiers.append(n)
+            self._notifiers.setdefault(state,[]).append(n)
         success=n.wait(timeout=timeout)
         if success:
             return n.get_value()
@@ -95,8 +95,10 @@ class QMultiThreadNotifier(object):
         with self._lock:
             self._cnt+=1
             cnt=self._cnt
-            notifiers=self._notifiers
-            self._notifiers=[]
+            notifiers=[]
+            for k in list(self._notifiers):
+                if k<=self._cnt:
+                    notifiers+=self._notifiers.pop(k)
         for n in notifiers:
             n.notify(cnt)
 
@@ -218,11 +220,13 @@ class SignalSynchronizer(object):
             (if the signal is sent less than `limit_period` after the previous signal, ignore it).
         add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`synchronizing.TSignalSynchronizerInfo` for details).
         dest_controller: the controller for the thread in which `func` should be called; by default, it's the thread which creates the synchronizer object.
+            call_tag(str or None): tag used for the synchronized call; by default, use the interrupt call (which is the default of ``call_in_thread``).
     """
-    def __init__(self, func, limit_queue=1, limit_period=0, add_call_info=False, dest_controller=None):
+    def __init__(self, func, limit_queue=1, limit_period=0, add_call_info=False, dest_controller=None, call_tag=None):
         dest_controller=dest_controller or threadprop.current_controller()
+        self.call_tag=call_tag
         def call(*args):
-            dest_controller.call_in_thread_callback(func,args,callback=self._call_done)
+            dest_controller.call_in_thread_callback(func,args,callback=self._call_done,tag=self.call_tag)
         self.call=call
         self.limit_queue=limit_queue
         self.queue_size=0

@@ -565,14 +565,16 @@ class QThreadController(QtCore.QObject):
         Any given point can be notified only once, the repeated notification causes error.
         """
         self._get_exec_note(point).notify()
-    def sync_exec(self, point, timeout=None):
+    def sync_exec(self, point, timeout=None, counter=1):
         """
         Wait for the given execution point.
         
         Automatically invoked points include ``"start"`` (thread starting), ``"run"`` (thread setup and ready to run), and ``"stop"`` (thread finished).
         If timeout is passed, raise :exc:`threadprop.TimeoutThreadError`.
+        `counter` specifies the minimal number of pre-requisite :func:`notify_exec` calls to finish the waiting (by default, a single call is enough).
+        Return actual number of notifier calls up to date.
         """
-        return self._get_exec_note(point).wait(timeout=timeout)
+        return self._get_exec_note(point).wait(timeout=timeout,state=counter)
     def add_stop_notifier(self, func, call_if_stopped=True):
         """
         Add stop notifier: a function which is called when the thread is about to be stopped (left the main message loop).
@@ -750,6 +752,21 @@ class QMultiRepeatingThreadController(QThreadController):
         cleanup=self.batch_jobs[name][1]
         if cleanup:
             cleanup(*args,**kwargs)
+
+    def subscribe_commsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, add_call_info=False, id=None):
+        """
+        Subscribe callback to a signal which is synchronized with commands and jobs execution.
+
+        Unlike the standard :meth:`subscribe` method, the subscribed callback will only be executed between jobs or commands, not during one of these.
+
+        See :func:`signal_pool.SignalPool.subscribe` for details.
+        By default, the subscribed destination is the thread's name.
+        """
+        if self._signal_pool:
+            uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,
+                limit_queue=limit_queue,limit_period=limit_period,add_call_info=add_call_info,dest_controller=self,call_tag="control.execute",id=id)
+            self._signal_pool_uids.append(uid)
+            return uid
 
     def check_commands(self):
         """

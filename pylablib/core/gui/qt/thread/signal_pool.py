@@ -61,7 +61,7 @@ class SignalPool(object):
                 return False
             return filt(src,dst,tag,value) if (filt is not None) else True
         return self._pool.add_observer(callback,name=id,filt=full_filt,priority=priority,cacheable=(filt is None))
-    def subscribe(self, callback, srcs="any", dsts="any", tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, dest_controller=None, add_call_info=False, id=None):
+    def subscribe(self, callback, srcs="any", dsts="any", tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, dest_controller=None, call_tag=None, add_call_info=False, id=None):
         """
         Subscribe synchronous callback to a signal.
 
@@ -82,13 +82,14 @@ class SignalPool(object):
                 (if the signal is sent while at least `limit_queue` callbacks are already in queue to be executed, ignore it).
             limit_period(float): limits the minimal time between two call to the subscribed callback
                 (if the signal is sent less than `limit_period` after the previous signal, ignore it).
+            call_tag(str or None): tag used for the synchronized call; by default, use the interrupt call (which is the default of ``call_in_thread``).
             add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`synchronizing.TSignalSynchronizerInfo` for details).
             id(int): subscription ID (by default, generate a new unique name).
 
         Returns:
             subscription ID, which can be used to unsubscribe later.
         """
-        sync_callback=synchronizing.SignalSynchronizer(callback,limit_queue=limit_queue,limit_period=limit_period,add_call_info=add_call_info,dest_controller=dest_controller)
+        sync_callback=synchronizing.SignalSynchronizer(callback,limit_queue=limit_queue,limit_period=limit_period,add_call_info=add_call_info,dest_controller=dest_controller,call_tag=call_tag)
         return self.subscribe_nonsync(sync_callback,srcs=srcs,dsts=dsts,tags=tags,filt=filt,priority=priority,id=id)
     def unsubscribe(self, id):
         """Unsubscribe from a subscription with a given ID."""
