@@ -190,7 +190,7 @@ class ImageView(QtWidgets.QWidget):
         params.v["minlim"],params.v["maxlim"]=levels
         params.v["vlinepos"]=self.imgVLine.getPos()[0]
         params.v["hlinepos"]=self.imgHLine.getPos()[1]
-    def _sanitize_img(self, img, targetImageSize=20): # PyQtGraph histgram has an unfortuinate failure mode
+    def _sanitize_img(self, img, targetImageSize=20): # PyQtGraph histogram has unfortunate failure modes
         steps=(int(np.ceil(img.shape[0] / targetImageSize)), int(np.ceil(img.shape[1] / targetImageSize)))
         step_img=img[::steps[0],::steps[1]] # ImageView only uses stepped image for plotting
         if np.all(step_img==step_img[0,0]): # ImageView can't plot images of constant color

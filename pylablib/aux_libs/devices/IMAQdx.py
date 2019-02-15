@@ -26,10 +26,10 @@ class IMAQdxAttribute(object):
     Usually created automatically by an :class:`IMAQdxCamera` instance, but could be created manually.
 
     Attributes:
-        name: attirbute name
+        name: attribute name
         display_name: attribute display name (short description name)
         tooltip: longer attribute description
-        descrpition: full attribute description (usually, same as `tooltip`)
+        description: full attribute description (usually, same as `tooltip`)
         units: attribute units (if applicable)
         readable (bool): whether attribute is readable
         writable (bool): whether attribute is writable
@@ -235,7 +235,7 @@ class IMAQdxCamera(interface.IDevice):
 
     def get_all_attributes(self, root="", as_dict=False):
         """
-        Get values of all attrubutes with the given `root`.
+        Get values of all attributes with the given `root`.
 
         If ``as_dict==True``, return ``dict`` object; otherwise, return :class:`Dictionary` object.
         """
@@ -243,7 +243,7 @@ class IMAQdxCamera(interface.IDevice):
         return settings.as_dict(style="flat") if as_dict else settings
     def set_all_attributes(self, settings, root="", truncate=True):
         """
-        Set values of all attrubutes with the given `root`.
+        Set values of all attributes with the given `root`.
         
         If ``truncate==True``, truncate value to lie within attribute range.
         """
@@ -322,7 +322,7 @@ class IMAQdxCamera(interface.IDevice):
         Setup acquisition mode.
 
         `continuous` determines whether acquisition runs continuously, or stops after the given number of frames
-        (note that :meth:`acquision_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
+        (note that :meth:`acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
         """
         lib.IMAQdxConfigureAcquisition(self.sid,continuous,frames)
@@ -341,7 +341,7 @@ class IMAQdxCamera(interface.IDevice):
         lib.IMAQdxStopAcquisition(self.sid)
         self.frame_counter=0
         self.last_wait_frame=-1
-    def acquision_in_progress(self):
+    def acquisition_in_progress(self):
         """Check if acquisition is in progress"""
         return self.v["StatusInformation/AcqInProgress"]
     def refresh_acquisition(self, delay=0.005):
@@ -365,7 +365,7 @@ class IMAQdxCamera(interface.IDevice):
         Useful for applying certain settings which can't be changed during the acquisition.
         """
         acq_params=self.acq_params
-        acq_in_progress=self.acquision_in_progress()
+        acq_in_progress=self.acquisition_in_progress()
         try:
             self.stop_acquisition()
             self.clear_acquisition()
@@ -385,7 +385,7 @@ class IMAQdxCamera(interface.IDevice):
         If no images are available, return ``None``.
         """
         newest_img=self._last_buffer()
-        if not self.acquision_in_progress() or newest_img<0:
+        if not self.acquisition_in_progress() or newest_img<0:
             return None
         if self.frame_counter>newest_img:
             return None
@@ -482,7 +482,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
         Setup acquisition mode.
 
         `continuous` determines whether acquisition runs continuously, or stops after the given number of frames
-        (note that :meth:`acquision_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
+        (note that :meth:`acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
         """
         IMAQdxCamera.setup_acquisition(self,continuous,frames)

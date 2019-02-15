@@ -20,7 +20,7 @@ def errcheck(passing=None):
     Build an error checking function.
 
     Return a function which checks return codes of DCAM library functions.
-    `passing` is a list specifying which return codes are acceptable (by default, non-negative codes are aceptable).
+    `passing` is a list specifying which return codes are acceptable (by default, non-negative codes are acceptable).
     """
     passing=set(passing) if passing is not None else set()
     def checker(result, func, arguments):

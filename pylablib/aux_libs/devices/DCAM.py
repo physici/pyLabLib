@@ -313,7 +313,7 @@ class DCAMCamera(IDevice):
         """
         Start acquisition.
 
-        `mode` can be either ``"snap"`` (since frame or sequency acquisition) or ``"sequence"`` (contunuous acquisition).
+        `mode` can be either ``"snap"`` (since frame or sequency acquisition) or ``"sequence"`` (continuous acquisition).
         `nframes` determines number of frames to acquire in ``"snap"`` mode, or size of the ring buffer in the ``"sequence"`` mode (by default, 100).
         """
         acq_modes=["sequence","snap"]
@@ -366,7 +366,7 @@ class DCAMCamera(IDevice):
         
         Return tuple ``(first, last)`` with images range (inclusive).
         If no images are available, return ``None``.
-        If some images werein the buffer were overwritten, exclude them from the range.
+        If some images were in the buffer were overwritten, exclude them from the range.
         """
         if self._last_frame is None:
             return None

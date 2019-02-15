@@ -113,7 +113,8 @@ class QThreadCallNotifier(QThreadNotifier):
         Wait (with the given `timeout`) for the value passed by the notifier
 
         If ``pass_exception==True`` and the returned value represents exception, re-raise it; otherwise, return `default`.
-        If ``error_on_stopped==True`` and the controlled thread is stopped before it executed the call, raise :exc:`NoControllerThreadError`; otherwise, return `default`.
+        If ``error_on_fail==True`` and the controlled thread notifies of a fail (usually, if it's stopped before it executed the call),
+                raise :exc:`NoControllerThreadError`; otherwise, return `default`.
         """
         res=QThreadNotifier.get_value_sync(self,timeout=timeout)
         if res:
@@ -130,13 +131,23 @@ class QThreadCallNotifier(QThreadNotifier):
                     raise threadprop.NoControllerThreadError("failed executing remote call: controller is stopped")
                 return default
             else:
-                raise ValueError("unrecognzied return value kind: {}".format(kind))
+                raise ValueError("unrecognized return value kind: {}".format(kind))
         else:
             if error_on_fail:
                 raise threadprop.TimeoutThreadError
             return default
 
 class QSyncCall(object):
+    """
+    Object representing a remote call in a different thread.
+
+    Args:
+        func: callable to be invoked in the destination thread
+        args, kwargs: arguments to be passed to `func`
+        pass_exception (bool): if ``True``, and `func` raises an exception, re-raise it in the caller thread
+        error_on_fail (bool): if ``True`` and the controlled thread notifies of a fail (usually, if it's stopped before it executed the call),
+                raise :exc:`NoControllerThreadError`; otherwise, return `default`.
+    """
     def __init__(self, func, args=None, kwargs=None, pass_exception=True, error_on_fail=True):
         object.__init__(self)
         self.func=func
@@ -161,23 +172,53 @@ class QSyncCall(object):
                 self.callback()
             self.synchronizer.notify(res)
     def set_callback(self, callback, call_on_fail=True):
+        """
+        Set the callback to be executed after the main call is done.
+        
+        Callback is not provided with any arguments.
+        If ``callback_on_fail==True``, call it even if the original call raised an exception.
+        """
         self.callback=callback
         self.callback_on_fail=call_on_fail
     def fail(self):
+        """Notify that the call is failed (invoked by the destination thread)"""
         self.synchronizer.notify(("fail",None))
     def value(self, sync=True, timeout=None, default=None):
+        """
+        Get the result of the call function (invoked by the caller thread).
+        
+        If ``sync==True``, wait until the execution is done and return the result.
+        In this case `timeout` and `default` specify the waiting timeout and the default return value if the timeout is exceeded.
+        If ``sync==False``, return :class:`QThreadCallNotifier` object which can be used to check execution/obtain the result later.
+        """
         if sync:
             return self.synchronizer.get_value_sync(timeout=timeout,default=default,error_on_fail=self.error_on_fail,pass_exception=self.pass_exception)
         else:
             return self.synchronizer
     def wait(self, timeout=None):
+        """Wait until the call is executed"""
         return self.synchronizer.wait(timeout)
     def done(self):
+        """Check if the call is executed"""
         return self.synchronizer.done_wait()
 
 
 TSignalSynchronizerInfo=collections.namedtuple("TSignalSynchronizerInfo",["call_time"])
 class SignalSynchronizer(object):
+    """
+    Synchronizer used by :class:`signal_pool.SignalPool` to manache sync signal subscriptions.
+
+    Usually created by the signal pool, so it is rarely invoked directly.
+
+    Args:
+        func: function to be called when the signal arrives.
+        limit_queue(int): limits the maximal number of scheduled calls
+            (if the signal is sent while at least `limit_queue` callbacks are already in queue to be executed, ignore it).
+        limit_period(float): limits the minimal time between two call to the subscribed callback
+            (if the signal is sent less than `limit_period` after the previous signal, ignore it).
+        add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`synchronizing.TSignalSynchronizerInfo` for details).
+        dest_controller: the controller for the thread in which `func` should be called; by default, it's the thread which creates the synchronizer object.
+    """
     def __init__(self, func, limit_queue=1, limit_period=0, add_call_info=False, dest_controller=None):
         dest_controller=dest_controller or threadprop.current_controller()
         def call(*args):

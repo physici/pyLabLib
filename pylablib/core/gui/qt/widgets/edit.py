@@ -2,6 +2,11 @@ from PyQt5 import QtWidgets, QtCore
 from ... import format, limit
 
 class LVTextEdit(QtWidgets.QLineEdit):
+    """
+    Expanded text edit.
+
+    Maintains internally stored consistent value (which can be, e.g., accessed from different threads).
+    """
     def __init__(self, parent, value=None):
         QtWidgets.QLineEdit.__init__(self, parent)
         self.returnPressed.connect(self._on_enter)
@@ -27,13 +32,27 @@ class LVTextEdit(QtWidgets.QLineEdit):
             QtWidgets.QLineEdit.keyPressEvent(self,event)
 
     value_entered=QtCore.pyqtSignal("PyQt_PyObject")
+    """Signal emitted when value is entered (regardless of whether it stayed the same)"""
     value_changed=QtCore.pyqtSignal("PyQt_PyObject")
+    """Signal emitted when value is changed"""
     def get_value(self):
+        """Get current numerical value"""
         return self._value
     def show_value(self, interrupt_edit=False):
+        """
+        Display currently stored numerical value
+        
+        If ``interrupt_edit==True`` and the edit is currently being modified by the user, don't update the display.
+        """
         if (not self.hasFocus()) or interrupt_edit:
             self.setText(self._value)
     def set_value(self, value, notify_value_change=True, interrupt_edit=False):
+        """
+        Set current numerical value.
+        
+        If ``notify_value_change==True``, emit the `value_changed` signal; otherwise, change value silently.
+        If ``interrupt_edit==True`` and the edit is currently being modified by the user, don't update the display (but still update the internally stored value).
+        """
         value_changed=False
         value=str(value)
         if self._value!=value:
@@ -45,6 +64,12 @@ class LVTextEdit(QtWidgets.QLineEdit):
         return value_changed
 
 class LVNumEdit(QtWidgets.QLineEdit):
+    """
+    Labview-style numerical edit.
+
+    Maintains internally stored consistent value (which can be, e.g., accessed from different threads).
+    Supports different number representations, metric perfixes (in input or output), keyboard shortcuts (up/down for changing number, escape for cancelling).
+    """
     def __init__(self, parent, value=None, num_limit=None, num_format=None):
         QtWidgets.QLineEdit.__init__(self, parent)
         self.num_limit=limit.as_limiter(num_limit) if num_limit is not None else limit.NumberLimit()
@@ -95,19 +120,34 @@ class LVNumEdit(QtWidgets.QLineEdit):
             return self._value
 
     def change_limiter(self, limiter):
+        """Change current numerical limiter"""
         self.num_limit=limit.as_limiter(limiter)
         if self._value is not None:
             new_value=self._coerce_value(self._value)
             if new_value!=self._value:
                 self.set_value(new_value)
     def set_number_limit(self, lower_limit=None, upper_limit=None, action="ignore", value_type=None):
+        """
+        Set number limit.
+        
+        `lower_limit` and `upper_limit` set the value limits (``None`` means no limit).
+        `action` specifies the action on out-of-limit: either ``"ignore"`` (return to the previously stored value), or ``"coerce"`` (coerce to the closest limit)
+        `value_type` can be either ``"float"`` (any floating point number is accepted), or ``"int"`` (round to the nearest integer).
+        """
         limiter=limit.NumberLimit(lower_limit=lower_limit,upper_limit=upper_limit,action=action,value_type=value_type)
         self.change_limiter(limiter)
     def change_formatter(self, formatter):
+        """Change current numerical formatter"""
         self.num_format=format.as_formatter(formatter)
         if self._value is not None:
             self.show_value()
     def set_number_format(self, kind="float", *args, **kwargs):
+        """
+        Set numerical format
+        
+        `kind` specifies the format kind (``"float"`` or ``"int"``), and the additional arguments are passed to the corresponding formatter.
+        See :class:`core.gui.FloatFormatter` and :class:`core.gui.IntegerFormatter` for details.
+        """
         if kind=="float":
             formatter=format.FloatFormatter(*args,**kwargs)
         elif kind=="int":
@@ -117,10 +157,12 @@ class LVNumEdit(QtWidgets.QLineEdit):
         self.change_formatter(formatter)
 
     def get_cursor_order(self):
+        """Get a decimal order of the text cursor"""
         str_value=str(self.text())
         cursor_pos=self.cursorPosition()
         return format.pos_to_order(str_value,cursor_pos)
     def set_cursor_order(self, order):
+        """Move text cursor to a given decimal order"""
         if order is not None:
             new_cursor_pos=format.order_to_pos(str(self.text()),order)
             self.setCursorPosition(new_cursor_pos)
@@ -136,13 +178,23 @@ class LVNumEdit(QtWidgets.QLineEdit):
                 return new_value
             value=new_value
     def repr_value(self, value):
+        """Return representation of `value` according to the current numerical format"""
         return self.num_format(value)
 
     value_entered=QtCore.pyqtSignal("PyQt_PyObject")
+    """Signal emitted when value is entered (regardless of whether it stayed the same)"""
     value_changed=QtCore.pyqtSignal("PyQt_PyObject")
+    """Signal emitted when value is changed"""
     def get_value(self):
+        """Get current numerical value"""
         return self._value
     def show_value(self, interrupt_edit=False, preserve_cursor_order=True):
+        """
+        Display currently stored numerical value
+        
+        If ``interrupt_edit==True`` and the edit is currently being modified by the user, don't update the display.
+        If ``preserve_cursor_order==True`` and the display value is being edited, keep the decimal order of the cursor position after change.
+        """
         if (not self.hasFocus()) or interrupt_edit:
             if preserve_cursor_order and self.hasFocus():
                 cursor_order=self.get_cursor_order()
@@ -152,6 +204,13 @@ class LVNumEdit(QtWidgets.QLineEdit):
             else:
                 self.setText(self.num_format(self._value))
     def set_value(self, value, notify_value_change=True, interrupt_edit=False, preserve_cursor_order=True):
+        """
+        Set and display current numerical value.
+        
+        If ``notify_value_change==True``, emit the `value_changed` signal; otherwise, change value silently.
+        If ``interrupt_edit==True`` and the edit is currently being modified by the user, don't update the display (but still update the internally stored value).
+        If ``preserve_cursor_order==True`` and the display value is being edited, keep the decimal order of the cursor position after change.
+        """
         value_changed=False
         try:
             value=self._coerce_value(value)

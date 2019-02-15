@@ -30,7 +30,7 @@ class PfcamProperty(object):
     Usually created automatically by an :class:`PFCamera` instance, but could be created manually.
 
     Attributes:
-        name: attirbute name
+        name: attribute name
         readable (bool): whether property is readable
         writable (bool): whether property is writable
         is_command (bool): whether property is a command
@@ -440,7 +440,7 @@ def get_status_lines(frames, check_transposed=True):
     
     `frames` can be 2D array (one frame), 3D array (stack of frames, first index is frame number), or list of array.
     Automatically check if the status line is present; return ``None`` if it's not.
-    If ``check_transposed==Treu``, check for the case where the image is transposed (i.e., line becomes a column).
+    If ``check_transposed==True``, check for the case where the image is transposed (i.e., line becomes a column).
     """
     if isinstance(frames,list):
         return [get_status_lines(f,check_transposed=check_transposed) for f in frames]

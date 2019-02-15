@@ -82,8 +82,8 @@ class SignalPool(object):
                 (if the signal is sent while at least `limit_queue` callbacks are already in queue to be executed, ignore it).
             limit_period(float): limits the minimal time between two call to the subscribed callback
                 (if the signal is sent less than `limit_period` after the previous signal, ignore it).
-            id(int): subscription ID (by default, generate a new unique name).
             add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`synchronizing.TSignalSynchronizerInfo` for details).
+            id(int): subscription ID (by default, generate a new unique name).
 
         Returns:
             subscription ID, which can be used to unsubscribe later.

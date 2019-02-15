@@ -10,6 +10,9 @@ import matplotlib.pyplot as mpl
 import time
 
 class MPLFigureCanvas(FigureCanvasQTAgg):
+    """
+    Simple widget wrapper for MPL plotting canvas.
+    """
     def __init__(self, parent=None):
         FigureCanvasQTAgg.__init__(self,mpl.Figure())
         if parent:
@@ -18,6 +21,11 @@ class MPLFigureCanvas(FigureCanvasQTAgg):
         self._last_draw_time=None
 
     def redraw(self, force=False):
+        """
+        Replot the data.
+
+        If ``force==False``, and less than ``self.redraw_period`` (10ms by default) passed since the last replot event, do nothing.
+        """
         t=time.time()
         if force or (not self._last_draw_time) or (self._last_draw_time+self.redraw_period<=t):
             self.draw_idle()
@@ -26,6 +34,9 @@ class MPLFigureCanvas(FigureCanvasQTAgg):
 
 
 class MPLFigureToolbarCanvas(QtWidgets.QWidget):
+    """
+    Simple widget wrapper for MPL plotting canvas with the toolbar (for plot zooming/panning)
+    """
     def __init__(self, parent=None):
         QtWidgets.QFrame.__init__(self,parent)
         self.layout=QtWidgets.QVBoxLayout(self)
@@ -36,9 +47,16 @@ class MPLFigureToolbarCanvas(QtWidgets.QWidget):
         self.layout.addWidget(self.toolbar)
     @property
     def redraw_period(self):
+        """Set redraw period"""
         return self.canvas.redraw_period
     @redraw_period.setter
     def redraw_period(self, value):
+        """Get redraw period"""
         self.canvas.redraw_period=value
     def redraw(self, force=False):
+        """
+        Replot the data.
+
+        If ``force==False``, and less than ``self.redraw_period`` (10ms by default) passed since the last replot event, do nothing.
+        """
         self.canvas.redraw(force=force)

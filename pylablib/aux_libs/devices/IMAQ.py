@@ -238,7 +238,7 @@ class IMAQCamera(interface.IDevice):
             trig_line(int): trigger line number
             trig_pol(str): trigger polarity; can be ``"high"`` or ``"low"``
             trig_drive(str): trigger output signal; can be ``"disable"`` (disable drive),
-                ``"acq_in_progress"`` (asserted when acuqisition is started),``"acq_done"`` (asserted when acquisition is done),
+                ``"acq_in_progress"`` (asserted when acquisition is started),``"acq_done"`` (asserted when acquisition is done),
                 ``"unasserted"`` (force unasserted level), ``"asserted"`` (force asserted level),
                 ``"hsync"`` (asserted on start of a single line start), ``"vsync"`` (asserted on start of a frame scan),
                 ``"frame_start"`` (asserted when a single frame is captured), or ``"frame_done"`` (asserted when a single frame is done)
@@ -319,7 +319,7 @@ class IMAQCamera(interface.IDevice):
         Setup acquisition mode.
 
         `continuous` determines whether acquisition runs continuously, or stops after the given number of frames
-        (note that :meth:`acquision_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
+        (note that :meth:`acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
         If ``start==True``, start acquisition directly after setup.
         """
@@ -347,7 +347,7 @@ class IMAQCamera(interface.IDevice):
         """Return acquisition parameters ``(continuous, frames_buffer)``."""
         return self._acq_params
     def start_acquisition(self):
-        """Start acquistion"""
+        """Start acquisition"""
         self.stop_acquisition()
         if self._acq_params is None:
             self.setup_acquisition(True,100)
@@ -356,10 +356,10 @@ class IMAQCamera(interface.IDevice):
         self._lost_frames=0
         lib.imgSessionStartAcquisition(self.sid)
     def stop_acquisition(self):
-        """Stop acquistion"""
+        """Stop acquisition"""
         lib.imgSessionStopAcquisition(self.sid)
         self._last_wait_frame=-1
-    def acquision_in_progress(self):
+    def acquisition_in_progress(self):
         """Check if acquisition is in progress"""
         return bool(lib.imgSessionStatus(self.sid)[0])
     
@@ -371,7 +371,7 @@ class IMAQCamera(interface.IDevice):
         Useful for applying certain settings which can't be changed during the acquisition (e.g., ROI or bit depth).
         """
         acq_params=self._acq_params
-        acq_in_progress=self.acquision_in_progress()
+        acq_in_progress=self.acquisition_in_progress()
         try:
             self.clear_acquisition()
             yield
@@ -422,7 +422,7 @@ class IMAQCamera(interface.IDevice):
         If `timeout` is exceeded, raise :exc:`IMAQdxError`.
         `period` specifies camera polling period.
         """
-        if not self.acquision_in_progress():
+        if not self.acquisition_in_progress():
             return
         last_acq_frame=self._acquired_frames()-1
         if since=="lastread" and last_acq_frame>self._last_read_frame:
@@ -436,7 +436,7 @@ class IMAQCamera(interface.IDevice):
         except IMAQError as e:
             if e.name=="IMG_ERR_TIMEOUT":
                 raise IMAQTimeoutError() from None
-            elif e.name=="IMG_ERR_BOARD_NOT_RUNNING" and not self.acquision_in_progress():
+            elif e.name=="IMG_ERR_BOARD_NOT_RUNNING" and not self.acquisition_in_progress():
                 pass
             else:
                 raise e from None
@@ -488,7 +488,7 @@ class IMAQCamera(interface.IDevice):
 
         If ``peek==True``, return images but not mark them as read.
         `missing_frame` determines what to do with frames which are out of range (missing or lost):
-        can be ``"none"`` (replacing them with ``None``), ``"zero"`` (same as ``None``, added for comaptibility with :func:`read_multiple_images`),
+        can be ``"none"`` (replacing them with ``None``), ``"zero"`` (same as ``None``, added for compatibility with :func:`read_multiple_images`),
         or ``"skip"`` (skipping them).
         """
         if not self._buffers:

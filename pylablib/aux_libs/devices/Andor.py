@@ -1298,7 +1298,7 @@ class AndorSDK3Camera(IDevice):
         """
         Start acquisition.
 
-        `mode` can be either ``"snap"`` (since frame or sequency acquisition) or ``"sequence"`` (contunuous acquisition).
+        `mode` can be either ``"snap"`` (since frame or sequency acquisition) or ``"sequence"`` (continuous acquisition).
         `nframes` determines number of frames to acquire in ``"snap"`` mode, or size of the ring buffer in the ``"sequence"`` mode (by default, 100).
         """
         self.stop_acquisition()
