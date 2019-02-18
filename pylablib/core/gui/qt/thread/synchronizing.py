@@ -116,7 +116,7 @@ class QThreadCallNotifier(QThreadNotifier):
 
         If ``pass_exception==True`` and the returned value represents exception, re-raise it; otherwise, return `default`.
         If ``error_on_fail==True`` and the controlled thread notifies of a fail (usually, if it's stopped before it executed the call),
-                raise :exc:`NoControllerThreadError`; otherwise, return `default`.
+        raise :exc:`NoControllerThreadError`; otherwise, return `default`.
         """
         res=QThreadNotifier.get_value_sync(self,timeout=timeout)
         if res:

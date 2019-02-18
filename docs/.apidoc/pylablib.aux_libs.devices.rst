@@ -36,6 +36,14 @@ pylablib.aux\_libs.devices.Andor module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.devices.AndorSDK3\_lib module
+------------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.AndorSDK3_lib
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.devices.Andor\_lib module
 --------------------------------------------
 
@@ -108,10 +116,26 @@ pylablib.aux\_libs.devices.HighFinesse module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.devices.IMAQ module
+--------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.IMAQ
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.devices.IMAQ\_lib module
 -------------------------------------------
 
 .. automodule:: pylablib.aux_libs.devices.IMAQ_lib
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pylablib.aux\_libs.devices.IMAQ\_lib\_const module
+--------------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.IMAQ_lib_const
     :members:
     :undoc-members:
     :show-inheritance:
@@ -220,6 +244,14 @@ pylablib.aux\_libs.devices.Pfeiffer module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.devices.PhotonFocus module
+---------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.PhotonFocus
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.devices.PurePhotonics module
 -----------------------------------------------
 
@@ -312,6 +344,14 @@ pylablib.aux\_libs.devices.misc module
 --------------------------------------
 
 .. automodule:: pylablib.aux_libs.devices.misc
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pylablib.aux\_libs.devices.pfcam\_lib module
+--------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.pfcam_lib
     :members:
     :undoc-members:
     :show-inheritance:

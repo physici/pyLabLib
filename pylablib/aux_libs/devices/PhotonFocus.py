@@ -148,7 +148,7 @@ def list_cameras(supported=False):
     """
     List all cameras available through pfcam interface
     
-    If ``supported==True'', only return cameras which support pfcam protocol.
+    If ``supported==True``, only return cameras which support pfcam protocol.
     """
     ports=range(lib.pfPortInit())
     if supported:
