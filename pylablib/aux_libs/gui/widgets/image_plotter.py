@@ -22,14 +22,15 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table=ParamTable(self)
         self.settings_table.setObjectName("settings_table")
         self.layout.addWidget(self.settings_table)
+        self.img_lim=(0,65536)
         self.settings_table.setupUi("img_settings",add_indicator=True,display_table=display_table,display_table_root=display_table_root)
         self.settings_table.add_text_label("size",label="Image size:")
         self.settings_table.add_check_box("flip_x","Flip X",value=False)
         self.settings_table.add_check_box("flip_y","Flip Y",value=False)
         self.settings_table.add_check_box("transpose","Transpose",value=False)
         self.settings_table.add_check_box("normalize","Normalize",value=False)
-        self.settings_table.add_num_edit("minlim",value=0,limiter=(0,65535,"coerce","int"),formatter=("int"),label="Minimal intensity:")
-        self.settings_table.add_num_edit("maxlim",value=65535,limiter=(0,65535,"coerce","int"),formatter=("int"),label="Maximal intensity:")
+        self.settings_table.add_num_edit("minlim",value=self.img_lim[0],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Minimal intensity:")
+        self.settings_table.add_num_edit("maxlim",value=self.img_lim[1],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Maximal intensity:")
         self.settings_table.add_check_box("show_lines","Show lines",value=True)
         self.settings_table.add_num_edit("vlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="X line:")
         self.settings_table.add_num_edit("hlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="Y line:")
@@ -40,9 +41,16 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.add_button("single","Single").value_changed_signal().connect(self.view.arm_single)
         self.settings_table.add_padding()
 
-    def set_img_maxlim(self, maxlim):
-        self.settings_table.w["minlim"].set_number_limit(0,maxlim,"coerce","int")
-        self.settings_table.w["maxlim"].set_number_limit(0,maxlim,"coerce","int")
+    def set_img_lim(self, *args):
+        if len(args)==1:
+            self.img_lim=(self.img_lim[0],args[0])
+        elif len(args)==2:
+            self.img_lim=tuple(args)
+        else:
+            return
+        minl,maxl=self.img_lim
+        self.settings_table.w["minlim"].set_number_limit(minl,maxl,"coerce","int")
+        self.settings_table.w["maxlim"].set_number_limit(minl,maxl,"coerce","int")
     def get_all_values(self):
         return self.settings_table.get_all_values()
     def set_all_values(self, params):

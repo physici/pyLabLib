@@ -865,6 +865,24 @@ class QTaskThread(QMultiRepeatingThreadController):
         """Finlize the thread (always called on thread termination, regardless of the reason)"""
         pass
 
+    ### Status update function ###
+    def update_status(self, kind, status, text=None, notify=True):
+        """
+        Update device status represented in thread variables.
+
+        `kind` is the status kind and `status` is its value.
+        Status variable name is ``"status/"+kind``.
+        If ``text is not None``, it specifies new status text stored in ``"status/"+kind+"_text"``.
+        If ``notify==True``, send a signal about the status change.
+        """
+        status_str="status/"+kind if kind else "status"
+        self[status_str]=status
+        if notify:
+            self.send_signal("any",status_str,status)
+        if text:
+            self.set_variable(status_str+"_text",text)
+            self.send_signal("any",status_str+"_text",text)
+
     ### Start/stop control (called automatically) ###
     def on_start(self):
         QMultiRepeatingThreadController.on_start(self)
@@ -884,15 +902,15 @@ class QTaskThread(QMultiRepeatingThreadController):
     ### Command control ###    
     def add_command(self, name, command=None, priority=0):
         """
-        Add a new command to the command set (by default same set applies voth to commands and queries).
+        Add a new command to the command set (by default same set applies both to commands and queries).
 
         If `command' is ``None``, look for the method with the given `name`; otherwise, it is a command function to be called.
-        `priority` specifies command prioirity (if several commands are in a queue, higher-priority commands are executed first).
+        `priority` specifies command priority (if several commands are in a queue, higher-priority commands are executed first).
         """
         if name in self._commands:
             raise ValueError("command {} already exists".format(name))
         if command is None:
-            command=name
+            command=getattr(self,name)
         self._commands[name]=command
         self._command_priorities[name]=priority
     def _process_named_command(self, name, *args, **kwargs):
@@ -1086,3 +1104,13 @@ def stop_all_controllers(sync=True, concurrent=True, stop_self=True):
                 stop_controller(n,sync=sync)
     if stop_self:
         stop_controller(current_ctl,sync=True)
+def stop_app():
+    """
+    Initialize stopping the application.
+    
+    Do this either by stopping the GUI controller (if it exists), or by stopping all controllers.
+    """
+    try:
+        get_gui_controller(create_if_missing=False).stop()
+    except threadprop.NoControllerThreadError:
+        stop_all_controllers(sync=False)

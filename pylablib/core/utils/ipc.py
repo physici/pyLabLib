@@ -92,7 +92,7 @@ class SharedMemIPCChannel(PipeIPCChannel):
         if method=="pipe":
             return PipeIPCChannel.send_numpy(self,data)
         buff_ptr,count=data.ctypes.data,data.nbytes
-        self.conn.send(TPipeMsg(_sharedmem_start,(count,data.dtype.str)))
+        self.conn.send(TPipeMsg(_sharedmem_start,(count,data.dtype.str,data.shape)))
         while count>0:
             chunk_size=min(count,self.arr_size)
             ctypes.memmove(ctypes.addressof(self.arr.get_obj()),buff_ptr,chunk_size)
@@ -108,7 +108,7 @@ class SharedMemIPCChannel(PipeIPCChannel):
         if msg.id==_simple_msg:
             return msg.data
         else:
-            count,dtype=msg.data
+            count,dtype,shape=msg.data
             buffer=ctypes.create_string_buffer(count)
             buff_ptr=ctypes.addressof(buffer)
             while count>0:
@@ -117,4 +117,4 @@ class SharedMemIPCChannel(PipeIPCChannel):
                 buff_ptr+=chunk_size
                 count-=chunk_size
                 self.conn.send(TPipeMsg(_sharedmem_recvd,None))
-            return np.frombuffer(buffer,dtype)
+            return np.frombuffer(buffer,dtype).reshape(shape)

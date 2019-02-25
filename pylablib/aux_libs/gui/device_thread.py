@@ -54,15 +54,6 @@ class DeviceThread(controller.QTaskThread):
             self.device.close()
             self.update_status("connection","closed","Disconnected")
 
-    def update_status(self, kind, status, text=None, notify=True):
-        status_str="status/"+kind if kind else "status"
-        self[status_str]=status
-        if notify:
-            self.send_signal("any",status_str,status)
-        if text:
-            self.set_variable(status_str+"_text",text)
-            self.send_signal("any",status_str+"_text",text)
-
     def get_settings(self):
         return self.rpyc_obtain(self.device.get_settings()) if self.device is not None else {}
     

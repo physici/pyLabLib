@@ -46,7 +46,7 @@ class StreamFormerThread(controller.QThreadController):
 
     class ChannelQueue(object):
         QueueStatus=collections.namedtuple("QueueStatus",["queue_len","enabled"])
-        def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True, fill_on="started", latching=True, default=None):
+        def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True, fill_on="started", latching=True, expand_list=False, default=None):
             object.__init__(self)
             funcargparse.check_parameter_range(fill_on,"fill_on",{"started","completed"})
             self.func=func
@@ -58,15 +58,22 @@ class StreamFormerThread(controller.QThreadController):
             self.last_value=default
             self.default=default
             self.latching=latching
+            self.expand_list=expand_list
         def add(self, value):
-            data_available=bool(self.queue)
-            if self.enabled:
-                self.queue.append(value)
-                if self.max_queue_len>0 and len(self.queue)>self.max_queue_len:
-                    self.queue.popleft()
-                if self.latching:
-                    self.last_value=value
-            return self.queue and not (data_available)
+            if self.expand_list and isinstance(value,list):
+                res=None
+                for v in value:
+                    res=self.add(v)
+                return res
+            else:
+                data_available=bool(self.queue)
+                if self.enabled:
+                    self.queue.append(value)
+                    if self.max_queue_len>0 and len(self.queue)>self.max_queue_len:
+                        self.queue.popleft()
+                    if self.latching:
+                        self.last_value=value
+                return self.queue and not (data_available)
         def add_from_func(self):
             if self.enabled and self.func and self.fill_on=="started":
                 self.queue.append(self.func())
@@ -102,10 +109,11 @@ class StreamFormerThread(controller.QThreadController):
             return self.QueueStatus(len(self.queue),self.enabled)
             
 
-    def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", fill_on="started", latching=True, default=None):
+    def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", fill_on="started", latching=True, expand_list=False, default=None):
         if name in self.channels:
             raise KeyError("channel {} already exists".format(name))
-        self.channels[name]=self.ChannelQueue(func,max_queue_len=max_queue_len,required=required,enabled=enabled,fill_on=fill_on,latching=latching,default=default)
+        self.channels[name]=self.ChannelQueue(func,max_queue_len=max_queue_len,required=required,enabled=enabled,
+            fill_on=fill_on,latching=latching,expand_list=expand_list,default=default)
         self.table[name]=[]
     def subscribe_source(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
         def on_signal(src, tag, value):

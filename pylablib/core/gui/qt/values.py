@@ -290,8 +290,9 @@ class ValuesTable(object):
         return self.handlers[path].get_value(subpath)
     def get_all_values(self, root=""):
         values=dictionary.Dictionary()
-        for n in self.handlers[root].paths():
-            values[n]=self.handlers[(root,n)].get_all_values()
+        if root in self.handlers:
+            for n in self.handlers[root].paths():
+                values[n]=self.handlers[(root,n)].get_all_values()
         return values
     def set_value(self, name, value):
         path,subpath=self.handlers.get_max_prefix(name,kind="leaf")
@@ -300,8 +301,8 @@ class ValuesTable(object):
         return self.handlers[path].set_value(value,subpath)
     def set_all_values(self, values, root=""):
         for n,v in dictionary.as_dictionary(values).iternodes(to_visit="all",topdown=True,include_path=True):
-            if self.handlers[root].has_entry(n,kind="leaf"):
-                self.handlers[(root,n)].set_all_values(v)
+            if self.handlers.has_entry((root,n),kind="leaf"):
+                self.handlers[root,n].set_all_values(v)
             
     def repr_value(self, name, value):
         path,subpath=self.handlers.get_max_prefix(name,kind="leaf")
@@ -452,3 +453,7 @@ class IndicatorValuesTable(ValuesTable):
             p=(root,n)
             if p in self.indicator_handlers:
                 self.set_indicator(p,self.get_value(p))
+    def set_all_indicators(self, values, root=""):
+        for n,v in dictionary.as_dictionary(values).iternodes(include_path=True):
+            if self.indicator_handlers.has_entry((root,n,"__default__"),kind="leaf"):
+                self.set_indicator((root,n),v)
