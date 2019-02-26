@@ -233,6 +233,8 @@ try:
                 raise NotImplementedError("PyVisa version <1.6 doesn't support locking")
             def _lock_context(self, timeout=None):
                 raise NotImplementedError("PyVisa version <1.6 doesn't support locking")
+            def _read_term(self):
+                return self.instr.term_chars
         else:
             def _set_timeout(self, timeout):
                 self.instr.timeout=timeout*1000. # in newer versions timeout is in ms
@@ -251,9 +253,15 @@ try:
                 self.instr.unlock()
             def _lock_context(self, timeout=None):
                 return self.instr.lock_context(timeout=timeout*1000. if timeout is not None else None)
+            def _read_term(self):
+                return self.instr.read_termination
             
         
         def __init__(self, conn, timeout=10., term_write=None, term_read=None, do_lock=None, datatype="auto"):
+            if term_write is None:
+                term_write=b"\r\n"
+            if term_read is None:
+                term_read=b"\n"
             IDeviceBackend.__init__(self,conn,term_write=term_write,term_read=term_read,datatype=datatype)
             try:
                 self.instr=self._open_resource(self.conn)
@@ -325,7 +333,9 @@ try:
                 while True:
                     result=self.instr.read_raw()
                     if remove_term:
-                        result=result[:-len(self.instr.term_chars)]
+                        term=self._read_term()
+                        if term and result.endswith(term):
+                            result=result[:-len(term)]
                     if (not skip_empty) or result:
                         break
             self.cooldown()

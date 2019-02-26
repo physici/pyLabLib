@@ -246,6 +246,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
         if isinstance(arg,textstring):
             return "string"
         raise ValueError("can't determine type for argument {0}".format(arg))
+    _float_fmt="E"
     def _compose_msg(self, msg, arg=None, arg_type=None, unit=None, fmt=None, bool_selector=("OFF","ON")):
         if arg is not None:
             if fmt is not None:
@@ -258,7 +259,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
                 elif arg_type=="int":
                     val="{:d}".format(int(arg))
                 elif arg_type=="float":
-                    val="{:E}".format(float(arg))
+                    val=("{:"+self._float_fmt+"}").format(float(arg))
                 elif arg_type=="bool":
                     val="{}".format(bool_selector[1] if arg else bool_selector[0])
                 else:
