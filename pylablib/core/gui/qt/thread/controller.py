@@ -621,7 +621,7 @@ class QThreadController(QtCore.QObject):
             self._interrupt_called.emit(call)
         else:
             self.send_message(tag,call,priority=priority)
-    def call_in_thread_sync(self, func, args=None, kwargs=None, sync=True, timeout=None, default_result=None, pass_exception=True, tag=None, priority=0, error_on_stopped=True, same_thread_shortcut=True):
+    def call_in_thread_sync(self, func, args=None, kwargs=None, sync=True, callback=None, timeout=None, default_result=None, pass_exception=True, tag=None, priority=0, error_on_stopped=True, same_thread_shortcut=True):
         """
         Call a function in this thread with the given arguments.
 
@@ -629,14 +629,22 @@ class QThreadController(QtCore.QObject):
         (in essence, the fact that the function executes in a different thread is transparent).
         Otherwise, exit call immediately, and return a synchronizer object (:class:`synchronizing.QThreadCallNotifier`),
         which can be used to check if the call is done (method `is_done`) and obtain the result (method :meth:`synchronizing.QThreadCallNotifier.get_value_sync`).
+        If `callback` is not ``None``, call it after the function is successfully executed (from the target thread), with a single parameter being function result.
         If ``pass_exception==True`` and `func` raises and exception, re-raise it in the caller thread (applies only if ``sync==True``).
         If `tag` is supplied, send the call in a message with the given tag and priority; otherwise, use the interrupt call (generally, higher priority method).
         If ``error_on_stopped==True`` and the controlled thread is stopped before it executed the call, raise :exc:`NoControllerThreadError`; otherwise, return `default_result`.
         If ``same_thread_shortcut==True`` (default), the call is synchronous, and the caller thread is the same as the controlled thread, call the function directly.
         """
+        if callback:
+            def call_func(*args, **kwargs):
+                res=func(*args,**kwargs)
+                callback(res)
+                return res
+        else:
+            call_func=func
         if same_thread_shortcut and tag is None and sync and threadprop.current_controller() is self:
-            return func(*(args or []),**(kwargs or {}))
-        call=synchronizing.QSyncCall(func,args=args,kwargs=kwargs,pass_exception=pass_exception,error_on_fail=error_on_stopped)
+            return call_func(*(args or []),**(kwargs or {}))
+        call=synchronizing.QSyncCall(call_func,args=args,kwargs=kwargs,pass_exception=pass_exception,error_on_fail=error_on_stopped)
         if self.add_stop_notifier(call.fail):
             call.set_callback(lambda: self.remove_stop_notifier(call.fail),call_on_fail=True)
         if tag is None:
@@ -924,18 +932,19 @@ class QTaskThread(QMultiRepeatingThreadController):
     ## Methods to be called by functions executing in other thread ##
 
     ### Request calls ###
-    def _sync_call(self, func, name, args, kwargs, sync, timeout=None, priority=0, ignore_errors=False):
+    def _sync_call(self, func, name, args, kwargs, sync, callback=None, timeout=None, priority=0, ignore_errors=False):
         priority=self._command_priorities.get(name,0)
-        return self.call_in_thread_sync(func,args=(name,)+tuple(args),kwargs=kwargs,sync=sync,timeout=timeout,tag="control.execute",priority=priority,
-                error_on_stopped=not ignore_errors,pass_exception=not ignore_errors)
-    def call_command(self, name, args, kwargs):
+        return self.call_in_thread_sync(func,args=(name,)+tuple(args or []),kwargs=kwargs,sync=sync,callback=callback,timeout=timeout,tag="control.execute",
+                priority=priority,error_on_stopped=not ignore_errors,pass_exception=not ignore_errors)
+    def call_command(self, name, args=None, kwargs=None, callback=None):
         """
         Invoke command call with the given name and arguments
         
+        If `callback` is not ``None``, call it after the command is successfully executed (from the target thread), with a single parameter being the command result.
         Return :class:`synchronzing.QThreadCallNotifier` object which can be used to wait for and read the command result.
         """
-        return self._sync_call(self.process_command,name,args,kwargs,sync=False)
-    def call_query(self, name, args, kwargs, timeout=None, ignore_errors=False):
+        return self._sync_call(self.process_command,name,args,kwargs,sync=False,callback=callback)
+    def call_query(self, name, args=None, kwargs=None, timeout=None, ignore_errors=False):
         """
         Invoke query call with the given name and arguments, and return the result.
         

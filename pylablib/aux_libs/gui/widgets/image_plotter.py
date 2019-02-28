@@ -1,3 +1,12 @@
+"""
+PyQtGraph-based image plotter.
+
+Has 2 parts: :class:`ImageView` which displays the image,
+and :class:`ImageViewController` which controls the image display (value ranges, flipping or transposing, etc.)
+:class:`ImageView` can also operate alone without a controller.
+When both are used, :class:`ImageView` is created and set up first, and then supplied to :meth:`ImageViewController.setupUi` method.
+"""
+
 from .param_table import ParamTable, FixedParamTable
 from ....core.gui.qt.thread import controller
 
@@ -8,10 +17,27 @@ import contextlib
 
 
 class ImageViewController(QtWidgets.QWidget):
+    """
+    Class for controlling an image inside :class:`ImageView`.
+
+    Like most widgets, requires calling :meth:`setupUi` to set up before usage.
+
+    Args:
+        parent: parent widget
+    """
     def __init__(self, parent=None):
         super(ImageViewController, self).__init__(parent)
 
     def setupUi(self, name, view, display_table=None, display_table_root=None):
+        """
+        Setup the image view controller.
+
+        Args:
+            name (str): widget name
+            view (ImageView): controlled image view
+            display_table (bool): as :class:`.IndicatorValuesTable` object used to access table values; by default, create one internally
+            display_table_root (str): if not ``None``, specify root (i.e., path prefix) for values inside the table.
+        """
         self.name=name
         self.setObjectName(self.name)
         self.layout=QtWidgets.QHBoxLayout(self)
@@ -42,6 +68,11 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.add_padding()
 
     def set_img_lim(self, *args):
+        """
+        Set up image limits
+
+        Can specify either only upper limit (lower stays the same), or both limits.
+        """
         if len(args)==1:
             self.img_lim=(self.img_lim[0],args[0])
         elif len(args)==2:
@@ -52,8 +83,10 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.w["minlim"].set_number_limit(minl,maxl,"coerce","int")
         self.settings_table.w["maxlim"].set_number_limit(minl,maxl,"coerce","int")
     def get_all_values(self):
+        """Get all control values"""
         return self.settings_table.get_all_values()
     def set_all_values(self, params):
+        """Set all control values"""
         self.settings_table.set_all_values(params)
 
 
@@ -63,6 +96,14 @@ builtin_cmaps={ "gray":([0,1.],[(0.,0.,0.),(1.,1.,1.)]),
                 "hot_sat":([0,0.3,0.7,0.999,1.],[(0.,0.,0.),(1.,0.,0.),(1.,1.,0.),(1.,1.,1.),(0.,0.,1.)])
             }
 class ImageView(QtWidgets.QWidget):
+    """
+    Image view object.
+
+    Built on top of PyQtGraph ImageView class.
+
+    Args:
+        parent: parent widget
+    """
     def __init__(self, parent=None):
         super(ImageView, self).__init__(parent)
         self.ctl=None
@@ -79,6 +120,14 @@ class ImageView(QtWidgets.QWidget):
             if size:
                 self.size=size
     def setupUi(self, name, img_size=(1024,1024), min_size=(512,512)):
+        """
+        Setup the image view.
+
+        Args:
+            name (str): widget name
+            img_size (tuple): default image size (used only until actual image is supplied)
+            min_size (tuple): minimal widget size
+        """
         self.name=name
         self.setObjectName(self.name)
         self.single=False
@@ -106,6 +155,11 @@ class ImageView(QtWidgets.QWidget):
         self.rectangles={}
 
     def attach_controller(self, ctl):
+        """
+        Attach :class:`ImageViewController` object.
+
+        Called automatically in :meth:`ImageViewController.SetupUi`
+        """
         self.ctl=ctl
     def _get_params(self):
         if self.ctl is not None:
@@ -120,6 +174,12 @@ class ImageView(QtWidgets.QWidget):
                 "update_image":True})
 
     def set_colormap(self, cmap):
+        """
+        Setup colormap.
+
+        Can be name of one built-in colormaps (``"gray"``, ``"gray_sat"``, ``"hot"``, ``"hot_sat"``),
+        a list specifying PyQtGraph colormap or a :class:`pyqtgraph.ColorMap` instance.
+        """
         cmap=builtin_cmaps.get(cmap,cmap)
         if isinstance(cmap,(list,tuple)):
             cmap=pyqtgraph.ColorMap(*cmap)
@@ -138,7 +198,7 @@ class ImageView(QtWidgets.QWidget):
             self.imageWindow.getHistogramWidget().sigLevelsChanged.disconnect(self.update_image_controls)
             self._signals_connected=False
     @contextlib.contextmanager
-    def no_events(self):
+    def _no_events(self):
         self._disconnect_signals()
         try:
             yield
@@ -147,15 +207,28 @@ class ImageView(QtWidgets.QWidget):
 
 
     def set_image(self, img):
+        """
+        Set the current image.
+
+        The image display won't be updated until :meth:`update_image` is called
+        """
         self.img=img
     @controller.exsafe
     def center_lines(self):
+        """Center coordinate lines"""
         imshape=self.img.shape[::-1] if self._get_params().v["transpose"] else self.img.shape
         self.imgVLine.setPos(imshape[0]/2)
         self.imgHLine.setPos(imshape[1]/2)
     def arm_single(self):
+        """Arm the single-image trigger"""
         self.single=True
     def set_rectangle(self, name, center=None, size=None):
+        """
+        Add or change parameters of a rectangle with a given name.
+
+        Rectangle coordiantes are specified in the original image cooredinate system
+        (i.e., rectangles are automatically flipped/transposed with the image).
+        """
         if name not in self.rectangles:
             pqrect=pyqtgraph.ROI((0,0),(0,0),movable=False)
             self.imageWindow.getView().addItem(pqrect)
@@ -177,13 +250,16 @@ class ImageView(QtWidgets.QWidget):
         rect.rect.setPos(rcenter)
         rect.rect.setSize(rsize)
     def update_rectangles(self):
+        """Update rectange coordinates"""
         for name in self.rectangles:
             self.set_rectangle(name)
     def del_rectangle(self, name):
+        """Delete a rectangle with a given name"""
         if name in self.rectangles:
             rect=self.rectangles.pop(name)
             self.imageWindow.getView().removeItem(rect)
     def show_rectangles(self, show=True):
+        """Toggle showing rectangles on or off"""
         imgview=self.imageWindow.getView()
         for rect in self.rectangles.values():
             if show and rect.rect not in imgview.addedItems:
@@ -193,6 +269,7 @@ class ImageView(QtWidgets.QWidget):
     # Update image controls based on PyQtGraph image window
     @controller.exsafeSlot()
     def update_image_controls(self):
+        """Update image controls in the connected :class:`ImageViewController` object"""
         params=self._get_params()
         levels=self.imageWindow.getHistogramWidget().getLevels()
         params.v["minlim"],params.v["maxlim"]=levels
@@ -211,7 +288,12 @@ class ImageView(QtWidgets.QWidget):
     # Update image plot
     @controller.exsafe
     def update_image(self, update_controls=False):
-        with self.no_events():
+        """
+        Update displayed image.
+
+        If ``update_controls==True``, update control values (such as image min/max values and line positions).
+        """
+        with self._no_events():
             params=self._get_params()
             if not (params.v["update_image"] or self.single):
                 return params

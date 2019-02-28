@@ -33,6 +33,7 @@ from unittest import mock
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon',
     'sphinx.ext.coverage',
     'sphinx.ext.imgmath',
@@ -43,6 +44,14 @@ sys.modules['visa']=mock.Mock(VisaIOError=object, __version__='1.9.0')
 sys.modules['serial']=mock.Mock(SerialException=object)
 sys.modules['ft232']=mock.Mock(Ft232Exception=object)
 autodoc_member_order = 'bysource'
+
+# nitpicky = True
+nitpick_ignore=[ ("py:class","object"), ("py:class","int"), ("py:class","float"), ("py:class","bool"), ("py:class","str"),
+                    ("py:class","list"), ("py:class","tuple"), ("py:class","dict"),
+                    ("py:obj","None")]
+intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
+                       'numpy': ('http://docs.scipy.org/doc/numpy/', None),
+                       'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -58,7 +67,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'pyLabLib'
-copyright = u'2018, Alexey Shkarin'
+copyright = u'2019, Alexey Shkarin'
 author = u'Alexey Shkarin'
 
 # The version info for the project you're documenting, acts as replacement for

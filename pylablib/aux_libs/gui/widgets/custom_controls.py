@@ -6,6 +6,19 @@ from ....core.utils.numerical import limit_to_range
 import collections
 
 class BinROICtl(QtWidgets.QWidget):
+    """
+    Class for ROI control.
+
+    Has 2 rows (for X and Y coordiantes), each with 3 numerical edits: min, max (or width, depedning on :func:`SetupUi` parameters), and bin.
+
+    Like most widgets, requires calling :meth:`setupUi` to set up before usage.
+
+    Args:
+        parent: parent widget
+
+    Attributes:
+        value_changed: signal emitted when the ROIvalue is changed
+    """
     AxisParams=collections.namedtuple("AxisParams",["min","max","bin"])
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self,parent)
@@ -30,6 +43,7 @@ class BinROICtl(QtWidgets.QWidget):
         vbin=limit_to_range(rng.bin,1,maxbin)
         return self.AxisParams(int(vmin),int(vmax),int(vbin))
     def validateROI(self, xparams, yparams):
+        """Restrict current ROI values according to the class constraints"""
         xminsize,yminsize=self.minsize if isinstance(self.minsize,tuple) else (self.minsize,self.minsize)
         xmaxsize,ymaxsize=self.maxsize if isinstance(self.maxsize,tuple) else (self.maxsize,self.maxsize)
         xparams=self._limit_range(xparams,self.xlim,self.maxbin,xminsize,xmaxsize)
@@ -40,6 +54,20 @@ class BinROICtl(QtWidgets.QWidget):
             yparams=self.AxisParams(*yparams)
         return xparams,yparams
     def setupUi(self, name, xlim=(0,None), ylim=None, maxbin=None, minsize=0, maxsize=None, kind="minmax", validate=None):
+        """
+        Setup the ROI control.
+
+        Args:
+            name (str): widget name
+            xlim (tuple): limit for x-axis min and max values
+            ylim (tuple): limit for y-axis min and max values
+            maxbin (int or tuple): maximal allowed binning (int imples same for both axes)
+            minsize (int or tuple): minimal allowed size (int imples same for both axes)
+            maxsize (int or tuple): maximal allowed size (int imples same for both axes)
+            kind (str): can be either ``"minmax"`` (each axis control are min, max, and bin) or ``"minsize"`` (each axis control are min, size and bin)
+            validate: if not ``None``, a function which takes tuple ``(xparams, yparams)`` of two axes parameters (each is a 3-tuple ``(min, max, bin)``)
+                and return their constrained versions.
+        """
         self.name=name
         self.kind=kind
         self.setObjectName(self.name)
@@ -108,6 +136,12 @@ class BinROICtl(QtWidgets.QWidget):
 
 
     def set_limits(self, xlim="keep", ylim="keep", maxbin="keep", minsize="keep", maxsize="keep"):
+        """
+        Set limits for various parameters.
+
+        If value is ``"keep"``, keep the current value; if value is ``None``, impose no contraints.
+        `maxbin`, `minsize` and `maxsize` can be integers or 2-tuples dependingon whether the limits are the same or different for two axes.
+        """
         if xlim!="keep":
             self.xlim=xlim
         if ylim!="keep":
@@ -133,6 +167,11 @@ class BinROICtl(QtWidgets.QWidget):
         self.value_changed.emit(params)
 
     def get_value(self):
+        """
+        Get ROI value.
+
+        Return tuple ``(xparams, yparams)`` of two axes parameters (each is a 3-tuple ``(min, max, bin)``).
+        """
         if self.kind=="minmax":
             xparams=self.AxisParams(self.x_min.get_value(),self.x_max.get_value(),self.x_bin.get_value())
             yparams=self.AxisParams(self.y_min.get_value(),self.y_max.get_value(),self.y_bin.get_value())
@@ -154,6 +193,12 @@ class BinROICtl(QtWidgets.QWidget):
         self.y_max.set_value(ymax,notify_value_change=False)
         self.y_bin.set_value(yparams.bin,notify_value_change=False)
     def set_value(self, roi, notify_value_change=True):
+        """
+        Set ROI value.
+
+        `roi` is a tuple ``(xparams, yparams)`` of two axes parameters (each is a 3-tuple ``(min, max, bin)``).
+        If ``notify_value_change==True``, emit the `value_changed` signal; otherwise, change value silently.
+        """
         roi=self.AxisParams(*roi[0]),self.AxisParams(*roi[1])
         params=self.validateROI(*roi)
         self._show_values(*params)
@@ -165,11 +210,36 @@ class BinROICtl(QtWidgets.QWidget):
 
 
 class RangeCtl(QtWidgets.QWidget):
+    """
+    Class for range control.
+
+    Can have any subset of 3 rows: specifying min-max, specifying center-span (connected to min-max), and specifying step.
+
+    Like most widgets, requires calling :meth:`setupUi` to set up before usage.
+
+    Args:
+        parent: parent widget
+
+    Signals:
+        value_changed: emitted when the ROIvalue is changed
+    """
     def __init__(self, parent=None):
         super(RangeCtl, self).__init__(parent)
         self.rng=(0,0,0)
 
     def setupUi(self, name, lim=(None,None), order=True, formatter="float", labels=("Min","Max","Center","Span","Step"), elements=("minmax","cspan","step")):
+        """
+        Setup the range control.
+
+        Args:
+            name (str): widget name
+            lim (tuple): limit containing min and max values
+            order (bool): if ``True``, firt value is always smaller than the second one (values are swapped otherwise)
+            formatter (str): formatter for all edit boxes; see :func:`.format.as_formatter` for details
+            labels (tuple): tuple of 5 labels for 5 controls: min, max, center, span, and step (need to always specify 5, even if no all elements are included)
+            elements (tuple): tuple specifying elements which are displayed for the control;
+                can contain ``"minmax"`` (min-max row), ``"cspan"`` (center-span row), and ``"step"`` (step row)
+        """
         self.name=name
         self.order=order
         self.setObjectName(self.name)
@@ -259,11 +329,13 @@ class RangeCtl(QtWidgets.QWidget):
         self.set_value(rng)
 
     def set_limit(self, lim):
+        """Set range vlaues limit (2-tuple)"""
         self.lim=lim
         self.set_value(self.rng)
 
     value_changed=QtCore.pyqtSignal("PyQt_PyObject")
     def get_value(self):
+        """Get current range value (2-tuple ``(left, right)``)"""
         return self.rng
     def _show_values(self, rng):
         if self.e_min:
@@ -275,6 +347,12 @@ class RangeCtl(QtWidgets.QWidget):
         if self.e_step:
             self.e_step.set_value(rng[2],notify_value_change=False)
     def set_value(self, rng, notify_value_change=True):
+        """
+        Get current range value
+        
+        `rng` is a 2-tuple ``(left, right)``
+        If ``notify_value_change==True``, emit the `value_changed` signal; otherwise, change value silently.
+        """
         rng=self._limit_range(rng)
         if self.rng!=rng:
             self.rng=rng

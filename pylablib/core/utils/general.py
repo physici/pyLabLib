@@ -544,6 +544,22 @@ def call_every(func, times=1, cooldown=0., default=None):
 
 
 
+### Docstring inheritance ###
+def doc_inherit(parent):
+    """
+    Wrapper for inheriting docstrings from parent classes.
+    
+    Ttakes parent class as an argument and replaces the docstring of the wrapped function
+    by the docstring of the same-named function from the parent class (if available).
+    """
+    def wrapper(func):
+        if hasattr(parent,func.__name__):
+            func.__doc__=getattr(parent,func.__name__).__doc__
+        return func
+    return wrapper
+
+
+
 ### Countdown ###
 
 class Countdown(object):

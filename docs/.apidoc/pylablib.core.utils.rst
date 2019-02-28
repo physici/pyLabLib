@@ -52,6 +52,14 @@ pylablib.core.utils.general module
     :undoc-members:
     :show-inheritance:
 
+pylablib.core.utils.ipc module
+------------------------------
+
+.. automodule:: pylablib.core.utils.ipc
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.core.utils.iterator module
 -----------------------------------
 

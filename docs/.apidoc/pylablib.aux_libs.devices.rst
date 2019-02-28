@@ -268,6 +268,14 @@ pylablib.aux\_libs.devices.Rigol module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.devices.Sirah module
+---------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.Sirah
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.devices.SmarAct module
 -----------------------------------------
 

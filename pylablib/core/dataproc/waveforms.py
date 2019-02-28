@@ -115,17 +115,23 @@ def get_y_column(wf, y_column=None):
     
 
 ##### Sorting #####
-def sort_by(wf, x_column=None, reverse=False):
+try:
+    np.argsort([],kind="stable")
+    _stable_sort="stable"
+except ValueError:
+    _stable_sort="mergesort"
+def sort_by(wf, x_column=None, reverse=False, stable=False):
     """
     Sort 2D array using selected column as a key and preserving rows.
     
-    If ``revers==True``, sort in descending order. `x_column` values are described in :func:`get_x_column`.
+    If ``reverse==True``, sort in descending order. `x_column` values are described in :func:`get_x_column`.
+    If ``stable==True``, use stable sort (could be slower and uses more memory)
     """
     x_column=get_x_column(wf,x_column)
     if reverse:
-        return wrap(wf).t[x_column.argsort(),::-1]
+        return wrap(wf).t[x_column.argsort(kind=_stable_sort if stable else "quicksort"),::-1]
     else:
-        return wrap(wf).t[x_column.argsort()]
+        return wrap(wf).t[x_column.argsort(kind=_stable_sort if stable else "quicksort")]
 table.DataTable.sort_by=sort_by
 
 

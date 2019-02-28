@@ -2,6 +2,24 @@ from ...core.gui.qt.thread import controller
 from ...core.utils import rpyc as rpyc_utils
 
 class DeviceThread(controller.QTaskThread):
+    """
+    Expansion of :class:`controller.QTaskThread` equipped to deal with a single device.
+
+    Args:
+        name: thread name
+        devargs: args supplied to :math:`setup_task` method.
+        signal_pool: :class:`.SignalPool` for this thread (by default, use the default common pool)
+
+    Attributes:
+        device: managed device. Its opening should be specified in an overloaded :meth:`connect_device` method,
+            and it is actually opened by calling :meth:`open_device` method (which also handles status updates and duplicate opening issues).
+        
+    Commands:
+        open_device: open the deivce, if not already opened
+        close_device: close the deivce, if opened
+        get_settings: get device settings
+        get_full_info: get full info of the device
+    """
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
         controller.QTaskThread.__init__(self,name=name,signal_pool=signal_pool,setupargs=devargs,setupkwargs=devkwargs)
         self.device=None
@@ -19,19 +37,48 @@ class DeviceThread(controller.QTaskThread):
         self.close_device()
 
     def rpyc_device(self, remote, module, device, *args, **kwargs):
+        """
+        Create a remote device on a different PC via RPyC.
+
+        Can replace straightforward device creation for remote devices,
+        i.e., instead of ``self.device = DeviceModule.DeviceClass(*args,**kwargs)``
+        one would call ``self.device = self.rpyc_device(host,"DeviceModule","DeviceClass",*args,**kwargs)``.
+
+        Args:
+            remote: address of the remote host (it should be running RPyC server; see :func:`.rpyc.run_device_service` for details)
+            module: device class module name
+            device: device class name
+            args, kwarg: arguments supplied to the device contstructor.
+        """
         self.rpyc=True
         self.rpyc_serv=rpyc_utils.connect_device_service(remote)
         if not self.rpyc_serv:
             return None
         return self.rpyc_serv.get_device(module,device,*args,**kwargs)
     def rpyc_obtain(self, obj):
+        """
+        Obtain (i.e., transfer to the local PC) an object returned by the device.
+
+        If current device is local, return `obj` as is.
+        """
         if self.rpyc:
             return rpyc_utils.obtain(obj,serv=self.rpyc_serv)
         return obj
 
     def connect_device(self):
+        """
+        Connect the device and assign it to the ``self.device`` attribute.
+
+        Should be overloaded in subclasses.
+        In case of connection error, can leave ``self.device`` as ``None``, which symbolizes connection failure.
+        """
         pass
     def open_device(self):
+        """
+        Open the device by calling :meth:`connect_device`.
+
+        Return ``True`` if connection was a success (or the device is already connected) and ``False`` otherwise.
+        """
         if self.device is not None and self.device.is_opened():
             return True
         if self.device is None and self._tried_device_connect and not self.retry_device_connect:
@@ -49,22 +96,48 @@ class DeviceThread(controller.QTaskThread):
         self.update_status("connection","closed","Disconnected")
         return False
     def close_device(self):
+        """
+        Close the device.
+
+        Automatically called on the thread finalization, ususally shouldn't be called explicitly.
+        """
         if self.device is not None and self.device.is_opened():
             self.update_status("connection","closing","Disconnecting...")
             self.device.close()
             self.update_status("connection","closed","Disconnected")
 
     def get_settings(self):
+        """Get device settings"""
         return self.rpyc_obtain(self.device.get_settings()) if self.device is not None else {}
     
     def setup_full_info_job(self, period=2., nodes=None):
+        """
+        Setup a job which periodically obtains full information (by calling ``get_full_info`` method) from the device
+
+        Useful if obtaining settings takes a lot of time, and they might be needed by some other thread on a short notice.
+
+        Args:
+            period: job period
+            node: specifies info nodes to be requested (by default, all available nodes)
+        """
         if not self._full_info_job:
             self._full_info_nodes=nodes
             self.add_job("update_full_info",self.update_full_info,period)
             self._full_info_job=True
     def update_full_info(self):
+        """
+        Update full info of the device.
+
+        A function for a job which is setup in :meth:`setup_full_info_job`. Normally doesn't need to be called explicitly.
+        """
         self["full_info"]=self.rpyc_obtain(self.device.get_full_info(nodes=self._full_info_nodes))
     def get_full_info(self):
+        """
+        Get full device info
+        
+        If the full info job is set up using :meth:`setup_full_info_job`, use the last cached verision of the full info;
+        otherwise, request a new version from the device.
+        """
         if self.device:
             return self["full_info"] if self._full_info_job else self.rpyc_obtain(self.device.get_full_info(nodes=self._full_info_nodes))
         else:

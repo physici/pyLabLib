@@ -23,6 +23,28 @@ except AttributeError:
 
 
 class ParamTable(QtWidgets.QWidget):
+    """
+    GUI parameter table.
+    
+    Simplifes creating code-generated controls and displays table layouts.
+    
+    Has methods for adding various kinds of controls (labels, edit boxes, combo boxes, check boxes),
+    automatically creates values table for easy settings/getting.
+    By default supports 2-column (label-control) and 3-column (label-control-indicator) layout, depending on the parameters given to :meth:`setupUi`.
+
+    Similar to :class:`.IndicatorValuesTable`, has three container-like accessor:
+    ``.v`` for settings/getting values
+    (i.e., ``self.get_value(name)`` is equivalent to ``self.v[name]``, and ``self.set_value(name, value)`` is equivalent to ``self.v[name]=value``),
+    ``.i`` for settings/getting indicator values
+    (i.e., ``self.get_indicator(name)`` is equivalent to ``self.i[name]``, and ``self.set_indicator(name, value)`` is equivalent to ``self.i[name]=value``),
+    and ``.w`` for getting the underlying widget
+    (i.e., ``self.get_widget(name)`` is equivalent to ``self.w[name]``)
+
+    Like most widgets, requires calling :meth:`setupUi` to set up before usage.
+
+    Args:
+        parent: parent widget
+    """
     def __init__(self, parent=None):
         super(ParamTable, self).__init__(parent)
         self.params={}
@@ -31,6 +53,15 @@ class ParamTable(QtWidgets.QWidget):
         self.w=dictionary.ItemAccessor(self.get_widget)
 
     def setupUi(self, name, add_indicator=False, display_table=None, display_table_root=None):
+        """
+        Setup the table.
+
+        Args:
+            name (str): table widget name
+            add_indicator (bool): if ``True``, add indicators for all added widgets by default.
+            display_table (bool): as :class:`.IndicatorValuesTable` object used to access table values; by default, create one internally
+            display_table_root (str): if not ``None``, specify root (i.e., path prefix) for values inside the table.
+        """
         self.name=name
         self.setObjectName(_fromUtf8(self.name))
         self.formLayout = QtWidgets.QGridLayout(self)
@@ -65,6 +96,21 @@ class ParamTable(QtWidgets.QWidget):
         if changed_signal:
             changed_signal.connect(lambda value: self.value_changed.emit(name,value))
     def add_simple_widget(self, name, widget, label=None, value_handler=None, add_indicator=None, location=(None,0)):
+        """
+        Add a 'simple' (single-spaced, single-valued) widget to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            widget: widget to add
+            label (str): if not ``None``, specifies label to put in front of the widget in the layout
+            value_handler: value handler of the widget; by default, use auto-detected value handler (works for many simple built-in or custom widgets)
+            add_indicator: if ``True``, add an indicator label in the third column and a corresponding indicator handler in the built-in values table;
+                by default, use the default value supplied to :meth:`setupUi`
+            location (tuple): tuple ``(row, column)`` specifying location of the widget (or widget label, if it is specified);
+                by default, add to a new row in the end and into the first column
+        
+        Return the widget's value handler
+        """
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
         row,col,rowspan,_=self._normalize_location(location)
@@ -93,6 +139,20 @@ class ParamTable(QtWidgets.QWidget):
         return value_handler
 
     def add_custom_widget(self, name, widget, value_handler=None, indicator_handler=None, location=(None,0,1,None)):
+        """
+        Add a 'custom' (multi-spaced, possibly complex-valued) widget to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            widget: widget to add
+            value_handler: value handler of the widget; by default, use auto-detected value handler (works for many simple built-in or custom widgets)
+            indicator_handler: indicator handler of the widget; by default, use auto-detected indciator handler
+                (use ``set/get_indicator`` methods if present, or no indicator otherwises)
+            location (tuple): tuple ``(row, column, rowspan, colspan)`` specifying location of the widget;
+                by default, add to a new row in the end and into the first column, span one row and all table columns
+        
+        Return the widget's value handler
+        """
         if name in self.params:
             raise KeyError("widget {} already exists".format(name))
         location=self._normalize_location(location,default=(None,0,1,3))
@@ -103,6 +163,17 @@ class ParamTable(QtWidgets.QWidget):
         return value_handler
 
     def add_button(self, name, caption, checkable=False, value=False, label=None, add_indicator=None, location=(None,0)):
+        """
+        Add a button to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            caption (str): text on the button
+            checkable (bool): determines whether the button is checkable (has on/off state) or simple press button
+            value (bool): if checkable, specifies initial value
+
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=QtWidgets.QPushButton(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
@@ -110,36 +181,109 @@ class ParamTable(QtWidgets.QWidget):
         widget.setChecked(value)
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
     def add_check_box(self, name, caption, value=False, label=None, add_indicator=None, location=(None,0)):
+        """
+        Add a checkbox to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            caption (str): text on the checkbox
+            value (bool): specifies initial value
+            
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=QtWidgets.QCheckBox(self)
         widget.setText(_translate(self.name,caption,None))
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
         widget.setChecked(value)
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
     def add_text_label(self, name, value=None, label=None, location=(None,0)):
+        """
+        Add a text label to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            value (bool): specifies initial value
+            
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=QtWidgets.QLabel(self)
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
         if value is not None:
             widget.setText(str(value))
         return self.add_simple_widget(name,widget,label=label,add_indicator=False,location=location)
     def add_num_label(self, name, value=None, limiter=None, formatter=None, label=None, location=(None,0)):
+        """
+        Add a numerical label to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            value (bool): specifies initial value
+            limiter (tuple): tuple ``(upper_limit, lower_limit, action, value_type)`` specifying value limits;
+                see :func:`.limit.as_limiter` for details
+            formatter (tuple): either ``"int"`` (for integer values), or tuple specifying floating value format;
+                see :func:`.format.as_formatter` for details
+            
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=widget_label.LVNumLabel(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
         return self.add_simple_widget(name,widget,label=label,add_indicator=False,location=location)
     def add_text_edit(self, name, value=None, label=None, add_indicator=None, location=(None,0)):
+        """
+        Add a text edit to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            value (bool): specifies initial value
+            
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=edit.LVTextEdit(self,value=value)
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
     def add_num_edit(self, name, value=None, limiter=None, formatter=None, label=None, add_indicator=None, location=(None,0)):
+        """
+        Add a numerical edit to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            value (bool): specifies initial value
+            limiter (tuple): tuple ``(upper_limit, lower_limit, action, value_type)`` specifying value limits;
+                see :func:`.limit.as_limiter` for details
+            formatter (tuple): either ``"int"`` (for integer values), or tuple specifying floating value format;
+                see :func:`.format.as_formatter` for details
+            
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=edit.LVNumEdit(self,value=value,num_limit=limiter,num_format=formatter)
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator,location=location)
     def add_progress_bar(self, name, value=None, label=None):
+        """
+        Add a progress bar to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            value (bool): specifies initial value
+            
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=QtWidgets.QProgressBar(self)
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
         if value is not None:
             widget.setValue(value)
         return self.add_simple_widget(name,widget,label=label)
     def add_combo_box(self, name, value=None, options=None, label=None, add_indicator=None):
+        """
+        Add a combo box to the table.
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            value (bool): specifies initial value
+            options (list): list of string specifying box options
+            
+        Rest of the arguments and the return value are the same as :meth:`add_simple_widget`.
+        """
         widget=QtWidgets.QComboBox(self)
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
         if options is not None:
@@ -149,11 +293,13 @@ class ParamTable(QtWidgets.QWidget):
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
 
     def add_spacer(self, height, width=1, location=(None,0)):
+        """Add a spacer with the given width and height"""
         spacer=QtWidgets.QSpacerItem(width,height,QtWidgets.QSizePolicy.Minimum,QtWidgets.QSizePolicy.Minimum)
         location=self._normalize_location(location)
         self.formLayout.addItem(spacer,*location)
         return spacer
     def add_label(self, text, location=(None,0)):
+        """Add a text label (only for decoration) with the given text"""
         label=QtWidgets.QLabel(self)
         label.setText(str(text))
         label.setAlignment(QtCore.Qt.AlignLeft)
@@ -161,10 +307,12 @@ class ParamTable(QtWidgets.QWidget):
         self.formLayout.addWidget(label,*location)
         return label
     def add_padding(self, prop=1):
+        """Add a padding (expandable spacer) with the given proprtion"""
         self.add_spacer(0)
         self.formLayout.setRowStretch(self.formLayout.rowCount(),prop)
 
     def lock(self, names=None, locked=True):
+        """Lock (disable) or unlock (enable) widgets with the given names (by default, all widgets)"""
         if isinstance(names,py3.anystring):
             names=[names]
         if names is None:
@@ -173,31 +321,42 @@ class ParamTable(QtWidgets.QWidget):
             self.params[name].widget.setEnabled(not locked)
 
     def get_value(self, name):
+        """Get value of a widget with the given name"""
         return self.display_table.get_value((self.display_table_root,name))
     def set_value(self, name, value):
+        """Set value of a widget with the given name"""
         par=self.params[name]
         if self.change_focused_control or not par.widget.hasFocus():
             return self.display_table.set_value((self.display_table_root,name),value)
     def get_all_values(self):
-        return self.display_table.get_all_values(root=self.display_table_root)
+        """Get values of all widgets in the table"""
+        return self.display_table.get_all_values(root=self.display_table_root,include=self.params)
     def set_all_values(self, values):
-        return self.display_table.set_all_values(values,root=self.display_table_root)
+        """Set values of all widgets in the table"""
+        return self.display_table.set_all_values(values,root=self.display_table_root,include=self.params)
 
     def get_handler(self, name):
+        """Get value handler of a widget with the given name"""
         return self.params[name].value_handler
     def get_widget(self, name):
+        """Get a widget with the given name"""
         return self.params[name].widget
     def changed_event(self, name):
+        """Get a value-changed signal for a widget with the given name"""
         return self.params[name].value_handler.value_changed_signal()
 
     def get_indicator(self, name):
+        """Get indicator value for a widget with the given name"""
         return self.display_table.get_indicator((self.display_table_root,name))
     def set_indicator(self, name, value):
+        """Set indicator value for a widget with the given name"""
         return self.display_table.set_indicator((self.display_table_root,name),value)
     def update_indicators(self):
-        return self.display_table.update_indicators(root=self.display_table_root)
+        """Update all indicators (set their value """
+        return self.display_table.update_indicators(root=self.display_table_root,include=self.params)
 
     def clear(self):
+        """Clear the table (remove all widgets)"""
         if self.params:
             for name in self.params:
                 path=(self.display_table_root,name)
@@ -222,10 +381,24 @@ def FixedParamTable(v=None,i=None):
 
 
 class StatusTable(ParamTable):
+    """
+    Expansion of :class:`ParamTable` which adds status lines, which automatically subscribe to signals and update values.
+    """
     def __init__(self, parent=None):
         ParamTable.__init__(self,parent=parent)
 
     def add_status_line(self, name, label=None, srcs=None, tags=None, filt=None, make_status=None):
+        """
+        Add a status line to the table:
+
+        Args:
+            name (str): widget name (used to reference its value in the values table)
+            label (str): if not ``None``, specifies label to put in front of the status line
+            srcs (list): status signal sources
+            tags (list): status signal tags
+            filt (list): filter function for the signals
+            make_status: if not ``None``, specifies a function which takes 3 arguments (signal source, tag, and value) and generates a status line text.
+        """
         self.add_text_label(name,label=label)
         def update_text(src, tag, value):
             if make_status is not None:
