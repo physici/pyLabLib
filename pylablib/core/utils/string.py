@@ -259,7 +259,7 @@ def to_string(value, location="element", custom_representations=None):
         value
         location (str): Used for converting strings (see :func:`escape_string`).
         custom_representations (dict): dictionary ``{value_type: fmt}``,
-            where value type can be ``'int'``, ``'float'`` or ``'complex'`` and `fmt` is a :func:`format` string.  
+            where value type can be ``'int'``, ``'float'`` or ``'complex'`` and `fmt` is a :meth:`str.format` string.  
     """
     tr=custom_representations or {}
     if isinstance(value,complex):

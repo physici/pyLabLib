@@ -24,9 +24,9 @@ def read_table_and_comments(f, delimiters=_table_delimiters_regexp, empty_entry_
     Comment lines are the ones starting with ``#``.
     
     Args:
-        delimiters (regex): Regex string which recognizes delimiters (by default ``r"\s*,\s*|\s+"``, i.e., commas and whitespaces).
+        delimiters (str): Regex string which recognizes delimiters (by default ``r"\s*,\s*|\s+"``, i.e., commas and whitespaces).
         empty_entry_substitute: Substitute for empty table entries. If ``None``, all empty table entries are skipped.
-        stop_comment (regex): Regex string for the stopping comment.
+        stop_comment (str): Regex string for the stopping comment.
             If not ``None``. the function will stop if comment satisfying `stop_comment` regex is encountered.
         chunk_size (int): Maximal size (number of lines) of the data to read.
         as_text (bool): If ``False``, return entries as strings; otherwise, convert them into values.
@@ -251,11 +251,11 @@ def load_columns(f, dtype, delimiters=_table_delimiters, empty_entry_substitute=
             Possible dtypes are: ``'int'``, ``'float'``, ``'complex'``,
             ``'numeric'`` (tries to coerce to minimal possible numeric type, raises error if data can't be converted to complex),
             ``'generic'`` (accept arbitrary types, including lists, dictionaries, escaped strings, etc.), ``'raw'`` (keep raw string).
-        delimiters (regex): Regex string which recognizes delimiters (by default ``r"\s*,\s*|\s+"``, i.e., commas and whitespaces).
+        delimiters (str): Regex string which recognizes delimiters (by default ``r"\s*,\s*|\s+"``, i.e., commas and whitespaces).
         empty_entry_substitute: Substitute for empty table entries. If ``None``, all empty table entries are skipped.
         ignore_corrupted_lines: If ``True``, skip corrupted (e.g., non-numeric for numeric dtype, or with too few entries) lines;
             otherwise, raise :exc:`ValueError`.
-        stop_comment (regex): Regex string for the stopping comment.
+        stop_comment (str): Regex string for the stopping comment.
             If not ``None``. the function will stop if comment satisfying `stop_comment` regex is encountered.
             
     Returns:
@@ -298,7 +298,7 @@ def columns_to_table(data, columns=None, out_type="table"):
     
     Args:
         columns: either number if columns, or a list of columns names.
-        out_type (str): type of the result: ``'array'`` for numpy array, ``'table'`` for :class:`~core.datatable.table.DataTable` object.
+        out_type (str): type of the result: ``'array'`` for numpy array, ``'table'`` for :class:`.DataTable` object.
     """
     funcargparse.check_parameter_range(out_type,"out_type",{"table","array"})
     if columns is not None:

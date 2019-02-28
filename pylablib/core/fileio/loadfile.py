@@ -252,18 +252,18 @@ class CSVTableInputFileFormat(ITextInputFileFormat):
         """
         Read CSV file.
         
-        See :func:`parse_csv.load_table` for more description.
+        See :func:`.parse_csv.load_table` for more description.
         
         Args:
             location_file: Location of the data.
-            out_type (str): type of the result: ``'array'`` for numpy array, ``'table'`` for :class:`~core.datatable.table.DataTable` object.
+            out_type (str): type of the result: ``'array'`` for numpy array, ``'table'`` for :class:`.DataTable` object.
             dtype: dtype of entries; can be either a single type, or a list of types (one per column).
                 Possible dtypes are: ``'int'``, ``'float'``, ``'complex'``,
                 ``'numeric'`` (tries to coerce to minimal possible numeric type, raises error if data can't be converted to `complex`),
                 ``'generic'`` (accept arbitrary types, including lists, dictionaries, escaped strings, etc.),
                 ``'raw'`` (keep raw string).
             columns: either a number if columns, or a list of columns names.
-            delimiters (regex): Regex string which recognizes entries delimiters (by default ``r"\\s*,\\s*|\\s+"``, i.e., commas and whitespaces).
+            delimiters (str): Regex string which recognizes entries delimiters (by default ``r"\\s*,\\s*|\\s+"``, i.e., commas and whitespaces).
             empty_entry_substitute: Substitute for empty table entries. If ``None``, all empty table entries are skipped.
             ignore_corrupted_lines (bool): If ``True``, skip corrupted (e.g., non-numeric for numeric dtype, or with too few entries) lines;
                 otherwise, raise :exc:`ValueError`.
@@ -302,10 +302,10 @@ class DictionaryInputFileFormat(ITextInputFileFormat):
             case_normalization (str): If ``None``, the dictionary paths are case-sensitive;
                 otherwise, defines the way the entries are normalized (``'lower'`` or ``'upper'``).
             inline_dtype (str): dtype for inlined tables.
-            entry_format (str): Determines the way for dealing with :class:`~dict_entry.IDictionaryEntry` objects
+            entry_format (str): Determines the way for dealing with :class:`.dict_entry.IDictionaryEntry` objects
                 (objects transformed into dictionary branches with special recognition rules). Can be
                 ``'branch'`` (don't attempt to recognize those object, leave dictionary as in the file),
-                ``'dict_entry'`` (recognize and leave as :class:`~dict_entry.IDictionaryEntry` objects) or
+                ``'dict_entry'`` (recognize and leave as :class:`.dict_entry.IDictionaryEntry` objects) or
                 ``'value'`` (recognize and keep the value).
             skip_lines (int): Number of lines to skip from the beginning of the file.
         """
@@ -350,7 +350,7 @@ class BinaryTableInputFileFormatter(IInputFileFormat):
         
         Args:
             location_file: Location of the data.
-            out_type (str): type of the result: ``'array'`` for numpy array, ``'table'`` for :class:`~core.datatable.table.DataTable` object.
+            out_type (str): type of the result: ``'array'`` for numpy array, ``'table'`` for :class:`.DataTable` object.
             dtype: :class:`numpy.dtype` describing the data.
             columns: either number if columns, or a list of columns names.
             packing (str): The way the 2D array is packed. Can be either
@@ -405,7 +405,7 @@ def load(path=None, input_format=None, loc="file", return_file=False, **kwargs):
         path (str): Path to the file.
         input_format (str): Input file format. If ``None``, attempt to auto-detect file format (same as ``'generic'``).
         loc (str): Location type.
-        return_file (bool): If ``True``, return :class:`datafile.DataFile` object (contains some metainfo);
+        return_file (bool): If ``True``, return :class:`.DataFile` object (contains some metainfo);
             otherwise, return just the file data.
     
     `**kwargs` are passed to the file formatter used to read the data

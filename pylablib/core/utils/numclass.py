@@ -53,7 +53,7 @@ class NumClass(object):
     
     .. automethod:: _perform_numop
     
-    The other more specialized methods are (by default they all invoke :func:`_perform_numop`):
+    The other more specialized methods are (by default they all invoke :meth:`_perform_numop`):
     
     Methods:
         _perform_numop_l: Binary operations with the object as the first argument (e.g., ``obj + x``).
@@ -122,7 +122,7 @@ class NumClass(object):
         
         Args:
             x: A second argument (``None`` if the operation is unary).
-            op_func (Callable): A default function which performs the operation
+            op_func (callable): A default function which performs the operation
                 (e.g., ``lambda (x, y): x + y`` for addition).
             op_sym (str): A symbol for the operation. 
         """

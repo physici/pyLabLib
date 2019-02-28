@@ -146,7 +146,7 @@ class LVNumEdit(QtWidgets.QLineEdit):
         Set numerical format
         
         `kind` specifies the format kind (``"float"`` or ``"int"``), and the additional arguments are passed to the corresponding formatter.
-        See :class:`core.gui.FloatFormatter` and :class:`core.gui.IntegerFormatter` for details.
+        See :class:`.format.FloatFormatter` and :class:`.format.IntegerFormatter` for details.
         """
         if kind=="float":
             formatter=format.FloatFormatter(*args,**kwargs)

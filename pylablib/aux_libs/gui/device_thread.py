@@ -3,7 +3,7 @@ from ...core.utils import rpyc as rpyc_utils
 
 class DeviceThread(controller.QTaskThread):
     """
-    Expansion of :class:`controller.QTaskThread` equipped to deal with a single device.
+    Expansion of :class:`.QTaskThread` equipped to deal with a single device.
 
     Args:
         name: thread name
@@ -48,7 +48,8 @@ class DeviceThread(controller.QTaskThread):
             remote: address of the remote host (it should be running RPyC server; see :func:`.rpyc.run_device_service` for details)
             module: device class module name
             device: device class name
-            args, kwarg: arguments supplied to the device contstructor.
+            args: arguments supplied to the device contstructor.
+            kwargs: keyword arguments supplied to the device contstructor.
         """
         self.rpyc=True
         self.rpyc_serv=rpyc_utils.connect_device_service(remote)

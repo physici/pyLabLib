@@ -39,7 +39,7 @@ class LVNumLabel(QtWidgets.QLabel):
         Set numerical format
         
         `kind` specifies the format kind (``"float"`` or ``"int"``), and the additional arguments are passed to the corresponding formatter.
-        See :class:`core.gui.format.FloatFormatter` and :class:`core.gui.format.IntegerFormatter` for details.
+        See :class:`.format.FloatFormatter` and :class:`.format.IntegerFormatter` for details.
         """
         if kind=="float":
             formatter=format.FloatFormatter(*args,**kwargs)

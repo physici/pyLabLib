@@ -55,7 +55,7 @@ class IDataTableStorage(object):
         """
         Return a single column at the index `idx` (1D).
         
-        Same as :func:`get_columns`, but only accepts single column index.
+        Same as :meth:`get_columns`, but only accepts single column index.
         """
         return self.get_columns(idx)
     def set_columns(self, idx, val): # accepts column object (or list of column objects) or iterable (or 2D iterable)
@@ -88,14 +88,14 @@ class IDataTableStorage(object):
         """
         Return a single row at the index `idx` (1D) as a tuple.
         
-        Same as :func:`get_rows`, but only accepts single column index.
+        Same as :meth:`get_rows`, but only accepts single column index.
         """
         return self.get_rows(idx)
     def get_single_row_item(self, idx): # same as get_item, but only accept single number as an (row) index
         """
         Return a single row at the index `idx` (1D) as a numpy array.
         
-        Same as :func:`get_item`, but only accepts single column index.
+        Same as :meth:`get_item`, but only accepts single column index.
         """
         return self.get_item(idx)
     def set_rows(self, idx, val): # accepts iterable (or 2D iterable)
@@ -159,9 +159,9 @@ class IDataTableStorage(object):
 
 class ColumnDataTableStorage(IDataTableStorage):
     """
-    Table storage which stores the data as a list of columns (defined in :mod:`columns`).
+    Table storage which stores the data as a list of columns (defined in :mod:`.datatable.column`).
 
-    More flexible compared to the :class:`ArrayDataStorage`, but potentially slower.
+    More flexible compared to the :class:`ArrayDataTableStorage`, but potentially slower.
 
     Args:
         columns: table data; can be a numpy array, a list of columns, or a 2D list
@@ -326,7 +326,7 @@ class ColumnDataTableStorage(IDataTableStorage):
         """
         Return a single column at the index `idx` (1D).
         
-        Same as :func:`get_columns`, but only accepts single column index.
+        Same as :meth:`get_columns`, but only accepts single column index.
         """
         return self._columns[idx]
     def set_columns(self, idx, val, force_copy=False): # accepts column object (or list of column objects) or iterable (or 2D iterable)
@@ -443,14 +443,14 @@ class ColumnDataTableStorage(IDataTableStorage):
         """
         Return a single row at the index `idx` (1D) as a tuple.
         
-        Same as :func:`get_rows`, but only accepts single column index.
+        Same as :meth:`get_rows`, but only accepts single column index.
         """
         return tuple([c._get_single_item(idx) for c in self._columns])
     def get_single_row_item(self, idx): # same as get_item, but only accept single number as an (row) index
         """
         Return a single row at the index `idx` (1D) as a numpy array.
         
-        Same as :func:`get_item`, but only accepts single column index.
+        Same as :meth:`get_item`, but only accepts single column index.
         """
         return as_array([c._get_single_item(idx) for c in self._columns])
     def add_rows(self, idx, val): # accepts iterable (or 2D iterable)
@@ -674,7 +674,7 @@ class ArrayDataTableStorage(IDataTableStorage):
         """
         Return a single column at the index `idx` (1D).
         
-        Same as :func:`get_columns`, but only accepts single column index.
+        Same as :meth:`get_columns`, but only accepts single column index.
         """
         return self._data[:,idx]
     def set_columns(self, idx, val, force_copy=False):
@@ -753,14 +753,14 @@ class ArrayDataTableStorage(IDataTableStorage):
         """
         Return a single row at the index `idx` (1D) as a tuple.
         
-        Same as :func:`get_rows`, but only accepts single column index.
+        Same as :meth:`get_rows`, but only accepts single column index.
         """
         return self._data[idx]
     def get_single_row_item(self, idx): # same as get_item, but only accept single number as an (row) index
         """
         Return a single row at the index `idx` (1D) as a numpy array.
         
-        Same as :func:`get_item`, but only accepts single column index.
+        Same as :meth:`get_item`, but only accepts single column index.
         """
         return self._data[idx]
     def add_rows(self, idx, val): # accepts iterable (or 2D iterable)

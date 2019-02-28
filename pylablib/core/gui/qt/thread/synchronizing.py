@@ -7,15 +7,15 @@ import threading, time, collections
 
 class QThreadNotifier(notifier.ISkippableNotifier):
     """
-    Wait-notify thread synchronizer for controlled Qt threads based on :class:`notifier.ISkippableNotifier`.
+    Wait-notify thread synchronizer for controlled Qt threads based on :class:`.notifier.ISkippableNotifier`.
 
-    Like :class:`notifier.ISkippableNotifier`, the main functions are :meth:`wait` (wait in a message loop until notifiedm or until timeout expirese)
-    and :meth:`notify` (notify the waiting thread). Both of these can only be called once and will raise and error otherwise.
+    Like :class:`.notifier.ISkippableNotifier`, the main functions are :meth:`.ISkippableNotifier.wait` (wait in a message loop until notifiedm or until timeout expirese)
+    and :meth:`.ISkippableNotifier.notify` (notify the waiting thread). Both of these can only be called once and will raise and error otherwise.
     Along with notifying a variable can be passed, which can be accessed using :meth:`get_value` and :meth:`get_value_sync`.
 
     Args:
         skippable (bool): if ``True``, allows for skippable wait events
-            (if :meth:`notify` is called before :meth:`wait`, neither methods are actually called).
+            (if :meth:`.ISkippableNotifier.notify` is called before :meth:`.ISkippableNotifier.wait`, neither methods are actually called).
     """
     _uid_gen=general.UIDGenerator(thread_safe=True)
     _notify_tag="#sync.notifier"
@@ -108,7 +108,7 @@ class QThreadCallNotifier(QThreadNotifier):
     Specific kind of :class:`QThreadNotifier` designed to notify about results of remote calls.
 
     Its :meth:`get_value_sync` function takes into account that remote call could fail or raise an exception.
-    Used in (and could be returned by) :meth:`ThreadController.call_in_thread_sync`.
+    Used in (and could be returned by) :meth:`.QThreadController.call_in_thread_sync`.
     """
     def get_value_sync(self, timeout=None, default=None, error_on_fail=True, pass_exception=True):
         """
@@ -116,7 +116,7 @@ class QThreadCallNotifier(QThreadNotifier):
 
         If ``pass_exception==True`` and the returned value represents exception, re-raise it; otherwise, return `default`.
         If ``error_on_fail==True`` and the controlled thread notifies of a fail (usually, if it's stopped before it executed the call),
-        raise :exc:`NoControllerThreadError`; otherwise, return `default`.
+        raise :exc:`.qt.thread.threadprop.NoControllerThreadError`; otherwise, return `default`.
         """
         res=QThreadNotifier.get_value_sync(self,timeout=timeout)
         if res:
@@ -145,10 +145,11 @@ class QSyncCall(object):
 
     Args:
         func: callable to be invoked in the destination thread
-        args, kwargs: arguments to be passed to `func`
+        args: arguments to be passed to `func`
+        kwargs: keyword arguments to be passed to `func`
         pass_exception (bool): if ``True``, and `func` raises an exception, re-raise it in the caller thread
         error_on_fail (bool): if ``True`` and the controlled thread notifies of a fail (usually, if it's stopped before it executed the call),
-                raise :exc:`NoControllerThreadError`; otherwise, return `default`.
+                raise :exc:`.qt.thread.threadprop.NoControllerThreadError`; otherwise, return `default`.
     """
     def __init__(self, func, args=None, kwargs=None, pass_exception=True, error_on_fail=True):
         object.__init__(self)
@@ -208,7 +209,7 @@ class QSyncCall(object):
 TSignalSynchronizerInfo=collections.namedtuple("TSignalSynchronizerInfo",["call_time"])
 class SignalSynchronizer(object):
     """
-    Synchronizer used by :class:`signal_pool.SignalPool` to manache sync signal subscriptions.
+    Synchronizer used by :class:`.SignalPool` to manache sync signal subscriptions.
 
     Usually created by the signal pool, so it is rarely invoked directly.
 
@@ -218,7 +219,7 @@ class SignalSynchronizer(object):
             (if the signal is sent while at least `limit_queue` callbacks are already in queue to be executed, ignore it).
         limit_period(float): limits the minimal time between two call to the subscribed callback
             (if the signal is sent less than `limit_period` after the previous signal, ignore it).
-        add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`synchronizing.TSignalSynchronizerInfo` for details).
+        add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`.TSignalSynchronizerInfo` for details).
         dest_controller: the controller for the thread in which `func` should be called; by default, it's the thread which creates the synchronizer object.
             call_tag(str or None): tag used for the synchronized call; by default, use the interrupt call (which is the default of ``call_in_thread``).
     """

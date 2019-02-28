@@ -4,7 +4,7 @@ class ISkippableNotifier(object):
     """
     Generic skippable notifier.
 
-    The main methods are :func:`wait` (wait until the event happend) and :func:`notify` (notify that the event happend).
+    The main methods are :meth:`wait` (wait until the event happend) and :meth:`notify` (notify that the event happend).
     Only calls underlying waiting and notifying methods once, duplicate calls are ignored.
 
     Args:
@@ -37,7 +37,7 @@ class ISkippableNotifier(object):
         """
         Perform post-waiting actions.
 
-        Only called if the :func:`_pre_wait` was successfull.
+        Only called if the :meth:`_pre_wait` was successfull.
         """
         pass
     def wait(self, *args, **kwargs):

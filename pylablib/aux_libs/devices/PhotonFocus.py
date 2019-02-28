@@ -27,7 +27,7 @@ class PfcamProperty(object):
     Object representing a pfcam camera property.
 
     Allows to query and set values and get additional information.
-    Usually created automatically by an :class:`PFCamera` instance, but could be created manually.
+    Usually created automatically by an :class:`PhotonFocusIMAQCamera` instance, but could be created manually.
 
     Attributes:
         name: attribute name
@@ -166,7 +166,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
     IMAQ+PFcam interface to a PhotonFocus camera.
 
     Args:
-        imaq_name: IMAQ interface name (can be learned by :func:`IMAQ.list_cameras`; usually, but not always, starts with ``"img"``)
+        imaq_name: IMAQ interface name (can be learned by :func:`.IMAQ.list_cameras`; usually, but not always, starts with ``"img"``)
         pfcam_port: port number for pfcam interface (can be learned by :func:`list_cameras`; port number is the first element of the camera data tuple)
     """
     def __init__(self, imaq_name="img0", pfcam_port=0):
@@ -271,7 +271,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         """
         Get values of all properties with the given `root`.
 
-        If ``as_dict==True``, return ``dict`` object; otherwise, return :class:`Dictionary` object.
+        If ``as_dict==True``, return ``dict`` object; otherwise, return :class:`.Dictionary` object.
         """
         settings=self.properties[root].copy().filter_self(lambda a: a.readable).map_self(lambda a: a.get_value())
         return settings.as_dict(style="flat") if as_dict else settings

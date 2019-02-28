@@ -31,7 +31,7 @@ class DataTable(object):
             if ``"auto"``, assumed to be ``False`` for numpy arrays and ``True`` otherwise
         force_copy (bool): if ``True``, make sure that the supplied data is copied
         storage_type (str): determines the type of underlying DataTable storage:
-            ``'columns'`` (default) stores each column separately in an :class:`IDataColumn` object;
+            ``'columns'`` (default) stores each column separately in an :class:`.IDataColumn` object;
             ``'array'`` stores all the data in a 2D numpy array (limited functionality, but faster execution)
     """
     def __init__(self, data=None, column_names=None, transposed="auto", force_copy=True, storage_type=None):
@@ -85,7 +85,7 @@ class DataTable(object):
     def __len__(self):
         return self.nrows()
     def idx(self):
-        """Create an index column (analogous to ``np.arange(len(table))``)."""
+        """Create an index column (analogous to ``numpy.arange(len(table))``)."""
         return column.LinearDataColumn(self.nrows())
     
     ## Iterators ##
@@ -136,7 +136,7 @@ class DataTable(object):
             """Append a row or a list of rows to the end of the table."""
             self.insert(None,val)
         def idx(self):
-            """Create an index column (analogous to ``np.arange(len(table))``)."""
+            """Create an index column (analogous to ``numpy.arange(len(table))``)."""
             return self._storage.idx()
     
     class ColumnAccessor(object):
@@ -197,7 +197,7 @@ class DataTable(object):
             """
             Append a column or a list of column to the end of the table.
             
-            See :func:`DataTable.add_columns` for description.
+            See :meth:`.IDataTableStorage.add_columns` for description.
             """
             self.insert(None,val,names,transposed=transposed)
         def move(self, source, dest):
@@ -211,7 +211,7 @@ class DataTable(object):
             self._storage.del_columns(source) 
             self._storage.add_columns(dest,source_column,source_name,force_copy=False)
         def idx(self):
-            """Create an index row (analogous to ``np.arange(table.shape[1])``)."""
+            """Create an index row (analogous to ``numpy.arange(table.shape[1])``)."""
             return column.LinearDataColumn(self._storage.ncols())
     
     class TableAccessor(object):
@@ -409,7 +409,7 @@ class DataTable(object):
         Turns a function into a method, which is automatically applied to the array representation.
 
         Arguments:
-            func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
+            func (callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
             alias (str): the method name; by default, it's ``func.__name__``
             doc (str): the method docstring; by default, it's ``func.__doc__``
         """
@@ -431,7 +431,7 @@ class DataTable(object):
         Add function to the class definition, which is automatically applied to each column.
 
         Arguments:
-            func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
+            func (callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
             alias (str): the method name; by default, it's ``func.__name__``
             collection_type (str): determines the type of the result; can be ``"list"``, ``"array"``, or ``"table"``
             column_arg_name (str): name of the column argument supplied to the function, in which case it is only applied to this specified column (by default, the function has no such argument)
@@ -467,7 +467,7 @@ class DataTable(object):
         Column number should be given as a first argument of the function.
 
         Arguments:
-            func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
+            func (callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
             alias (str): the method name; by default, it's ``func.__name__``
             column_arg_name (str): name of the column argument supplied to the function, in which case it is only applied to this specified column
             column_arg_default: default name of the column, if no column argument os supplied to the function
@@ -493,16 +493,16 @@ class DataTable(object):
             self_func.__doc__=doc
         setattr(cls,alias,self_func)
         
-DataTable.add_column_function(np.argsort,doc="Same as :func:`np.argsort`.")
-DataTable.add_column_function(np.nonzero,doc="Same as :func:`np.nonzero`.")
-DataTable.add_column_function(np.unique,doc="Same as :func:`np.unique`.")
-DataTable.add_columnwise_function(np.argmin, column_arg_name="column",doc="Same as :func:`np.argmin`.")
-DataTable.add_columnwise_function(np.argmax, column_arg_name="column",doc="Same as :func:`np.argmax`.")
-DataTable.add_columnwise_function(np.min,"min", column_arg_name="column",doc="Same as :func:`np.min`.")
-DataTable.add_columnwise_function(np.max,"max", column_arg_name="column",doc="Same as :func:`np.max`.")
-DataTable.add_columnwise_function(np.mean, column_arg_name="column",doc="Same as :func:`np.mean`.")
-DataTable.add_columnwise_function(np.std, column_arg_name="column",doc="Same as :func:`np.std`.")
-DataTable.add_columnwise_function(np.sum, column_arg_name="column",doc="Same as :func:`np.sum`.")
+DataTable.add_column_function(np.argsort,doc="Same as :func:`numpy.argsort`.")
+DataTable.add_column_function(np.nonzero,doc="Same as :func:`numpy.nonzero`.")
+DataTable.add_column_function(np.unique,doc="Same as :func:`numpy.unique`.")
+DataTable.add_columnwise_function(np.argmin, column_arg_name="column",doc="Same as :func:`numpy.argmin`.")
+DataTable.add_columnwise_function(np.argmax, column_arg_name="column",doc="Same as :func:`numpy.argmax`.")
+DataTable.add_columnwise_function(np.min,"min", column_arg_name="column",doc="Same as :func:`numpy.amin`.")
+DataTable.add_columnwise_function(np.max,"max", column_arg_name="column",doc="Same as :func:`numpy.amax`.")
+DataTable.add_columnwise_function(np.mean, column_arg_name="column",doc="Same as :func:`numpy.mean`.")
+DataTable.add_columnwise_function(np.std, column_arg_name="column",doc="Same as :func:`numpy.std`.")
+DataTable.add_columnwise_function(np.sum, column_arg_name="column",doc="Same as :func:`numpy.sum`.")
 
 
 ### strdump definitions ###

@@ -146,7 +146,7 @@ class IDataColumn(numclass.NumClass):
         Turns a function into a method, which is automatically applied to the array representation.
 
         Arguments:
-            func (Callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
+            func (callable): a function which takes the column converted into a numpy array as a first argument, and then the rest if the supplied arguments
             alias (str): the method name; by default, it's ``func.__name__``
             wrap_into_column (bool): if ``True``, the returned result is wrapped into :class:`ArrayDataColumn`
             as_property (bool): if ``True``, the function is added as a property getter instead
@@ -172,19 +172,19 @@ class IDataColumn(numclass.NumClass):
         else:
             setattr(cls,alias,self_func)
         
-IDataColumn.add_array_function(np.argsort,doc="Same as :func:`np.argsort`.")
-IDataColumn.add_array_function(np.argmin,doc="Same as :func:`np.argmin`.")
-IDataColumn.add_array_function(np.argmax,doc="Same as :func:`np.argmax`.")
-IDataColumn.add_array_function(np.min,"min",doc="Same as :func:`np.min`.")
-IDataColumn.add_array_function(np.max,"max",doc="Same as :func:`np.max`.")
-IDataColumn.add_array_function(np.mean,doc="Same as :func:`np.mean`.")
-IDataColumn.add_array_function(np.std,doc="Same as :func:`np.std`.")
-IDataColumn.add_array_function(np.sum,doc="Same as :func:`np.sum`.")
-IDataColumn.add_array_function(np.nonzero,doc="Same as :func:`np.nonzero`.")
-IDataColumn.add_array_function(np.unique,doc="Same as :func:`np.unique`.")
-IDataColumn.add_array_function(np.real,wrap_into_column=True,as_property=True,doc="Same as :func:`np.real`.")
-IDataColumn.add_array_function(np.imag,wrap_into_column=True,as_property=True,doc="Same as :func:`np.imag`.")
-IDataColumn.add_array_function(np.conjugate,"conjugate",wrap_into_column=True,doc="Same as :func:`np.conjugate`.")
+IDataColumn.add_array_function(np.argsort,doc="Same as :func:`numpy.argsort`.")
+IDataColumn.add_array_function(np.argmin,doc="Same as :func:`numpy.argmin`.")
+IDataColumn.add_array_function(np.argmax,doc="Same as :func:`numpy.argmax`.")
+IDataColumn.add_array_function(np.min,"min",doc="Same as :func:`numpy.amin`.")
+IDataColumn.add_array_function(np.max,"max",doc="Same as :func:`numpy.amax`.")
+IDataColumn.add_array_function(np.mean,doc="Same as :func:`numpy.mean`.")
+IDataColumn.add_array_function(np.std,doc="Same as :func:`numpy.std`.")
+IDataColumn.add_array_function(np.sum,doc="Same as :func:`numpy.sum`.")
+IDataColumn.add_array_function(np.nonzero,doc="Same as :func:`numpy.nonzero`.")
+IDataColumn.add_array_function(np.unique,doc="Same as :func:`numpy.unique`.")
+IDataColumn.add_array_function(np.real,wrap_into_column=True,as_property=True,doc="Same as :func:`numpy.real`.")
+IDataColumn.add_array_function(np.imag,wrap_into_column=True,as_property=True,doc="Same as :func:`numpy.imag`.")
+IDataColumn.add_array_function(np.conjugate,"conjugate",wrap_into_column=True,doc="Same as :obj:`numpy.conj`.")
 
 
 

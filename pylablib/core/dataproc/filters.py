@@ -53,7 +53,7 @@ def convolution_filter(wf, width=1., kernel="gaussian", kernel_span="auto", mode
     Args:
         wf: Waveform for filtering.
         width (float): Kernel width (second parameter to the kernel function).
-        kernel: Either a string defining the kernel function (see :func:`specfunc.get_kernel_func` for possible kernels),
+        kernel: Either a string defining the kernel function (see :func:`.specfunc.get_kernel_func` for possible kernels),
             or a function taking 3 arguments ``(pos, width, height)``, where `height` can be ``None`` (assumes normalization by area). 
         kernel_span: The cutoff for the kernel function. Either an integer (number of points) or ``'auto'``.
         mode (str): Convolution mode (see :func:`scipy.ndimage.convolve`).
@@ -159,7 +159,7 @@ def median_filter(wf, width=1, mode="reflect", cval=0.):
     """
     Median filter.
     
-    Wrapper around :func:`scipy.ndimage.median1d`.
+    Wrapper around :func:`scipy.ndimage.median_filter`.
     """
     res=ndimage.median_filter(wf,width,mode=mode,cval=cval)
     return wrap(wf).array_replaced(res,wrapped=False)
@@ -251,8 +251,7 @@ def _decimate(wf, n=1, dec_mode="skip", axis=0, mode="drop"):
     Args:
         wf: Data.
         n (int): Decimation factor.
-        dec_mode (str):
-            Decimation mode. Can be
+        dec_mode (str): Decimation mode. Can be
                 - ``'skip'`` - just leave every n'th point while completely omitting everything else;
                 - ``'bin'`` or ``'mean'`` - do a binning average;
                 - ``'min'`` - leave min point;
@@ -286,7 +285,7 @@ def _decimate_linear(wf, n=1, dec_mode="skip", axis=0, mode="drop"):
     """
     Decimate a linear column data.
     
-    For parameters, see :func:`_decimate`.
+    For parameters, see :func:`.filters.decimate`.
     """
     if n is None or n<=1:
         return wf

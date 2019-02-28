@@ -10,7 +10,7 @@ class AccessIterator(object):
     
     Args:
         obj: Container to be iterated over.
-        access_function (Callable): A function which takes two parameteres `obj` and `idx`
+        access_function (callable): A function which takes two parameteres `obj` and `idx`
             and either returns the element or raises :exc:`IndexError`. By default, a simple ``__getitem__`` operation.
     """
     def __init__(self, obj, access_function=None):

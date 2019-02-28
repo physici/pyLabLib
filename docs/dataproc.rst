@@ -9,7 +9,7 @@ Data processing utilities
 Fitting
 -------
 
-Class :class:`Fitter` is a user-friendly wrapper around :func:`scipy.optimize.least_squares` routine. Dealing with fitting is made more convenient in a couple of ways:
+Class :class:`.fitting.Fitter` is a user-friendly wrapper around :func:`scipy.optimize.least_squares` routine. Dealing with fitting is made more convenient in a couple of ways:
 
 - it is easy to specify the x-parameter name (in the case it is not the first parameter), or specify multiple x-parameters;
 - all of the fit and fixed parameters are specified by name; it is easy to switch between any parameter being fit or fixed;

@@ -30,8 +30,8 @@ def obtain(proxy, serv=None):
     """
     Obtain a remote netfref object by value (i.e., copy it to the local Python instance).
 
-    Wrapper around :func:`rpyc.classic.obtain` with some special cases handling.
-    `serv` specifies the current remote service. If it is of type :class:`SocketTunnelSurvice`, use its socket tunnel for faster transfer.
+    Wrapper around :func:`rpyc.utils.classic.obtain` with some special cases handling.
+    `serv` specifies the current remote service. If it is of type :class:`SocketTunnelService`, use its socket tunnel for faster transfer.
     """
     if not isinstance(proxy,rpyc.BaseNetref):
         return proxy
@@ -63,7 +63,7 @@ def transfer(obj, serv):
 
 class SocketTunnelService(rpyc.SlaveService):
     """
-    Extension of the standard :class:`rpyc.SlaveService` with built-in network socket tunnel for faster data transfer.
+    Extension of the standard :class:`rpyc.core.service.SlaveService` with built-in network socket tunnel for faster data transfer.
 
     In order for the tunnel to work, services on both ends need to be subclasses of :class:`SocketTunnelService`.
     Because of the initial setup protocol, the two services are asymmetric: one should be 'server' (corresponding to the listening server),

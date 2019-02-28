@@ -1,5 +1,5 @@
 """
-Classes for dealing with the :class:`~core.utils.dictionary.Dictionary` entries with special conversion rules when saved or loaded.
+Classes for dealing with the :class:`.Dictionary` entries with special conversion rules when saved or loaded.
 Used to redefine how certain objects (e.g., tables) are written into files and read from files.
 """
 
@@ -147,7 +147,7 @@ class ITableDictionaryEntry(IDictionaryEntry):
         Args:
             dict_ptr (~core.utils.dictionary.DictionaryPointer): Pointer to the dictionary location for the entry.
             loc: Location for the data to be loaded.
-            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`DataTable` objects). 
+            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`.DataTable` objects). 
         """
         table_type=dict_ptr.get("__table_type__",None)
         if table_type is None:
@@ -195,7 +195,7 @@ class InlineTableDictionaryEntry(ITableDictionaryEntry):
         Args:
             dict_ptr (~core.utils.dictionary.DictionaryPointer): Pointer to the dictionary location for the entry.
             loc: Location for the data to be loaded.
-            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`DataTable` objects).
+            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`.DataTable` objects).
         """
         columns=dict_ptr.get("columns",None)
         data=dict_ptr.get("data",None)
@@ -273,7 +273,7 @@ class ExternalTextTableDictionaryEntry(IExternalTableDictionaryEntry):
         Args:
             dict_ptr (~core.utils.dictionary.DictionaryPointer): Pointer to the dictionary location for the entry.
             loc: Location for the data to be loaded.
-            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`DataTable` objects).
+            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`.DataTable` objects).
         """
         from . import loadfile
         file_path=dict_ptr["file_path"]
@@ -321,7 +321,7 @@ class ExternalBinTableDictionaryEntry(IExternalTableDictionaryEntry):
         Args:
             dict_ptr (~core.utils.dictionary.DictionaryPointer): Pointer to the dictionary location for the entry.
             loc: Location for the data to be loaded.
-            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`DataTable` objects).
+            out_type (str): Output format of the data (``'array'`` for numpy arrays or ``'table'`` for :class:`.DataTable` objects).
         """
         from . import loadfile
         file_path=dict_ptr["file_path"]

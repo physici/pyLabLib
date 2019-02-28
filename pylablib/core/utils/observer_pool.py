@@ -18,6 +18,7 @@ class ObserverPool(object):
         expand_tuple(bool): if ``True`` and the notification value is a tuple, treat it as an argument list for the callback functions.
     """
     def __init__(self, expand_tuple=True):
+        object.__init__(self)
         self._observers={}
         self._observers_uncacheable={}
         self._expand_tuple=expand_tuple
@@ -32,7 +33,7 @@ class ObserverPool(object):
         Args:
             callback(callable): callback function; takes at least one argument (notification tag), and possible more depending on the notification value.
             name(str): stored callback name; by default, a unique name is auto-generated
-            filt(Callable or None): a filter function for this observer (the observer is called only if the :meth:`notify` function tag and value pass the filter); by default, all tags are accepted
+            filt(callable or None): a filter function for this observer (the observer is called only if the :meth:`notify` function tag and value pass the filter); by default, all tags are accepted
             priority(int): callback priority; higher priority callback are invoked first.
             attr: additional observer attributes (can be used by :class:`ObserverPool` subclasses to change their behavior).
             cacheable(bool): if ``True``, assumes that the filter function only depends on the tag, so its calls can be cached.

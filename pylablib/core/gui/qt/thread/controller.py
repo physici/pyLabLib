@@ -59,7 +59,7 @@ def exsafe(func):
             return func(*args,**kwargs)
     return safe_func
 def exsafeSlot(*slargs, **slkwargs):
-    """Wrapper around :func:`PyQt5.QtCore.pyqtSlot` which intercepts exceptions and stops the execution in a controlled manner"""
+    """Wrapper around ``PyQt5.QtCore.pyqtSlot`` which intercepts exceptions and stops the execution in a controlled manner"""
     def wrapper(func):
         return QtCore.pyqtSlot(*slargs,**slkwargs)(exsafe(func))
     return wrapper
@@ -283,7 +283,7 @@ class QThreadController(QtCore.QObject):
         """
         Wait for a single message with a given tag.
 
-        If timeout is passed, raise :exc:`threadprop.TimeoutThreadError`.
+        If timeout is passed, raise :exc:`.threadprop.TimeoutThreadError`.
         """
         def done_check():
             if self._message_queue.setdefault(tag,[]):
@@ -301,7 +301,7 @@ class QThreadController(QtCore.QObject):
         Pop the latest message with the given tag.
 
         Select the message with the highest priority, and among those the oldest one.
-        If no messages are available, raise :exc:`threadprop.NoMessageThreadError`.
+        If no messages are available, raise :exc:`.threadprop.NoMessageThreadError`.
         """
         if self.new_messages_number(tag):
             return heapq.heappop(self._message_queue[tag])[-1]
@@ -311,7 +311,7 @@ class QThreadController(QtCore.QObject):
         Wait for synchronization signal with the given tag and UID.
 
         This method is rarely invoked directly, and is usually used by synchronizers code.
-        If timeout is passed, raise :exc:`threadprop.TimeoutThreadError`.
+        If timeout is passed, raise :exc:`.threadprop.TimeoutThreadError`.
         """
         def done_check():
             if uid in self._sync_queue.setdefault(tag,set()):
@@ -327,7 +327,7 @@ class QThreadController(QtCore.QObject):
         """
         Wait for any message (including synchronization messages or pokes).
 
-        If timeout is passed, raise :exc:`threadprop.TimeoutThreadError`.
+        If timeout is passed, raise :exc:`.threadprop.TimeoutThreadError`.
         """
         self._wait_in_process_loop(lambda: (True,None),timeout=timeout)
     def wait_until(self, check, timeout=None):
@@ -335,7 +335,7 @@ class QThreadController(QtCore.QObject):
         Wait until a given condition is true.
 
         Condition is given by the `check` function, which is called after every new received message and should return ``True`` if the condition is met.
-        If timeout is passed, raise :exc:`threadprop.TimeoutThreadError`.
+        If timeout is passed, raise :exc:`.threadprop.TimeoutThreadError`.
         """
         self._wait_in_process_loop(lambda: (check(),None),timeout=timeout)
     def check_messages(self):
@@ -392,7 +392,7 @@ class QThreadController(QtCore.QObject):
         """
         Subscribe synchronous callback to a signal.
 
-        See :func:`signal_pool.SignalPool.subscribe` for details.
+        See :meth:`.SignalPool.subscribe` for details.
         By default, the subscribed destination is the thread's name.
         """
         if self._signal_pool:
@@ -404,7 +404,7 @@ class QThreadController(QtCore.QObject):
         """
         Subscribe asynchronous callback to a signal.
 
-        See :func:`signal_pool.SignalPool.subscribe_nonsync` for details.
+        See :meth:`.SignalPool.subscribe_nonsync` for details.
         By default, the subscribed destination is the thread's name.
         """
         if self._signal_pool:
@@ -419,7 +419,7 @@ class QThreadController(QtCore.QObject):
         """
         Send a signal to the signal pool.
 
-        See :func:`signal_pool.SignalPool.signal` for details.
+        See :meth:`.SignalPool.signal` for details.
         By default, the signal source is the thread's name.
         """
         self._signal_pool.signal(src or self.name,dst,tag,value)
@@ -472,7 +472,7 @@ class QThreadController(QtCore.QObject):
 
         Can be called in any thread (controlled or external).
         If ``missing_error==False`` and no variable exists, return `default`; otherwise, raise and error.
-        If ``copy_branch==True`` and the variable is a :class:`Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignements.
+        If ``copy_branch==True`` and the variable is a :class:`.Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignements.
         """
         with self._params_val_lock:
             if missing_error and name not in self._params_val:
@@ -521,7 +521,7 @@ class QThreadController(QtCore.QObject):
         """
         Stop the thread.
 
-        If called from the thread, stop immediately by raising a :exc:`InterruptExceptionStop` exception. Otherwise, schedule thread stop.
+        If called from the thread, stop immediately by raising a :exc:`.qt.thread.threadprop.InterruptExceptionStop` exception. Otherwise, schedule thread stop.
         If the thread kind is ``"main"``, stop the whole application with the given exit code. Otherwise, stop the thread.
         """
         if self.kind=="main":
@@ -570,8 +570,8 @@ class QThreadController(QtCore.QObject):
         Wait for the given execution point.
         
         Automatically invoked points include ``"start"`` (thread starting), ``"run"`` (thread setup and ready to run), and ``"stop"`` (thread finished).
-        If timeout is passed, raise :exc:`threadprop.TimeoutThreadError`.
-        `counter` specifies the minimal number of pre-requisite :func:`notify_exec` calls to finish the waiting (by default, a single call is enough).
+        If timeout is passed, raise :exc:`.threadprop.TimeoutThreadError`.
+        `counter` specifies the minimal number of pre-requisite :meth:`notify_exec` calls to finish the waiting (by default, a single call is enough).
         Return actual number of notifier calls up to date.
         """
         return self._get_exec_note(point).wait(timeout=timeout,state=counter)
@@ -627,12 +627,12 @@ class QThreadController(QtCore.QObject):
 
         If ``sync==True``, calling thread is blocked until the controlled thread executes the function, and the function result is returned
         (in essence, the fact that the function executes in a different thread is transparent).
-        Otherwise, exit call immediately, and return a synchronizer object (:class:`synchronizing.QThreadCallNotifier`),
-        which can be used to check if the call is done (method `is_done`) and obtain the result (method :meth:`synchronizing.QThreadCallNotifier.get_value_sync`).
+        Otherwise, exit call immediately, and return a synchronizer object (:class:`.QThreadCallNotifier`),
+        which can be used to check if the call is done (method `is_done`) and obtain the result (method :meth:`.QThreadCallNotifier.get_value_sync`).
         If `callback` is not ``None``, call it after the function is successfully executed (from the target thread), with a single parameter being function result.
         If ``pass_exception==True`` and `func` raises and exception, re-raise it in the caller thread (applies only if ``sync==True``).
         If `tag` is supplied, send the call in a message with the given tag and priority; otherwise, use the interrupt call (generally, higher priority method).
-        If ``error_on_stopped==True`` and the controlled thread is stopped before it executed the call, raise :exc:`NoControllerThreadError`; otherwise, return `default_result`.
+        If ``error_on_stopped==True`` and the controlled thread is stopped before it executed the call, raise :exc:`.qt.thread.threadprop.NoControllerThreadError`; otherwise, return `default_result`.
         If ``same_thread_shortcut==True`` (default), the call is synchronous, and the caller thread is the same as the controlled thread, call the function directly.
         """
         if callback:
@@ -765,9 +765,9 @@ class QMultiRepeatingThreadController(QThreadController):
         """
         Subscribe callback to a signal which is synchronized with commands and jobs execution.
 
-        Unlike the standard :meth:`subscribe` method, the subscribed callback will only be executed between jobs or commands, not during one of these.
+        Unlike the standard :meth:`.QThreadController.subscribe` method, the subscribed callback will only be executed between jobs or commands, not during one of these.
 
-        See :func:`signal_pool.SignalPool.subscribe` for details.
+        See :meth:`.SignalPool.subscribe` for details.
         By default, the subscribed destination is the thread's name.
         """
         if self._signal_pool:
@@ -941,7 +941,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         Invoke command call with the given name and arguments
         
         If `callback` is not ``None``, call it after the command is successfully executed (from the target thread), with a single parameter being the command result.
-        Return :class:`synchronzing.QThreadCallNotifier` object which can be used to wait for and read the command result.
+        Return :class:`.QThreadCallNotifier` object which can be used to wait for and read the command result.
         """
         return self._sync_call(self.process_command,name,args,kwargs,sync=False,callback=callback)
     def call_query(self, name, args=None, kwargs=None, timeout=None, ignore_errors=False):

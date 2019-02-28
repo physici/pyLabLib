@@ -71,8 +71,12 @@ except (ImportError):
 
 def iir_apply_complex(trace, xcoeff, ycoeff):
     """
-    Wrapper for :func:`iir_apply` function that accounts for the trace being possibly complex (coefficients still have to be real)
-    and for datatable types.
+    Apply digital, (possibly) recursive filter with coefficients `xcoeff` and `ycoeff`.
+
+    Wrapper for ``iir_apply`` function that accounts for the trace being possibly complex (coefficients still have to be real and for datatable types.
+
+    Result is filtered signal `y` with ``y[n]=sum_j x[n-j]*xcoeff[j] + sum_k y[n-k-1]*ycoeff[k]`` .
+    All input arrays should be one-dimensional.
     """
     wrap=wrapping.wrap(trace)
     trace=np.asarray(trace)

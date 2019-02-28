@@ -9,7 +9,7 @@ class DataFile(object):
     Describes a single datafile.
     
     Args:
-        data: The main data of the file (usually :class:`~core.datatable.table.DataTable` or :class:`~core.utils.dictionary.Dictionary`).
+        data: The main data of the file (usually :class:`.DataTable` or :class:`.Dictionary`).
         filepath (str): absolute path
         filetype (str): a source type
         creation_time (datetime.datetime): File creation time

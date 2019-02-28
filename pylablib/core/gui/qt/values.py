@@ -6,7 +6,6 @@ from .widgets import edit
 from PyQt5 import QtCore, QtWidgets
 from ...utils import dictionary, py3, string
 from ...utils.functions import FunctionSignature
-from ...utils.general import doc_inherit
 
 
 def build_children_tree(root, types_include, is_atomic=None, is_excluded=None, self_node="#"):
@@ -132,7 +131,6 @@ class IDefaultValueHandler(IValueHandler):
             raise ValueError("can't find default setter for widget {}".format(self.widget))
         self.repr_value_kind=get_method_kind(getattr(self.widget,"repr_value",None),add_args=1)
         self.default_name=default_name
-    @doc_inherit(IValueHandler)
     def get_value(self, name=None):
         if not name:
             if self.get_value_kind=="simple":
@@ -147,7 +145,6 @@ class IDefaultValueHandler(IValueHandler):
             elif self.get_all_values_kind=="simple":
                 return self.widget.get_all_values()[name]
         raise ValueError("can't find getter for widget {} with name {}".format(self.widget,name))
-    @doc_inherit(IValueHandler)
     def get_all_values(self):
         if self.get_all_values_kind=="simple":
             return self.widget.get_all_values()
@@ -155,7 +152,6 @@ class IDefaultValueHandler(IValueHandler):
             return self.widget.get_value()
         else:
             return self.widget.get_value(self.default_name)
-    @doc_inherit(IValueHandler)
     def set_value(self, value, name=None):
         if not name:
             if self.set_value_kind=="simple":
@@ -172,7 +168,6 @@ class IDefaultValueHandler(IValueHandler):
                     name="/".join(name)
                 return self.widget.set_all_values({name:value})
         raise ValueError("can't find setter for widget {} with name {}".format(self.widget,name))
-    @doc_inherit(IValueHandler)
     def set_all_values(self, value):
         if self.set_all_values_kind=="simple":
             return self.widget.set_all_values(value)
@@ -180,7 +175,6 @@ class IDefaultValueHandler(IValueHandler):
             return self.widget.set_value(value)
         else:
             return self.widget.set_value(self.default_name,value)
-    @doc_inherit(IValueHandler)
     def repr_value(self, value, name=None):
         if not name:
             if self.repr_value_kind=="simple":
@@ -204,7 +198,7 @@ class ISingleValueHandler(IValueHandler):
     def __init__(self, widget):
         IValueHandler.__init__(self,widget)
     def get_single_value(self):
-        """Set the widget value"""
+        """Get the widget value"""
         raise ValueError("can't find default getter for widget {}".format(self.widget))
     def get_value(self, name=None):
         """
@@ -216,7 +210,7 @@ class ISingleValueHandler(IValueHandler):
             raise KeyError("no value with name {}".format(name))
         return self.get_single_value()
     def set_single_value(self, value):
-        """Get the widget value"""
+        """Set the widget value"""
         raise ValueError("can't find default setter for widget {}".format(self.widget))
     def set_value(self, value, name=None):
         """
@@ -243,22 +237,17 @@ class ISingleValueHandler(IValueHandler):
         return self.repr_single_value(value)
 
 class LineEditValueHandler(ISingleValueHandler):
-    """Value handler for :class:`QLineEdit` widget"""
-    @doc_inherit(ISingleValueHandler)
+    """Value handler for ``QLineEdit`` widget"""
     def get_single_value(self):
         return str(self.widget.text())
-    @doc_inherit(ISingleValueHandler)
     def set_single_value(self, value):
         return self.widget.setText(str(value))
-    @doc_inherit(ISingleValueHandler)
     def value_changed_signal(self):
         return self.widget.textChanged
 class LabelValueHandler(ISingleValueHandler):
-    """Value handler for :class:`QLabel` widget"""
-    @doc_inherit(ISingleValueHandler)
+    """Value handler for ``QLabel`` widget"""
     def get_single_value(self):
         return str(self.widget.text())
-    @doc_inherit(ISingleValueHandler)
     def set_single_value(self, value):
         return self.widget.setText(str(value))
 class IBoolValueHandler(ISingleValueHandler):
@@ -266,80 +255,62 @@ class IBoolValueHandler(ISingleValueHandler):
     def __init__(self, widget, labels=("Off","On")):
         ISingleValueHandler.__init__(self,widget)
         self.labels=labels
-    @doc_inherit(ISingleValueHandler)
     def repr_single_value(self, value):
         return self.labels[value]
 class CheckboxValueHandler(IBoolValueHandler):
-    """Value handler for :class:`QCheckBox` widget"""
-    @doc_inherit(IBoolValueHandler)
+    """Value handler for ``QCheckBox`` widget"""
     def get_single_value(self):
         return self.widget.isChecked()
-    @doc_inherit(IBoolValueHandler)
     def set_single_value(self, value):
         return self.widget.setChecked(value)
-    @doc_inherit(IBoolValueHandler)
     def value_changed_signal(self):
         return self.widget.stateChanged
 class PushButtonValueHandler(IBoolValueHandler):
-    """Value handler for :class:`QPushButton` widget"""
-    @doc_inherit(IBoolValueHandler)
+    """Value handler for ``QPushButton`` widget"""
     def get_single_value(self):
         return self.widget.isChecked()
-    @doc_inherit(IBoolValueHandler)
     def set_single_value(self, value):
         if self.widget.isCheckable():
             return self.widget.setChecked(value)
         elif value:
             return self.widget.click()
-    @doc_inherit(IBoolValueHandler)
     def value_changed_signal(self):
         if self.widget.isCheckable():
             return self.widget.toggled
         else:
             return self.widget.clicked
-    @doc_inherit(IBoolValueHandler)
     def repr_single_value(self, value):
         if not self.widget.isCheckable():
             return ""
         return IBoolValueHandler.repr_single_value(self,value)
 class ToolButtonValueHandler(IBoolValueHandler):
-    """Value handler for :class:`QToolButton` widget"""
-    @doc_inherit(IBoolValueHandler)
+    """Value handler for ``QToolButton`` widget"""
     def get_single_value(self):
         return self.widget.isChecked()
-    @doc_inherit(IBoolValueHandler)
     def set_single_value(self, value):
         return self.widget.setChecked(value)
-    @doc_inherit(IBoolValueHandler)
     def value_changed_signal(self):
         return self.widget.triggered
-    @doc_inherit(IBoolValueHandler)
     def repr_single_value(self, value):
         if not self.widget.isCheckable():
             return ""
         return IBoolValueHandler.repr_single_value(self,value)
 class ComboBoxValueHandler(ISingleValueHandler):
-    """Value handler for :class:`QComboBox` widget"""
-    @doc_inherit(ISingleValueHandler)
+    """Value handler for ``QComboBox`` widget"""
     def get_single_value(self):
         return self.widget.currentIndex()
-    @doc_inherit(ISingleValueHandler)
     def set_single_value(self, value):
         return self.widget.setCurrentIndex(value)
-    @doc_inherit(ISingleValueHandler)
     def value_changed_signal(self):
         return self.widget.currentIndexChanged
-    @doc_inherit(ISingleValueHandler)
     def repr_single_value(self, value):
         if isinstance(value,py3.anystring):
             return value
         return self.widget.itemText(value)
 class ProgressBarValueHandler(ISingleValueHandler):
-    """Value handler for :class:`QProgressBar` widget"""
-    @doc_inherit(ISingleValueHandler)
+    """Value handler for ``QProgressBar`` widget"""
     def get_single_value(self):
         return self.widget.value()
-    @doc_inherit(ISingleValueHandler)
     def set_single_value(self, value):
         return self.widget.setValue(int(value))
 
@@ -452,7 +423,7 @@ class ValuesTable(object):
         Get all values in a subtree with the given root (all table values by default).
         
         If supplied, `include` is a container specifies which specifies names (relative to the root) to include in the result; by default, include everything.
-        Return a :class:`dictionary.Dictionary` object containing tree structure of the names.
+        Return a :class:`.Dictionary` object containing tree structure of the names.
         """
         values=dictionary.Dictionary()
         if root in self.handlers:
@@ -548,7 +519,6 @@ class IDefaultIndicatorHandler(IIndicatorHandler):
         if not self.set_indicator_kind:
             raise ValueError("can't find default indicator setter for widget {}".format(self.widget))
         self.default_name=default_name
-    @doc_inherit(IIndicatorHandler)
     def get_value(self, name=None):
         if not name:
             if self.get_indicator_kind=="simple":
@@ -559,7 +529,6 @@ class IDefaultIndicatorHandler(IIndicatorHandler):
             if self.get_indicator_kind=="named":
                 return self.widget.get_indicator()
         raise ValueError("can't find indicator getter for widget {} with name {}".format(self.widget,name))
-    @doc_inherit(IIndicatorHandler)
     def set_value(self, value, name=None):
         if not name:
             if self.set_indicator_kind=="simple":
@@ -589,7 +558,6 @@ class FuncLabelIndicatorHandler(IIndicatorHandler):
         self.repr_func=repr_func
         self.repr_func_kind=get_method_kind(repr_func,add_args=1)
         self.repr_value_name=repr_value_name
-    @doc_inherit(IIndicatorHandler)
     def get_value(self, name=None):
         if name:
             raise KeyError("no indicator value with name {}".format(name))
@@ -606,7 +574,6 @@ class FuncLabelIndicatorHandler(IIndicatorHandler):
         elif self.repr_func_kind=="named":
             return self.repr_func(name,value)
         raise KeyError("no indicator value with name {}".format(name))
-    @doc_inherit(IIndicatorHandler)
     def set_value(self, value, name=None):
         return self.label_handler.set_value(self.repr_value(value,name=name))
 class WidgetLabelIndicatorHandler(IIndicatorHandler):
@@ -630,7 +597,6 @@ class WidgetLabelIndicatorHandler(IIndicatorHandler):
             widget=get_default_value_handler(widget)
         self.widget_handler=widget
         self.repr_value_name=repr_value_name
-    @doc_inherit(IIndicatorHandler)
     def get_value(self, name=None):
         if name:
             raise KeyError("no indicator value with name {}".format(name))
@@ -642,7 +608,6 @@ class WidgetLabelIndicatorHandler(IIndicatorHandler):
         if name:
             raise KeyError("no indicator value with name {}".format(name))
         return str(value)
-    @doc_inherit(IIndicatorHandler)
     def set_value(self, value, name=None):
         return self.label_handler.set_value(self.repr_value(value,name=name))
 
@@ -723,7 +688,7 @@ class IndicatorValuesTable(ValuesTable):
         
         `ind_name` can distinguish different sub-indicators with the same name, if the same value has multiple indicators.
         If supplied, `include` is a container specifies which specifies names (relative to the root) to include in the result; by default, include everything.
-        Return a :class:`dictionary.Dictionary` object containing tree structure of the names.
+        Return a :class:`.Dictionary` object containing tree structure of the names.
         """
         values=dictionary.Dictionary()
         if root in self.handlers:

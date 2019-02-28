@@ -19,7 +19,7 @@ class Fitter(object):
     Can handle variety of different functions, complex arguments or return values, array arguments.
     
     Args:
-        func(Callable): Fit function. Can be anything callable (function, method, object with ``__call__`` method, etc.).
+        func(callable): Fit function. Can be anything callable (function, method, object with ``__call__`` method, etc.).
         xarg_name(str or list): Name (or multiple names) for x arguments. These arguments are passed to `func` (as named arguments) when calling for fitting.
             Can be a string (single argument) or a list (arbitrary number of arguments, including zero).
         fit_parameters (dict): Dictionary ``{name: value}`` of parameters to be fitted (`value` is the starting value for the fitting procedure).
@@ -154,11 +154,11 @@ class Fitter(object):
             scale (dict): Defines typical scale of fit parameters (used to set up `x_scale`, `xtol` and `diff_step` parameters of :func:`scipy.optimize.least_squares`).
                 Note: for complex parameters scale must also be a complex number, with re and im parts of the scale variable corresponding to the scale of the re and im part.
             limits (dict): Boundaries for the fit parameters (missing entries are assumed to be unbound). Each boundary parameter is a tuple ``(lower, upper)``.
-                ``lower`` or ``upper`` can be ``None``, ``np.nan`` or ``np.inf`` (with the appropriate sign), which implies no bounds in the given direction.
+                ``lower`` or ``upper`` can be ``None``, ``numpy.nan`` or ``numpy.inf`` (with the appropriate sign), which implies no bounds in the given direction.
                 Note: for compound data types (such as lists) the entries are still tuples of 2 elements,
                 each of which is either ``None`` (no bound for any sub-element) or has the same structure as the full parameter.
                 Note: for complex parameters limits must also be complex numbers (or ``None``), with re and im parts of the limits variable corresponding to the limits of the re and im part.
-            weight (array-like): Determines the weights of y-points.
+            weight (list or numpy.ndarray): Determines the weights of y-points.
                 Can be either an array broadcastable to `y` (e.g., a scalar or an array with the same shape as `y`),
                 in which case it's interpreted as list of individual point weights (which multiply residuals before they are squared).
                 Or it can be an array with number of elements which is square of the number of elements in `y`,
@@ -330,7 +330,7 @@ def get_best_fit(x, y, fits):
     """
     Select the best (lowest residual) fit result.
     
-    `x` and `y` are the argument and the value of the bound fit function. `fits` is the list of fit results (tuples returned by :func:`Fitter.fit`).
+    `x` and `y` are the argument and the value of the bound fit function. `fits` is the list of fit results (tuples returned by :meth:`Fitter.fit`).
     """
     errors=[(abs(y-f[1](x))**2).mean() for f in fits]
     min_error_idx=np.argmin(errors)

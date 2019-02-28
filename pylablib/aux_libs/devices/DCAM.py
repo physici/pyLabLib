@@ -402,7 +402,7 @@ class DCAMCamera(IDevice):
         Wait for a new camera frame.
 
         `since` specifies what constitutes a new frame.
-        Can be ``"lastread"`` (wait for a new frame after the last read frame), ``"lastwait"`` (wait for a new frame after last :func:`wait_for_frame` call),
+        Can be ``"lastread"`` (wait for a new frame after the last read frame), ``"lastwait"`` (wait for a new frame after last :meth:`wait_for_frame` call),
         or ``"now"`` (wait for a new frame acquired after this function call).
         If `timeout` is exceeded, raise :exc:`DCAMTimeoutError`.
         """

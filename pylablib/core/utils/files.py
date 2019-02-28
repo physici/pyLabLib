@@ -178,7 +178,7 @@ class TempFile(object):
         rep_time (int): Number of attempts to create the file if the first try fails. 
         
     Attributes:
-        f (file): File object.
+        f: File object.
         name (str): File name.
         full_name (str): File name including containing folder.
     """
@@ -322,8 +322,8 @@ def list_dir(folder="", folder_filter=None, file_filter=None, separate_kinds=Tru
     
     Args:
         folder (str): Path to the folder.
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
         separate_kinds (bool): if ``True``, return :class:`FolderList` with files and folder separate; otherwise, return a single list (works much faster).
         error_on_file (bool): if ``True``, raise :exc:`OSError` if there's a file with the same name as the target folder.
     """
@@ -354,8 +354,8 @@ def dir_empty(folder, folder_filter=None, file_filter=None, level="single", erro
     
     Args:
         folder (str): Path to the folder.
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
         level (str): if ``'single'``, check only immediate folder content; if ``'recursive'``, follow recursively in all folders passing `folder_filter`.
         error_on_file (bool): if ``True``, raise :exc:`OSError` if there's a file with the same name as the target folder.
     """
@@ -378,11 +378,11 @@ def walk_dir(folder, folder_filter=None, file_filter=None, rel_path=True, topdow
     
     Args:
         folder (str): Path to the folder.
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
         rel_path (bool): If ``True``, the returned folder path is specified relative to the initial path.
         topdown (bool): If ``True``, return folder before its subfolders.
-        visit_folder_filter: Filter for visiting folders (more description at :func:`~core.utils.string.get_string_filter`).
+        visit_folder_filter: Filter for visiting folders (more description at :func:`.string.get_string_filter`).
             If not ``None``, specifies filter for visiting folders which is different from  `folder_filter` (filter for returned folders).
         max_depth (int): If not ``None``, limits the recursion depth.
     
@@ -447,8 +447,8 @@ def copy_dir(source, dest, folder_filter=None, file_filter=None, overwrite=True,
     Args:
         source (str): Source path.
         dest (str): Destination path.
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
         overwrite (bool): If ``True``, overwrite existing files.
         cmp_on_overwrite (bool): If ``True`` and the two files are compared to be the same, don't perform overwrite.
     """
@@ -469,8 +469,8 @@ def move_dir(source, dest, folder_filter=None, file_filter=None, overwrite=True,
     Args:
         source (str): Source path.
         dest (str): Destination path.
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
         overwrite (bool): If ``True``, overwrite existing files (if the existing file isn't overwritten, preserve the original).
         cmp_on_overwrite (bool): If ``True`` and the two files are compared to be the same, don't perform overwrite.
         preserve_if_not_move (bool): If ``True`` and the files are identical, preserve the original.
@@ -530,8 +530,8 @@ def cmp_dirs(a, b, folder_filter=None, file_filter=None, shallow=True, return_di
     Args:
         a (str): First folder path
         b (str): Second folder path
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
         shallow: If ``True``, do shallow comparison of the files (see :func:`filecmp.cmp`).
         return_difference: If ``False``, simply return `bool`; otherwise, return difference type (``'='``, ``'+'``, ``'-'`` or ``'*'``). 
     """
@@ -616,8 +616,8 @@ def zip_folder(zip_path, source_path, inside_path="", folder_filter=None, file_f
         zip_path (str): Path to the .zip file.
         source_path (str): Path to the source folder.
         inside_path (str): Destination path inside the zip archive.
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
         mode (str): Zip archive adding mode (see :class:`zipfile.ZipFile`).
         compression: Zip archive compression (see :class:`zipfile.ZipFile`).
     """
@@ -663,8 +663,8 @@ def unzip_folder(zip_path, dest_path, inside_path="", folder_filter=None, file_f
         zip_path (str): Path to the .zip file.
         dest_path (str): Path to the destination folder.
         inside_path (str): Source path inside the zip archive; extracted data paths are relative (i.e., they don't include `inside_path`).
-        folder_filter: Folder filter function (more description at :func:`~core.utils.string.get_string_filter`).
-        file_filter: File filter function (more description at :func:`~core.utils.string.get_string_filter`).
+        folder_filter: Folder filter function (more description at :func:`.string.get_string_filter`).
+        file_filter: File filter function (more description at :func:`.string.get_string_filter`).
     """
     with zipfile.ZipFile(zip_path, mode="r") as zf:
         if inside_path=="" and folder_filter is None and file_filter is None:

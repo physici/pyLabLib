@@ -110,7 +110,7 @@ class Dictionary(object):
     If dictionary is not case-sensitive, all inserted and accessed paths are normalized to lower or upper case.
     
     Args:
-        root (dict-like): Initial value.
+        root (dict or Dictionary): Initial value.
         case_sensitive (bool): If ``False``, entries case is normalized according to `case_normalization`.
         case_normalization (str): Normalization rules; either ``'lower'`` or ``'upper'``.
         copy (bool): If ``True``, make copy of the supplied data; otherwise, just make it the root.
@@ -522,8 +522,8 @@ class Dictionary(object):
         Attach source (:class:`dict` or other :class:`Dictionary`) to a given branch; source is automatically deep-copied.
         
         Args:
-            source (dict-like)
-            branch (path): Destination path.
+            source (dict or Dictionary)
+            branch (tuple or str): Destination path.
             overwrite (bool): If ``True``, replaces the old entries with the new ones (it only matters for leaf assignments).
             normalize_paths (bool): If ``True`` and the dictionary isn't case sensitive, perform normalization if the `source`.
         """
@@ -565,7 +565,7 @@ class Dictionary(object):
         """
         Get a copy of the dictionary and attach a new branch to it.
         
-        Parameters are the same as in the :func:`Dictionary.merge_branch`. 
+        Parameters are the same as in the :meth:`Dictionary.merge_branch`. 
         """
         cpy=self.copy()
         cpy.merge_branch(source,branch=branch,overwrite=overwrite,normalize_paths=normalize_paths)
@@ -607,7 +607,7 @@ class Dictionary(object):
         Apply `func` to the nodes in the dictionary.
         
         Args:
-            func (Callable): Mapping function. Leafs are passed by value, branches (if visited) are passed as :class:`DictionaryPointer`.
+            func (callable): Mapping function. Leafs are passed by value, branches (if visited) are passed as :class:`DictionaryPointer`.
             to_visit (str): Can be ``'leafs'``, ``'branches'`` or ``'all'`` and determines which parts of the dictionary passed to the map function.
             pass_path (bool): If ``True``, pass the node path (in the form of a normalized list) as a first argument to `func`.
             topdown (bool): If ``True``, visit node and its leafs before its subtrees leafs.
@@ -637,7 +637,7 @@ class Dictionary(object):
         Remove all the nodes from the dictionary for which `pred` returns ``False``.
         
         Args:
-            pred (Callable): Filter function. Leafs are passed to `pred` by value, branches (if visited) are passed as :class:`DictionaryPointer`.
+            pred (callable): Filter function. Leafs are passed to `pred` by value, branches (if visited) are passed as :class:`DictionaryPointer`.
             to_visit (str): Can be ``'leafs'``, ``'branches'`` or ``'all'`` and determines which parts of the dictionary passed to the predicate.
             pass_path (bool): If ``True``, pass the node path (in the form of a normalized list) as a first argument to `pred`.
             topdown (bool): If ``True``, visit node and its leafs before its subtrees leafs.
@@ -679,7 +679,7 @@ class Dictionary(object):
         If the other Dictionary has a different case sensitivity, raise :exc:`ValueError`.
         
         Returns:
-            :class:`DictionaryDiff`
+            :class:`Dictionary.DictionaryDiff`
         """
         if self._case_sensitive!=other._case_sensitive:
             raise ValueError("can't compare dictionaries with different case sensitivity")
@@ -713,7 +713,7 @@ class Dictionary(object):
         Find the difference between flat :class:`dict` objects.
         
         Returns:
-            :class:`DictionaryDiff`
+            :class:`Dictionary.DictionaryDiff`
         """
         first_paths=set(first)
         second_paths=set(second)
@@ -749,7 +749,7 @@ class Dictionary(object):
             use_flatten (bool): If ``True`` flatten all dictionaries before comparison (works faster for a large number of dictionaries).
         
         Returns:
-            :class:`DictionaryIntersection`
+            :class:`Dictionary.DictionaryIntersection`
         """
         if len(dicts)==0:
             return Dictionary.DictionaryIntersection(Dictionary(),[])
@@ -881,7 +881,7 @@ class DictionaryPointer(Dictionary):
     Effect is mostly equivalent to prepending some path to all queries.
     
     Args:
-        root (dict-like): Complete tree.
+        root (dict or Dictionary): Complete tree.
         pointer: Path to the pointer location. 
         case_sensitive (bool): If ``False``, entries case is normalized according to `case_normalization`.
         case_normalization (str): Normalization rules; either ``'lower'`` or ``'upper'``.
@@ -953,7 +953,7 @@ class PrefixTree(Dictionary):
     These leafs are inspected when specific prefix tree functions (find_largest_prefix and find_all_prefixes) are used.
         
     Args:
-        root (dict-like): Complete tree.
+        root (dict or Dictionary): Complete tree.
         case_sensitive (bool): If ``False``, entries case is normalized according to `case_normalization`.
         case_normalization (str): Normalization rules; either ``'lower'`` or ``'upper'``.
         wildcard (str): Symbol for a wildcard entry.
@@ -1045,7 +1045,7 @@ def combine_dictionaries(dicts, func, select="all", pass_missing=False):
     Combine several dictionaries element-wise (only for leafs) using a given function.
 
     Args:
-        dicts(iterable): list of dictionaries (:class:`Dictionary` or ``dict``) to be combined
+        dicts(list or tuple): list of dictionaries (:class:`Dictionary` or ``dict``) to be combined
         func(callable): combination function. Takes a single argument, which is a list of elements to be combined.
         select(str): determins which keys are selected for the resulting dictionary.
             Can be either ``"all"`` (only keep keys which are present in all the dictionaries), or ``"any"`` (keep keys which are present in at least one dictionary).
@@ -1135,7 +1135,7 @@ class PrefixShortcutTree(object):
         """
         Add a dictionary of shortcuts ``{shortcut: full_path}``.
         
-        Arguments are the same as in :func:`PrefixShortcutTree.add_shortcut`.
+        Arguments are the same as in :meth:`PrefixShortcutTree.add_shortcut`.
         """
         for s,d in viewitems_(shortcuts):
             self.add_shortcut(s,d,exact=exact)
@@ -1148,7 +1148,7 @@ class PrefixShortcutTree(object):
         """
         Make a copy and add additional shortcuts.
         
-        Arguments are the same as in :func:`PrefixShortcutTree.add_shortcuts`.
+        Arguments are the same as in :meth:`PrefixShortcutTree.add_shortcuts`.
         """
         return self.copy().add_shortcuts(shortcuts,exact=exact)
 

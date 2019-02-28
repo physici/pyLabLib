@@ -39,19 +39,33 @@ extensions = ['sphinx.ext.autodoc',
     'sphinx.ext.imgmath',
     'sphinx.ext.viewcode']
 
-autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt5', 'pywinusb', 'pyqtgraph', 'websocket', 'zhinst', 'matplotlib', 'sip']
+autodoc_mock_imports = ['nidaqmx', 'visa', 'serial', 'ft232', 'PyQt5', 'pywinusb', 'pyqtgraph', 'websocket', 'zhinst', 'matplotlib', 'sip', 'rpyc']
 sys.modules['visa']=mock.Mock(VisaIOError=object, __version__='1.9.0')
 sys.modules['serial']=mock.Mock(SerialException=object)
 sys.modules['ft232']=mock.Mock(Ft232Exception=object)
 autodoc_member_order = 'bysource'
 
 # nitpicky = True
-nitpick_ignore=[ ("py:class","object"), ("py:class","int"), ("py:class","float"), ("py:class","bool"), ("py:class","str"),
-                    ("py:class","list"), ("py:class","tuple"), ("py:class","dict"),
-                    ("py:obj","None")]
+nitpick_ignore=[ ("py:class","callable"),
+                    ("py:class","socket.socket"),
+                    ("py:class","sphinx.ext.autodoc.importer._MockObject"), ("py:class","_ctypes.Structure"), ("py:class","_ctypes.Union"),
+                    ("py:class","builtins.object"), ("py:class","builtins.OSError"), ("py:class","builtins.RuntimeError"),
+                    ("py:class","usb.core.USBError")]
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
                        'numpy': ('http://docs.scipy.org/doc/numpy/', None),
-                       'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),}
+                       'scipy': ('http://docs.scipy.org/doc/scipy/reference/', None),
+                       'matplotlib': ('http://matplotlib.org/', None),
+                       'rpyc': ('https://rpyc.readthedocs.io/en/latest/', None),
+                       'pyqtgraph': ("http://www.pyqtgraph.org/documentation/", None),
+                       'pySerial': ("https://pythonhosted.org/pyserial/", None),
+                       'PyVISA': ("https://pyvisa.readthedocs.io/en/master/", None),
+                       'nidaqmx': ("https://nidaqmx-python.readthedocs.io/en/latest/", None),}
+
+
+def no_namedtuple_attrib_docstring(app, what, name, obj, options, lines):
+    if len(lines) == 1 and lines[0].startswith('Alias for field number'):
+        # We don't return, so we need to purge in-place
+        del lines[:]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -118,6 +132,8 @@ html_static_path = ['_static']
 
 def setup(app):
     app.add_stylesheet('css/wide.css')
+    app.connect('autodoc-process-docstring',no_namedtuple_attrib_docstring)
+
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.

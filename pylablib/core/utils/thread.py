@@ -15,7 +15,7 @@ class PeriodicThread(object):
     """
     A thread that runs in an infinite loop (until externally stopped) and executes its task with a given periodicity.
 
-    To use, it needs to be inherited, with the subclass redefining :func:`execute` or :func:`process_message` method.
+    To use, it needs to be inherited, with the subclass redefining :meth:`execute` or :meth:`process_message` method.
     """
     def __init__(self):
         object.__init__(self)
@@ -41,7 +41,7 @@ class PeriodicThread(object):
         
     def loop(self, period, sync):
         """
-        Main loop methods. Called automatically in a new thread when :func:`start` is invoked.
+        Main loop methods. Called automatically in a new thread when :meth:`start` is invoked.
         """
         self.running=True
         if sync:
@@ -75,7 +75,7 @@ class PeriodicThread(object):
         """
         Send a message to the thread.
         
-        The message is processed by the thread in the :func:`process_message` method (by default does nothing).
+        The message is processed by the thread in the :meth:`process_message` method (by default does nothing).
         If ``sync==True``, wait until the thread received (not necessarily processed) the message.
         """
         if self.running:

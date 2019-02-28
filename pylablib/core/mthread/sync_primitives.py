@@ -648,14 +648,17 @@ class Queue(object):
         
 
 class ThreadObserverPool(observer_pool.ObserverPool):
-    def __init__(self):
-        observer_pool.ObserverPool.__init__(self)
-        
-    def add_observer(self, callback, name=None, tags=None, priority=0):
+    def add_observer(self, callback, name=None, filt=None, priority=0, attr=None, cacheable=False):
+        """
+        Add the observer callback.
+
+        Same as :meth:`.observer_pool.ObserverPool.add_observer`, but callback can be a string,
+        in which case it's interpreted as sending a message to a thread with the given name.
+        """
         if isinstance(callback,py3.textstring):
             controller=threadprop.current_controller(require_controller=True)
             callback=controller.add_new_message
-        return observer_pool.ObserverPool.add_observer(self,callback,name=name,tags=tags,priority=priority)
+        return observer_pool.ObserverPool.add_observer(self,callback,name=name,filt=filt,priority=priority,attr=attr,cacheable=cacheable)
         
         
 class StateUIDGenerator(object):

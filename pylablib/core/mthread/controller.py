@@ -93,7 +93,7 @@ class IThreadController(object):
         Wait for a message with given `tags` and satisfying the filter `filt`.
 
         if `exhaust` is ``True``, returns list of all messages satisfying `filt`, if several of them are available immediately.
-        if `discard_on_timeout` is ``True`` and the wait timed out, mark the message for discarding using `filt` (see :func:`.tag_queue.TaggedQueue.get`).
+        if `discard_on_timeout` is ``True`` and the wait timed out, mark the message for discarding using `filt` (see :meth:`.tag_queue.TaggedQueue.get`).
 
         Called from the controlled thread.
         """
@@ -236,8 +236,8 @@ class IThreadController(object):
         """
         Start the current controller in the current non-controlled thread.
 
-        If `stop_after_run` is ``True``, the controller is stopped after the :func:`run` function is done;
-        otherwise, th controller continues (e.g., :func:`run` can be empty, which means that this function simply initializes the controller).
+        If `stop_after_run` is ``True``, the controller is stopped after the :meth:`run` function is done;
+        otherwise, th controller continues (e.g., :meth:`run` can be empty, which means that this function simply initializes the controller).
         """
         with self.running_thread_lock:
             if self.running():
@@ -364,7 +364,7 @@ class IThreadController(object):
         """
         Check if the thread passed the given `stage`.
 
-        For stage description, see :func:`current_stage`.
+        For stage description, see :meth:`current_stage`.
 
         Called from any thread.
         """
@@ -426,8 +426,8 @@ class SimpleThreadController(IThreadController):
 
     Args:
         name(str): thread name (can be used to, e.g., get the controller from a different thread).
-        job(Callable): function to be executed in the thread.
-        cleanup(Callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
+        job(callable): function to be executed in the thread.
+        cleanup(callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
         args(list): arguments for `job` and `cleanup` functions.
         kwargs(dict): keyword arguments for `job` and `cleanup` functions.
         self_as_arg(bool): if ``True``, pass this controller as a first argument to the `job` and `cleanup` functions.
@@ -453,13 +453,13 @@ class ServiceThreadController(IThreadController):
     """
     Service thread.
 
-    Receives and processes messages, and replies using a :func:`reply` function.
+    Receives and processes messages, and replies using a ``reply`` function.
 
     Args:
         name(str): thread name (can be used to, e.g., get the controller from a different thread).
-        reply(Callable): message processing function; if it returns a tuple, interpret it as tag and value for a reply message.
-        setup(Callable): if not ``None``, function to be called when the thread is starting.
-        cleanup(Callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
+        reply(callable): message processing function; if it returns a tuple, interpret it as tag and value for a reply message.
+        setup(callable): if not ``None``, function to be called when the thread is starting.
+        cleanup(callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
         args(list): arguments for `reply`, `startup` and `cleanup` functions.
         kwargs(dict): keyword arguments for `reply`, `startup` and `cleanup` functions.
         stopped_recipient_action(str): action to take if the reply recipient has stopped;
@@ -500,10 +500,10 @@ class RepeatingThreadController(IThreadController):
 
     Args:
         name(str): thread name (can be used to, e.g., get the controller from a different thread).
-        job(Callable): periodically called function.
+        job(callable): periodically called function.
         delay(float): calling period.
-        setup(Callable): if not ``None``, function to be called when the thread is starting.
-        cleanup(Callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
+        setup(callable): if not ``None``, function to be called when the thread is starting.
+        cleanup(callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
         args(list): arguments for `job`, `startup` and `cleanup` functions.
         kwargs(dict): keyword arguments for `job`, `startup` and `cleanup` functions.
         self_as_arg(bool): if ``True``, pass this controller as a first argument to the `job` and `cleanup` functions.
@@ -681,9 +681,9 @@ class TimerThreadController(RepeatingThreadController):
 
     Args:
         period(float): calling period.
-        callpack(Callable): periodically called function.
-        setup(Callable): if not ``None``, function to be called when the thread is starting.
-        cleanup(Callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
+        callback(callable): periodically called function.
+        setup(callable): if not ``None``, function to be called when the thread is starting.
+        cleanup(callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
         name(str): thread name (can be used to, e.g., get the controller from a different thread). By default, a unique identifier.
     """
     def __init__(self, period, callback, setup=None, cleanup=None, name=None):

@@ -260,7 +260,7 @@ class IFileSystemDataLocation(IDataLocation):
         """
         Open a location file.
         
-        See :func:`IDataLocation.open_file` for arguments.
+        See :meth:`IDataLocation.open_file` for arguments.
         """
         if mode=="read":
             s=self._open_file_stream("r",name,data_type)
@@ -315,7 +315,7 @@ class PrefixedFileSystemDataLocation(IFileSystemDataLocation):
     
     Args:
         file_path (str): A master path. Its name is used as a prefix, and its extension is used as a default.
-        prefix_template (str): A :func:`format` string for generating prefixed files. Has two arguments:
+        prefix_template (str): A :meth:`str.format` string for generating prefixed files. Has two arguments:
             the first is the master name, the second is the sub_location.
     
     Multi-level paths translate into nested folders (the top level folder is combined from the `file_path` prefix and the first path entry).

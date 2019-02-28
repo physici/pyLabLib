@@ -124,7 +124,7 @@ def sort_by(wf, x_column=None, reverse=False, stable=False):
     """
     Sort 2D array using selected column as a key and preserving rows.
     
-    If ``reverse==True``, sort in descending order. `x_column` values are described in :func:`get_x_column`.
+    If ``reverse==True``, sort in descending order. `x_column` values are described in :func:`.waveforms.get_x_column`.
     If ``stable==True``, use stable sort (could be slower and uses more memory)
     """
     x_column=get_x_column(wf,x_column)
@@ -466,7 +466,7 @@ def _cut_to_range(wf, xs_range, x_column=None, ordered=False):
     Cut the waveform to the given range based on `x_column`.
     
     The range is defined as ``xs_range[0]:xs_range[1]``, or infinite if ``xs_range=None``.
-    `x_column` is used to determine which colmn's values to use to check if the point is in range (see :func:`get_x_column`).
+    `x_column` is used to determine which colmn's values to use to check if the point is in range (see :func:`.waveforms.get_x_column`).
     If ``ordered_x==True``, then the function assumes that `x_column` in ascending order.
     """
     x_column=get_x_column(wf,x_column)
@@ -480,7 +480,7 @@ def _cut_out_regions(wf, regions, x_column=None, ordered=False, multi_pass=True)
     """
     Cut the regions out of the `wf` based on `x_column`.
     
-    `x_column` is used to determine which colmn's values to use to check if the point is in range (see :func:`get_x_column`).
+    `x_column` is used to determine which colmn's values to use to check if the point is in range (see :func:`.waveforms.get_x_column`).
     If ``ordered_x==True``, then the function assumes that `x_column` in ascending order.
     If ``multi_pass==False``, combine all indices before deleting the data in a single operation (works faster, but only for non-intersecting regions). 
     """

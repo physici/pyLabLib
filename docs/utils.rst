@@ -6,7 +6,7 @@ Utilities
 Multi-level dictionary
 ----------------------
 
-:class:`Dictionary` is an expansion of the standard `dict` class which supports tree structures (nested dictionaries). The extensions include:
+:class:`.dictionary.Dictionary` is an expansion of the standard `dict` class which supports tree structures (nested dictionaries). The extensions include:
 
 - handling multi-level paths and nested dictionaries, with several different indexing methods
 - iteration over the immediate branches, or over the whole tree structure

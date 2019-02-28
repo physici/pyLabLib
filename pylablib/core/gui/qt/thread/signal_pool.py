@@ -83,7 +83,7 @@ class SignalPool(object):
             limit_period(float): limits the minimal time between two call to the subscribed callback
                 (if the signal is sent less than `limit_period` after the previous signal, ignore it).
             call_tag(str or None): tag used for the synchronized call; by default, use the interrupt call (which is the default of ``call_in_thread``).
-            add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`synchronizing.TSignalSynchronizerInfo` for details).
+            add_call_info(bool): if ``True``, add a fourth argument containing a call information (see :class:`.TSignalSynchronizerInfo` for details).
             id(int): subscription ID (by default, generate a new unique name).
 
         Returns:

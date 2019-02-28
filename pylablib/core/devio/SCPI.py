@@ -19,9 +19,9 @@ class SCPIDevice(backend_module.IBackendWrapper):
         - implements automatic re-sending and reconnecting on communication failures (fail-safe mode)
     
     Args:
-        conn: Connection parameters (depend on the backend). Can also be an opened :class:`backend.IDeviceBackend` class for a custom backend.
+        conn: Connection parameters (depend on the backend). Can also be an opened :class:`.backend.IDeviceBackend` class for a custom backend.
         term_write (str): Line terminator for writing operations.
-        wait_callback (Callable): A function to be called periodically (every 300ms by default) while waiting for operations to complete.
+        wait_callback (callable): A function to be called periodically (every 300ms by default) while waiting for operations to complete.
         backend (str): Connection backend (``'serial'`` or ``'visa'``).
         failsafe (bool): If ``True``, the device is working in a fail-safe mode:
             if an operation times out, attempt to repeat it several times before raising error.
@@ -39,7 +39,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
     _default_operation_cooldown=0.00 # operation cooldown (see backend description)
     _default_wait_callback_timeout=.3 # callback call period during wait operations (keeps the thread from complete halting)
     _default_failsafe=False # running in the failsafe mode by default
-    _allow_concatenate_write=True # allow automatic concatenation of several write operations (see :func:`using_write_buffer`)
+    _allow_concatenate_write=True # allow automatic concatenation of several write operations (see :meth:`using_write_buffer`)
     def __init__(self, conn, term_write=None, term_read=None, wait_callback=None, backend="visa", failsafe=None, timeout=None, backend_params=None):
         self._wait_sync_timeout=self._default_wait_sync_timeout
         failsafe=self._default_failsafe if failsafe is None else failsafe
@@ -107,8 +107,8 @@ class SCPIDevice(backend_module.IBackendWrapper):
         """
         Context manager for using a write buffer.
         
-        While it's active, all the consecutive :func:`write` operations are bundled together with ``;`` delimiter.
-        The actual write is performed at the :func:`read`/:func:`query` operation or at the end of the block.
+        While it's active, all the consecutive :meth:`write` operations are bundled together with ``;`` delimiter.
+        The actual write is performed at the :meth:`read`/:meth:`ask` operation or at the end of the block.
         """
         self._concatenate_write=self._concatenate_write+1
         try:
@@ -226,7 +226,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
         """
         Pause execution until device overlapped commands are complete.
         
-        `wait_type` is either ``'sync'`` (perform :func:`wait_sync`), ``'dev'`` (perform :func:`wait_dev`) or ``'none'`` (do nothing).
+        `wait_type` is either ``'sync'`` (perform :meth:`wait_sync`), ``'dev'`` (perform :meth:`wait_dev`) or ``'none'`` (do nothing).
         """
         if wait_type=="sync":
             self.wait_sync(timeout=timeout,wait_callback=wait_callback)
@@ -278,7 +278,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
             arg_type (str): Argument type. Can be ``'raw'`` (in which case data is sent raw), ``'string'``, ``'int'``, ``'float'``,
                 ``'bool'`` or ``'value'``.
             unit (str): If ``arg_type=='value'``, use it as a unit to append after the value.
-            fmt (str): If not ``None``, is a :func:`format` string to convert arg.
+            fmt (str): If not ``None``, is a :meth:`str.format` string to convert arg.
             bool_selector (tuple): A tuple ``(false_value, true_value)`` of two strings to represent bool argument.
             read_echo (bool): If ``True``, read a single line after write.
             read_echo_delay (float): The delay between write and read if ``read_echo==True``.
@@ -333,7 +333,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
         """
         Write a message and read a reply.
         
-        `msg` is the query message, `delay` is the delay between write and read. Other parameters are the same as in :func:`read`.
+        `msg` is the query message, `delay` is the delay between write and read. Other parameters are the same as in :meth:`read`.
         If ``read_echo==True``, assume that the device first echoes the input and skip it.
         """
         for t in general_utils.RetryOnException(self._retry_times,exceptions=ValueError):
@@ -369,7 +369,7 @@ class SCPIDevice(backend_module.IBackendWrapper):
     @staticmethod
     def parse_trace_data(data, fmt):
         """
-        Parse the data returned by the device. `fmt` is :class:`~data_format.DataFormat` description.
+        Parse the data returned by the device. `fmt` is :class:`.DataFormat` description.
         
         The data is assumed to be in a (somewhat) standard SCPI format:
         ``'#'``, then a single digit ``s`` denoting length of the size block,

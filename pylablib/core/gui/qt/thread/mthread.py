@@ -80,7 +80,7 @@ def call_in_gui_thread(func, args=None, kwargs=None, to_return="result", note=No
 
     `to_return` specifies the return value parameters:
         - ``"none"``: execute immediately, return nothing, no synchronization is performed;
-        - ``"syncher"``: execute immediately, return a synchronizer object (:class:`.sync_primitives.ValueSynchronizer`),
+        - ``"syncher"``: execute immediately, return a synchronizer object (:class:`.ValueSynchronizer`),
             which can be used to check if the execution is done and to obtain the result.
         - ``"result"``: pause until the function has been executed, return the result. Mostly equivalent to a simple function call.
 
@@ -125,8 +125,8 @@ class GUIThreadController(controller.IThreadController):
 
     Args:
         name(str): thread name (can be used to, e.g., get the controller from a different thread).
-        setup(Callable): if not ``None``, function to be called when the thread is starting.
-        cleanup(Callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
+        setup(callable): if not ``None``, function to be called when the thread is starting.
+        cleanup(callable): if not ``None``, function to be called when the thread is stopped (regardless of the stopping reason).
 
     Any thread creation and synchronization should be done after the controller has started, hence, it should be put into the `setup` function.
     """

@@ -143,7 +143,7 @@ class DataFormat(object):
         """
         Convert the array into a string data.
         
-        `ascii_format` is the :func:`format` string for textual representation.
+        `ascii_format` is the :meth:`str.format` string for textual representation.
         """
         if self.is_ascii():
             fmt="{:"+ascii_format+"}"

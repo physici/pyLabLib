@@ -14,7 +14,7 @@ def interpolate1D_func(x, y, kind="linear", axis=-1, copy=True, bounds_error=Tru
     """
     1D interpolation.
     
-    Simply a wrapper around :func:`scipy.interpolate.interp1d`.
+    Simply a wrapper around :class:`scipy.interpolate.interp1d`.
 
     Args:
         x: 1D arrays of x coordinates for the points at which to find the values.

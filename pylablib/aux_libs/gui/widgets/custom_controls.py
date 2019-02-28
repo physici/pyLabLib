@@ -9,7 +9,7 @@ class BinROICtl(QtWidgets.QWidget):
     """
     Class for ROI control.
 
-    Has 2 rows (for X and Y coordiantes), each with 3 numerical edits: min, max (or width, depedning on :func:`SetupUi` parameters), and bin.
+    Has 2 rows (for X and Y coordiantes), each with 3 numerical edits: min, max (or width, depedning on :func:`setupUi` parameters), and bin.
 
     Like most widgets, requires calling :meth:`setupUi` to set up before usage.
 

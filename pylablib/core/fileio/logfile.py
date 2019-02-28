@@ -11,7 +11,7 @@ class LogFile(object):
     
     Args:
         path (str): Path to the destination file.
-        default_fmt (list): If not ``None``, it's a defult value of `fmt` for :func:`write_dataline` method. 
+        default_fmt (list): If not ``None``, it's a defult value of `fmt` for :meth:`write_dataline` method. 
     """
     def __init__(self, path, default_fmt=None):
         object.__init__(self)
@@ -58,7 +58,7 @@ class LogFile(object):
         Create the file if it doesn't exist.
         
         Args:
-            data (list or np.ndarray): Data row to be added.
+            data (list or numpy.ndarray): Data row to be added.
             columns (list): If not ``None``, it's a list of column names to be added as a header on creation.
             fmt (str): If not ``None``, it's a list of format strings for the line entries.
             add_timestamp (bool): If ``True``, add the UNIX timestamp in the beginning of the line.\
@@ -71,7 +71,7 @@ class LogFile(object):
         Create the file if it doesn't exist.
         
         Args:
-            data (list of lists): Data rows to be added.
+            data ([list]): Data rows to be added.
             columns (list): If not ``None``, it's a list of column names to be added as a header on creation.
             fmt (str): If not ``None``, it's a list of format strings for the line entries.
             add_timestamp (bool): If ``True``, add the UNIX timestamp in the beginning of the line.\

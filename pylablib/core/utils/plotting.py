@@ -16,12 +16,12 @@ class IRecurrentPlot(object):
     
     Can be used to plot multiple similar datasets in the same plot.
     
-    First ploting call creates figure and axes (calling :func:`plot_prepare` method);
-    all consecutive calls only change the data (calling :func:`call_next` method).
+    First ploting call creates figure and axes (calling :meth:`plot_prepare` method);
+    all consecutive calls only change the data (calling :meth:`plot_next` method).
     This way the figure is preserved between the plotting calls, which decreases resource consumption and minimizes matplotlib memory leaks.
     
     Args:
-        fig (matplotlib.Figure): If not ``None``, the figure to use for plotting.
+        fig (matplotlib.figure.Figure): If not ``None``, the figure to use for plotting.
         auto_clear (bool): If ``True``, clear plot (empty data) before each subsequent plotting.
         auto_relim (bool): If ``True``, rescale plot after each plotting.
         auto_layout (bool): If ``True``, call `tight_layout` after each plotting.
@@ -87,7 +87,7 @@ class IRecurrentPlot(object):
         """
         Plot the data.
         
-        The supplied arguments are redirected to the overloaded methods :func:`plot_prepare` and :func:`plot_next`.
+        The supplied arguments are redirected to the overloaded methods :meth:`plot_prepare` and :meth:`plot_next`.
         """
         self.setup_prepare(*args,**kwargs)
         if self.auto_clear:
@@ -104,7 +104,7 @@ class IRecurrentPlot(object):
         """
         Save the figure to the location defined by `path`.
         
-        Arguments are passed to :func:`matplotlib.Figure.savefig`.
+        Arguments are passed to :meth:`matplotlib.figure.Figure.savefig`.
         """
         if self.fig is not None:
             self.fig.savefig(path,*args,**kwargs)
@@ -140,7 +140,7 @@ class GenericPlotter(IRecurrentPlot):
             can be either a single float (all axes have the same scale)
             or list of floats with length `axes_num` (all plots in the same axes have the same scale)
             or list of lists of floats (specifies scale for each line in each plot separately)
-        fig (matplotlib.Figure): If not ``None``, the figure to use for plotting.
+        fig (matplotlib.figure.Figure): If not ``None``, the figure to use for plotting.
     """
     def __init__(self, axes_num=1, plots_num=1, axes_names=None, log_x=False, log_y=False, xlabel="", ylabel="", legend=None, xscale=1., yscale=1., fig=None):
         IRecurrentPlot.__init__(self,fig=fig)
@@ -241,7 +241,7 @@ def plot_func(func, rng, *args, **kwargs):
     Plot a callable function over a given range.
 
     `rng` is a tuple `(start, stop, points_number)` passed to :func:`numpy.linspace` to generate plot points.
-    The rest of the arguments is the same as in :func:`matplotlib.plot`.
+    The rest of the arguments is the same as in :func:`matplotlib.pyplot.plot`.
     """
     xs=np.linspace(*rng)
     mpl.plot(xs,func(xs),*args,**kwargs)

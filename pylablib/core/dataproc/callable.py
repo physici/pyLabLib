@@ -109,11 +109,11 @@ class MultiplexedCallable(ICallable):
     (if return the values are scalar, they're joined in 1D array; otherwise, they're joined using `join_method`).
     
     Args:
-        func (Callable): Function to be parallelized.
+        func (callable): Function to be parallelized.
         multiplex_by (str): Name of the argument to be multiplexed by.
         join_method (str): Method for combining individual results together if they're non-scalars.
             Can be either ``'list'`` (combine the results in a single list),
-            ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result),
+            ``'stack'`` (combine using :func:`numpy.column_stack`, i.e., add dimension to the result),
             or ``'concatenate'`` (concatenate the return values; the dimension of the result stays the same).
     
     Multiplexing also makes use of call signatures for underlying function even if ``__call__`` is used.
@@ -186,10 +186,10 @@ class JoinedCallable(ICallable):
     (if return the values are scalar, they're joined in 1D array; otherwise, they're joined using `join_method`).
     
     Args:
-        funcs ([Callable]): List of functions to be joined together.
+        funcs ([callable]): List of functions to be joined together.
         join_method (str): Method for combining individual results together if they're non-scalars.
             Can be either ``'list'`` (combine the results in a single list),
-            ``'stack'`` (combine using :func:`numpy.columns_stack`, i.e., add dimension to the result),
+            ``'stack'`` (combine using :func:`numpy.column_stack`, i.e., add dimension to the result),
             or ``'concatenate'`` (concatenate the return values; the dimension of the result stays the same).
     """
     def __init__(self, funcs, join_method="stack"):
@@ -236,7 +236,7 @@ class FunctionCallable(ICallable):
     
     Args:
         func: Function to be wrapped.
-        function_signature: A :class:`~core.utils.functions.Functionsignature` object supplying information
+        function_signature: A :class:`~.functions.FunctionSignature` object supplying information
             about function's argument names and default values, if they're different from what's extracted from its signature.
         defaults (dict): A dictionary ``{name: value}`` of additional default parameters values. Override the defaults from the signature.
             All default values must be pass-able to the function as a parameter
@@ -366,7 +366,7 @@ class MethodCallable(FunctionCallable):
     
     Args:
         method: Method to be wrapped.
-        function_signature: A :class:`~core.utils.functions.Functionsignature` object supplying information
+        function_signature: A :class:`~.FunctionSignature` object supplying information
             about function's argument names and default values, if they're different from what's extracted from its signature.
             If it's assumed that the first self argument is already excluded.
         defaults (dict): A dictionary ``{name: value}`` of additional default parameters values. Override the defaults from the signature.
@@ -375,7 +375,7 @@ class MethodCallable(FunctionCallable):
             Original argument names can't be used if aliased (though, multi-aliasing can be used explicitly, e.g., ``alias={'alias':'arg','arg':'arg'}``).
             A name can be blocked (its usage causes error) if it's aliased to None (``alias={'blocked_name':None}``).
             
-    This callable is implemented largely to be used with :class:`~core.theory.calculator.TheoryCalculator`.
+    This callable is implemented largely to be used with ``TheoryCalculator`` class (currently deprecated).
     """
     def __init__(self, method, function_signature=None, defaults=None, alias=None):
         if method.__self__ is None:

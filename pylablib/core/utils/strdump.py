@@ -15,7 +15,7 @@ class StrDumper(object):
     Class for dumping and loading an object.
     
     Stores procedures for dumping and loading, i.e.,
-    conversion from complex classes (such as :class:`~core.utils.dictionary.Dictionary`) to simple built-in classes (such as :class:`dict` or :class:`str`).
+    conversion from complex classes (such as :class:`.Dictionary`) to simple built-in classes (such as :class:`dict` or :class:`str`).
     """
     def __init__(self):
         object.__init__(self)
@@ -29,8 +29,8 @@ class StrDumper(object):
         
         Args:
             cls
-            dumpf (Callable): Function for dumping an object of the class; ``None`` means identity function.
-            loadf (Callable): Function for loading an object of the class; ``None`` means identity function.
+            dumpf (callable): Function for dumping an object of the class; ``None`` means identity function.
+            loadf (callable): Function for loading an object of the class; ``None`` means identity function.
             name (str): Name of class, which is stored in the packed data (``cls.__name__`` by default).
             allow_subclass (bool): If ``True``, this rule is also used for subclasses of this class.
             recursive (bool): If ``True``, the functions are given a second argument, which is a dumping/loading function for their sub-elements.
@@ -129,9 +129,9 @@ dumper=StrDumper()
 """
 Default dumper for converting  into standard Python classes and pickling.
 
-Converts :class:`numpy.ndarray`, :class:`~core.utils.dictionary.Dictionary` and :class:`~core.datatable.table.DataTable` objects
+Converts :class:`numpy.ndarray`, :class:`.Dictionary` and :class:`.DataTable` objects
 (these conversion routines are defined when corresponding modules are imported).
-The converted values include non-printable characters (conversion uses :func:`numpy.loads` and :func:`numpy.dumps`),
+The converted values include non-printable characters (conversion uses :func:`numpy.ma.loads` and :func:`numpy.ma.dumps`),
 so they can't be saved into text files. However, they're suited for pickling.
 """
 

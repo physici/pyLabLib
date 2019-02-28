@@ -102,7 +102,7 @@ class MessageQueue(object):
         `interrupt_check` is an interrupt filter function, which pre-processes the message and return ``True`` if it was an interrupt
         (in which case the waiting continues). 
         if `exhaust` is ``True``, returns list of all messages satisfying `filt`, if several of them are available immediately.
-        if `discard_on_timeout` is ``True`` and the wait timed out, mark the message for discarding using `discard_filt` (see :func:`.tag_queue.TaggedQueue.get`).
+        if `discard_on_timeout` is ``True`` and the wait timed out, mark the message for discarding using `discard_filt` (see :meth:`.tag_queue.TaggedQueue.get`).
 
         Called from the receiver thread.
         """
@@ -121,21 +121,21 @@ class MessageQueue(object):
         """
         Clear the queue.
 
-        See :func:`.tag_queue.TaggedQueue.clear`
+        See :meth:`.tag_queue.TaggedQueue.clear`
         """
         self.queue.clear(notify_all,ignore_exceptions,mark_broken)
     def broken(self):
         """
         Check if the queue is broken.
 
-        See :func:`.tag_queue.TaggedQueue.broken`
+        See :meth:`.tag_queue.TaggedQueue.broken`
         """
         return self.queue.broken()
     def fix(self):
         """
         Fix broken queue.
 
-        See :func:`.tag_queue.TaggedQueue.fix`
+        See :meth:`.tag_queue.TaggedQueue.fix`
         """
         return self.queue.fix()
     
@@ -146,7 +146,7 @@ def send_message(dest, tag, value=None, priority=0, schedule_sync="wait", receiv
     """
     Send a message to the thread `dest` from the current thread.
 
-    See :func:`MessageQueue.add_message`.
+    See :meth:`MessageQueue.add_message`.
     """
     try:
         dest=threadprop.as_controller(dest)
@@ -160,13 +160,13 @@ def exhaust_messages(tags=None, filt=None):
     """
     Exhaust messages for the current thread.
 
-    See :func:`MessageQueue.exhaust_messages`.
+    See :meth:`MessageQueue.exhaust_messages`.
     """
     return threadprop.current_controller(True).exhaust_messages(tags=tags,filt=filt)
 def wait_for_message(tags=None, timeout=None, filt=None, exhaust=False, discard_on_timeout=False):
     """
     Wait for a message for the current thread.
 
-    See :func:`MessageQueue.wait_for_message`.
+    See :meth:`MessageQueue.wait_for_message`.
     """
     return threadprop.current_controller(True).wait_for_message(tags=tags,timeout=timeout,filt=filt,exhaust=exhaust,discard_on_timeout=discard_on_timeout)

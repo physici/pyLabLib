@@ -99,7 +99,7 @@ class ImageView(QtWidgets.QWidget):
     """
     Image view object.
 
-    Built on top of PyQtGraph ImageView class.
+    Built on top of :class:`pyqtgraph.ImageView` class.
 
     Args:
         parent: parent widget
@@ -158,7 +158,7 @@ class ImageView(QtWidgets.QWidget):
         """
         Attach :class:`ImageViewController` object.
 
-        Called automatically in :meth:`ImageViewController.SetupUi`
+        Called automatically in :meth:`ImageViewController.setupUi`
         """
         self.ctl=ctl
     def _get_params(self):

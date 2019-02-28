@@ -43,7 +43,7 @@ class ClientSocket(object):
     Args:
         sock (socket.socket): If not ``None``, use already created socket.
         timeout (float): The timeout used for connecting and sending/receiving (``None`` means no timeout).
-        wait_callback (Callable): Called periodically (every 100ms by default) while waiting for connecting or sending/receiving.
+        wait_callback (callable): Called periodically (every 100ms by default) while waiting for connecting or sending/receiving.
         send_method (str): Default sending method.
         recv_method (str): Default receiving method.
         datatype (str): Type of the returned data; can be ``"bytes"`` (return `bytes` object), ``"str"`` (return `str` object),
@@ -311,11 +311,11 @@ def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=No
     Args:
         host (str): Server host address. If ``None``, use the local host defined by :func:`socket.gethostname`.
         port (int): Server port. If ``0``, generate an arbitrary free port.
-        conn_func (Callable): Called with the client socket as a single argument every time a connection is established.
-        port_func (Callable): Called with the port as a single argument when the listening starts (useful with ``port=0``).
-        wait_callback (Callable): A callback function which is called periodically (every 100ms by default) while awaiting for connections.
+        conn_func (callable): Called with the client socket as a single argument every time a connection is established.
+        port_func (callable): Called with the port as a single argument when the listening starts (useful with ``port=0``).
+        wait_callback (callable): A callback function which is called periodically (every 100ms by default) while awaiting for connections.
         timeout (float): Timeout for waiting for the connections (``None`` is no timeout).
-        backlog (int): Backlog length for the socket (see :func:`socket.socket.listen`).
+        backlog (int): Backlog length for the socket (see :meth:`socket.socket.listen`).
         wrap_socket (bool): If ``True``, wrap the client socket of the connection into :class:`ClientSocket` class;
             otherwise, return :class:`socket.socket` object.
         connections_number (int): Specifies maximal number of connections before the listening function returns (by default, the number is unlimited).

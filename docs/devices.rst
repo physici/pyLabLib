@@ -91,7 +91,7 @@ Agilent AMP33502A                      DC amplifier                      :mod:`A
 Rigol DSA1030A                         Microwave spectrum analyzer       :mod:`Rigol <pylablib.aux_libs.devices.Rigol>`
 Agilent HP8712B, HP8722D               Vector network analyzers          :mod:`AgilentElectronics <pylablib.aux_libs.devices.AgilentElectronics>`
 Tektronix DPO2014, TDS2000, MDO3000    Oscilloscopes                     :mod:`Tektronix <pylablib.aux_libs.devices.Tektronix>`
-NI DAQ interface                       NI DAQ devices                    :mod:`NI <pylablib.aux_libs.devices.NI>`                                             Wrapper around the :mod:`nidaqmx` package. Tested with NI USB-6008 and NI PCIe-6323
+NI DAQ interface                       NI DAQ devices                    :mod:`NI <pylablib.aux_libs.devices.NI>`                                             Wrapper around the `nidaqmx <https://nidaqmx-python.readthedocs.io/en/latest/>`_ package. Tested with NI USB-6008 and NI PCIe-6323
 Zurich Instruments HF2 / UHF           Lock-in amplifiers                :mod:`ZurichInstruments <pylablib.aux_libs.devices.ZurichInstruments>`
 Arcus PerforMax                        Translation stage                 :mod:`Arcus <pylablib.aux_libs.devices.Arcus>`                                       Tested with PMX-4EX-SA stage.
 SmarAct SCU3D                          Translation stage                 :mod:`SmarAct <pylablib.aux_libs.devices.SmarAct>`
@@ -113,7 +113,7 @@ All the modules are located in :mod:`pylablib.aux_libs.devices`.
 Additional requirements
 ------------------------
 
-First, any device using :mod:`PyVISA` require NI VISA to be installed. See :mod:`PyVISA` for details.
+First, any device using ``PyVISA`` require NI VISA to be installed. See `PyVISA <https://pyvisa.readthedocs.io/en/master/>`_ for details.
 
 Second, some devices need dlls supplied by the manufacturer:
 

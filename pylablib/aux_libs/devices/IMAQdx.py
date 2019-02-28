@@ -237,7 +237,7 @@ class IMAQdxCamera(interface.IDevice):
         """
         Get values of all attributes with the given `root`.
 
-        If ``as_dict==True``, return ``dict`` object; otherwise, return :class:`Dictionary` object.
+        If ``as_dict==True``, return ``dict`` object; otherwise, return :class:`.Dictionary` object.
         """
         settings=self.attributes[root].copy().filter_self(lambda a: a.readable).map_self(lambda a: a.get_value())
         return settings.as_dict(style="flat") if as_dict else settings
@@ -322,7 +322,7 @@ class IMAQdxCamera(interface.IDevice):
         Setup acquisition mode.
 
         `continuous` determines whether acquisition runs continuously, or stops after the given number of frames
-        (note that :meth:`acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
+        (note that :meth:`.IMAQdxCamera.acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
         """
         lib.IMAQdxConfigureAcquisition(self.sid,continuous,frames)
@@ -401,9 +401,9 @@ class IMAQdxCamera(interface.IDevice):
 
         `since` specifies what constitutes a new frame.
         Can be ``"lastread"`` (wait for a new frame after the last read frame),
-        ``"lastwait"`` (wait for a new frame after last :func:`wait_for_frame` call),
+        ``"lastwait"`` (wait for a new frame after last :meth:`wait_for_frame` call),
         or ``"now"`` (wait for a new frame acquired after this function call).
-        If `timeout` is exceeded, raise :exc:`IMAQdxError`.
+        If `timeout` is exceeded, raise :exc:`.IMAQdxGenericError`.
         `period` specifies camera polling period.
         """
         ctd=general.Countdown(timeout)
@@ -482,7 +482,7 @@ class IMAQdxPhotonFocusCamera(IMAQdxCamera):
         Setup acquisition mode.
 
         `continuous` determines whether acquisition runs continuously, or stops after the given number of frames
-        (note that :meth:`acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
+        (note that :meth:`IMAQdxCamera.acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
         """
         IMAQdxCamera.setup_acquisition(self,continuous,frames)

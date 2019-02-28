@@ -319,7 +319,7 @@ class IMAQCamera(interface.IDevice):
         Setup acquisition mode.
 
         `continuous` determines whether acquisition runs continuously, or stops after the given number of frames
-        (note that :meth:`acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
+        (note that :meth:`.IMAQCamera.acquisition_in_progress` would still return ``True`` in this case, even though new frames are no longer acquired).
         `frames` sets up number of frame buffers.
         If ``start==True``, start acquisition directly after setup.
         """
@@ -417,9 +417,9 @@ class IMAQCamera(interface.IDevice):
 
         `since` specifies what constitutes a new frame.
         Can be ``"lastread"`` (wait for a new frame after the last read frame),
-        ``"lastwait"`` (wait for a new frame after last :func:`wait_for_frame` call),
+        ``"lastwait"`` (wait for a new frame after last :meth:`wait_for_frame` call),
         or ``"now"`` (wait for a new frame acquired after this function call).
-        If `timeout` is exceeded, raise :exc:`IMAQdxError`.
+        If `timeout` is exceeded, raise :exc:`.IMAQLibError`.
         `period` specifies camera polling period.
         """
         if not self.acquisition_in_progress():
@@ -488,7 +488,7 @@ class IMAQCamera(interface.IDevice):
 
         If ``peek==True``, return images but not mark them as read.
         `missing_frame` determines what to do with frames which are out of range (missing or lost):
-        can be ``"none"`` (replacing them with ``None``), ``"zero"`` (same as ``None``, added for compatibility with :func:`read_multiple_images`),
+        can be ``"none"`` (replacing them with ``None``), ``"zero"`` (same as ``None``, added for compatibility with :meth:`read_multiple_images`),
         or ``"skip"`` (skipping them).
         """
         if not self._buffers:
@@ -519,7 +519,7 @@ class IMAQCamera(interface.IDevice):
         Some frames in the result are "stuck together" in a single buffer, if their memory locations are continuous.
         Return list ``[(number_of_frames, raw_data)]``, where `number_of_frames` specifies number of frames in a given array element,
         and `raw_data` is the binary string corresponding to these frames (of the size ``self._frame_size*number_returned``).
-        Compared to :func:`_read_multiple_images_raw`, always assumes ``peek==False`` and ``missing_frame="skip"`` (default values).
+        Compared to :meth:`_read_multiple_images_raw`, always assumes ``peek==False`` and ``missing_frame="skip"`` (default values).
 
         Function exists only to speed up reading of large number of small frames.
         """
@@ -574,7 +574,7 @@ class IMAQCamera(interface.IDevice):
         Some frames in the result are "stuck together" in a single buffer, if their memory locations are continuous.
         Return list ``[(number_of_frames, raw_data)]``, where `number_of_frames` specifies number of frames in a given array element,
         and `raw_data` is the binary string corresponding to these frames (of the size ``self._frame_size*number_returned``).
-        Compared to :func:`read_multiple_images`, always assumes ``peek==False`` and ``missing_frame="skip"`` (default values).
+        Compared to :meth:`read_multiple_images`, always assumes ``peek==False`` and ``missing_frame="skip"`` (default values).
         Also, always return frames in ``"rct"`` format (row-first indexing, going from the top).
 
         Function exists only to speed up reading of large number of small frames.

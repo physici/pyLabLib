@@ -202,7 +202,7 @@ def getargsfrom(source, **merge_params):
     Decorator factory.
     
     Returns decorator that conforms function signature to the source function.
-    ``**merge_params`` are passed to the :func:`FunctionSignature.merge` method merging wrapped and source signature.
+    ``**merge_params`` are passed to the :meth:`FunctionSignature.merge` method merging wrapped and source signature.
     
     The default behavior (conforming parameter names, default values args and kwargs names) is useful for wrapping universal functions like ``g(*args, **kwargs)``.
     
@@ -377,9 +377,9 @@ class MethodObjectProperty(IObjectProperty):
     Object property created from object methods (makes methods look like properties).
     
     Args:
-        getter (Callable): Method invoked on ``get()``. If ``None``, raise :exc:`RuntimeError` when called.
-        setter (Callable): Method invoked on ``set()``. If ``None``, raise :exc:`RuntimeError` when called.
-        remover (Callable): Method invoked on ``rem()``. If ``None``, raise :exc:`RuntimeError` when called.
+        getter (callable): Method invoked on ``get()``. If ``None``, raise :exc:`RuntimeError` when called.
+        setter (callable): Method invoked on ``set()``. If ``None``, raise :exc:`RuntimeError` when called.
+        remover (callable): Method invoked on ``rem()``. If ``None``, raise :exc:`RuntimeError` when called.
         expand_tuple (bool): If ``True`` and if the first argument in the method call is a tuple,
             expand it as an argument list for the underlying function call.
     """

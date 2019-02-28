@@ -367,7 +367,7 @@ class SilenceException(object):
     
     Args:
         exceptions (Exception or list): A single exception class or a list of exception classes which are going to be silenced.
-        on_exception (Callable): A callback to be invoked if an exception occurs.
+        on_exception (callable): A callback to be invoked if an exception occurs.
         reraise (bool): Defines if the exception is re-rased after the callback has been invoked.
         
     A simple bit of syntax sugar. The code::

@@ -73,9 +73,9 @@ class I1DWrapper(IGenWrapper):
         Build a new object of the type corresponding to the wrapper from the supplied `array` (a 1D numpy array or a list).
 
         If ``force_copy==True``, make a copy of supplied array.
-        For a :class:`Column1DWrapper`, if `column` is a list and ``force_numpy==True``, turn it into a numpy array and return :class:`ArrayDataColumn`
-        (by default lists are wrapped into :class:`ListDataColumn`).
-        For a :class:`Column1DWrapper`, if ``try_optimizing==True``, check if the column can be turned into a :class:`LinearDataColumn`.
+        For a :class:`Column1DWrapper`, if `column` is a list and ``force_numpy==True``, turn it into a numpy array and return :class:`.ArrayDataColumn`
+        (by default lists are wrapped into :class:`.ListDataColumn`).
+        For a :class:`Column1DWrapper`, if ``try_optimizing==True``, check if the column can be turned into a :class:`.LinearDataColumn`.
         If ``wrapped==True``, return a new wrapper contating the column; otherwise, just return the column.
         """
         raise NotImplementedError("I1DWrapper.from_array")
@@ -94,7 +94,7 @@ class I1DWrapper(IGenWrapper):
         """
         Return a copy of the column with the data replaced by `array`.
 
-        All of the parameters are the same as in :func:`from_array`.
+        All of the parameters are the same as in :meth:`from_array`.
         """
         return self.from_array(array, force_copy=force_copy, force_numpy=force_numpy, try_optimizing=try_optimizing, wrapped=wrapped)
     def get_type(self):
@@ -179,7 +179,7 @@ class Array1DWrapper(I1DWrapper):
 
 class Column1DWrapper(I1DWrapper):
     """
-    A wrapper for an :class:`IDataColumn` object.
+    A wrapper for an :class:`.IDataColumn` object.
 
     Provides a uniform access to basic methods of a wrapped object.
     """
@@ -236,9 +236,9 @@ class Column1DWrapper(I1DWrapper):
         Build a new object of the type corresponding to the wrapper from the supplied `array` (a 1D numpy array or a list).
 
         If ``force_copy==True``, make a copy of supplied array.
-        If `column` is a list and ``force_numpy==True``, turn it into a numpy array and return :class:`ArrayDataColumn`
-        (by default lists are wrapped into :class:`ListDataColumn`).
-        If ``try_optimizing==True``, check if the column can be turned into a :class:`LinearDataColumn`.
+        If `column` is a list and ``force_numpy==True``, turn it into a numpy array and return :class:`.ArrayDataColumn`
+        (by default lists are wrapped into :class:`.ListDataColumn`).
+        If ``try_optimizing==True``, check if the column can be turned into a :class:`.LinearDataColumn`.
         If ``wrapped==True``, return a new wrapper contating the column; otherwise, just return the column.
         """
         new_cont=column.as_column(array,force_numpy=force_numpy,force_copy=force_copy,try_linear=try_optimizing)
@@ -259,7 +259,7 @@ class Column1DWrapper(I1DWrapper):
     
 class I2DWrapper(IGenWrapper):
     """
-    A wrapper containing a 2D object (a 2D numpy array or a :class:`DataTable` object).
+    A wrapper containing a 2D object (a 2D numpy array or a :class:`.DataTable` object).
 
     Provides a uniform access to basic methods of a wrapped object.
     """
@@ -297,7 +297,7 @@ class I2DWrapper(IGenWrapper):
         """
         Return a copy of the column with the data replaced by `array`.
 
-        All of the parameters are the same as in :func:`from_array`.
+        All of the parameters are the same as in :meth:`from_array`.
         """
         return self.from_array(array, self.c.get_names(), force_copy=force_copy, wrapped=wrapped)
     def get_type(self):
@@ -310,7 +310,7 @@ class I2DWrapper(IGenWrapper):
         """
         Get a column at index `idx`.
 
-        Return a 1D numpy array for a 2D numpy array object, and an :class:`IDataColumn` object for a :class:`DataTable`.
+        Return a 1D numpy array for a 2D numpy array object, and an :class:`.IDataColumn` object for a :class:`.DataTable`.
         If ``wrapped==True``, return a new wrapper contating the column; otherwise, just return the column.
         """
         raise NotImplementedError("I2DWrapper.column")
@@ -458,7 +458,7 @@ class Array2DWrapper(I2DWrapper):
     class TableAccessor(object):
         """
         A table accessor: acessing the table data through this interface returns an object of the appropriate type
-        (numpy array for numpy wrapped object, and :class:`DataTable` for :class:`DataTable` wrapped object).
+        (numpy array for numpy wrapped object, and :class:`.DataTable` for :class:`.DataTable` wrapped object).
 
         Generated automatically for each table on creation, doesn't need to be created explicitly.
         """
@@ -517,7 +517,7 @@ class Array2DWrapper(I2DWrapper):
 
 class Table2DWrapper(I2DWrapper):
     """
-    A wrapper for a :class:`DataTable` object.
+    A wrapper for a :class:`.DataTable` object.
 
     Provides a uniform access to basic methods of a wrapped object.
     """
@@ -648,7 +648,7 @@ class Table2DWrapper(I2DWrapper):
     class TableAccessor(object):
         """
         A table accessor: acessing the table data through this interface returns an object of the appropriate type
-        (numpy array for numpy wrapped object, and :class:`DataTable` for :class:`DataTable` wrapped object).
+        (numpy array for numpy wrapped object, and :class:`.DataTable` for :class:`.DataTable` wrapped object).
 
         Generated automatically for each table on creation, doesn't need to be created explicitly.
         """
@@ -664,14 +664,14 @@ class Table2DWrapper(I2DWrapper):
     
     def subtable(self, idx, wrapped=True):
         """
-        Return a subtable at index `idx` of the appropriate type (:class:`DataTable`).
+        Return a subtable at index `idx` of the appropriate type (:class:`.DataTable`).
         
         If ``wrapped==True``, return a new wrapper contating the table; otherwise, just return the table.
         """
         return Table2DWrapper(self.cont.t[idx]) if wrapped else self.cont.t[idx]
     def column(self, idx, wrapped=True):
         """
-        Get a column at index `idx` as an :class:`IDataColumn` object.
+        Get a column at index `idx` as an :class:`.IDataColumn` object.
 
         If ``wrapped==True``, return a new wrapper contating the column; otherwise, just return the column.
         """
@@ -711,21 +711,21 @@ class Table2DWrapper(I2DWrapper):
 
 def wrap1d(container):
     """
-    Wrap a 1D container (a 1D numpy array or an :class:`IDataColumn`) into an appropriate wrapper.
+    Wrap a 1D container (a 1D numpy array or an :class:`.IDataColumn`) into an appropriate wrapper.
     """
     if isinstance(container, column.IDataColumn):
         return Column1DWrapper(container)
     return Array1DWrapper(container)
 def wrap2d(container):
     """
-    Wrap a 2D container (a 2D numpy array or a :class:`DataTable`) into an appropriate wrapper.
+    Wrap a 2D container (a 2D numpy array or a :class:`.DataTable`) into an appropriate wrapper.
     """
     if isinstance(container, datatable.DataTable):
         return Table2DWrapper(container)
     return Array2DWrapper(container)
 def wrap(container):
     """
-    Wrap container (a numpy array, an :class:`IDataColumn` or a :class:`DataTable`) into an appropriate wrapper.
+    Wrap container (a numpy array, an :class:`.IDataColumn` or a :class:`.DataTable`) into an appropriate wrapper.
     """
     if isinstance(container,IGenWrapper):
         return container

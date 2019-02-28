@@ -140,7 +140,7 @@ class TaggedQueue(object):
 
         If `timeout` is not ``None``, it determines the wait time. If it is passed before an item has been acquired, the return ``None``.
         If `discard_on_timeout` is ``True`` and `timeout` is passed, marks `discard_filt` (same as `filt` by default) for discarding;
-        this means that the next time a single message satisfying `discard_filt` is scheduled (either directly during :func:`put`, or from scheduling queue during :func:`get`),
+        this means that the next time a single message satisfying `discard_filt` is scheduled (either directly during :meth:`put`, or from scheduling queue during :meth:`get`),
         it is silently 'received' (notified of scheduling and receiving, but never explicitly passed to the destination thread).
         """
         if filt is None:
@@ -195,7 +195,7 @@ class TaggedQueue(object):
         """
         Clear the queue.
 
-        If ``notify_all==True``, behave as if all the messages are received or discarded; otherwise, just remove them silently (equivalent to :func:`remove` method).
+        If ``notify_all==True``, behave as if all the messages are received or discarded; otherwise, just remove them silently (equivalent to :meth:`remove` method).
         If ``ignore_exceptions==True``, ignore exceptions on scheduling and receiving (e.g., if the notified thread is stopped); the queue is cleaned regardless.
         If ``mark_broken==True``, mark the queue as broken (any subsequent calls to its methods raise :exc:`BrokenQueueError`).
         """
@@ -267,7 +267,7 @@ def build_filter(tags=None, filt=None, uncond_tags=None, tag_separator=None):
 
     Args:
         tags ([str]): list of prefixes that match message tags.
-        filt (Callable): an additional filter function which needs to be satisfied (checking, e.g., message content to decide if it should be extracted).
+        filt (callable): an additional filter function which needs to be satisfied (checking, e.g., message content to decide if it should be extracted).
         uncond_tags ([str]): works like tags, but independently of `filt` function (allows message even if `filt` returns ``False``).
         tag_separator (str): a separator used to divide tag levels (usually ``'.'`` or ``'/'``).
             If it's not ``None``, tags are matched only either exactly, or if they're followed by tag separator (i.e., each tag level is treated as an indivisible word).

@@ -85,8 +85,8 @@ class IMessageLogAction(ILogAction):
     Operation performed on the text is defined in subclass by overloading :meth:`report_text`.
 
     Args:
-        display(string or tuple): default display format (see :meth:`report` for details)
-        min_display(string or tuple): default "minimal" display format (applied to all messages regardless of other display parameters)
+        display(str or tuple): default display format (see :meth:`report` for details)
+        min_display(str or tuple): default "minimal" display format (applied to all messages regardless of other display parameters)
 
     """
     def __init__(self, display=("lko",""), min_display=("","")):
@@ -196,8 +196,8 @@ class LogAction_File(IMessageLogAction):
     
     Args:
         path(str): path to the log file. The file is always appended.
-        display(string or tuple): default display format (see :meth:`report` for details)
-        min_display(string or tuple): default "minimal" display format (applied to all messages regardless of other display parameters)
+        display(str or tuple): default display format (see :meth:`IMessageLogAction.report` for details)
+        min_display(str or tuple): default "minimal" display format (applied to all messages regardless of other display parameters)
 
     """
     def __init__(self, path=None, display=("tlko",""), min_display=("tlko","")):
@@ -242,7 +242,7 @@ class Log(object):
 
     Handles dispatching of report to appropriate actions according to the set rules (see :meth:`add_rule`).
     
-    Actions can be added using :meth:`add_named_actions`. The pre-existing actions are:
+    Actions can be added using :meth:`add_named_action`. The pre-existing actions are:
         - ``'console'`` (prints the message to the console, see :class:`LogAction_Console`)
         - ``'file'`` (writes the message to a log file, see :class:`LogAction_File`)
         - ``'exception'`` (raises message as an exception, see :class:`LogAction_Exception`).
@@ -288,7 +288,7 @@ class Log(object):
             origin (str): origin prefix specifying the rule domain (by default, empty prefix, i.e., any origin)
             kind (str): a kind name or ``'*'`` (all kinds; default) for which the action is invoked
             level_range (tuple): a range (lower and upper bound) of levels for which the action is invoked
-            **kwargs: additional arguments passed to the action `report` method (override the default action arguments, but ar overridden by the :meth:`report` arguments)
+            **kwargs: additional arguments passed to the action ``report`` method (override the default action arguments, but are overridden by the ``report`` arguments)
         
         If several rules are applicable to the same message, all of them are invoked.
         """
@@ -444,7 +444,7 @@ def _parse_log_line(line, strict=True):
     Return a dictionary ``{'time':time, 'level':level, 'kind':kind, 'origin':origin, 'message':message'}`` or ``None`` if the line is invalid (can't be parsed).
     If the elements are missing from the message, set them to ``None``.
 
-    Try to convert the time string into a :class:`datetime` object and the level string into an integer.
+    Try to convert the time string into a :class:`datetime.datetime` object and the level string into an integer.
     If it fails and ``strict==True``, treat the line as invalid.
     """
     regex=_default_log_line_rec
@@ -474,7 +474,7 @@ def read_log(path, strict=True, required=None, bad_line_action="append"):
 
     Return a list of lines, where each line is a dictionary ``{'time':time, 'level':level, 'kind':kind, 'origin':origin, 'message':message'}``.
     If some elements of the line are missing from the message, set them to ``None``.
-    Try to convert the time string into a :class:`datetime` object and the level string into an integer.
+    Try to convert the time string into a :class:`datetime.datetime` object and the level string into an integer.
 
     Args:
         path(str): path to the file.

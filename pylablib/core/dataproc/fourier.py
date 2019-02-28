@@ -87,7 +87,7 @@ def fourier_transform(trace, truncate=False, truncate_power=None, normalization=
         window_power_compensate (bool): If ``True``, the data is multiplied by a compensating factor to preserve power in the spectrum.
     
     Returns:
-        Array: 2 column array: first column is frequency, second is complex FT data.
+        a two-column array, where the first column is frequency, and the second is complex FT data.
     """
     wrapped=wrap(trace)
     column_names=["frequency","ft_data"]
@@ -143,7 +143,7 @@ def inverse_fourier_transform(ft, truncate=False, truncate_power=None, no_freq=F
         symmetric_time (bool): If ``True``, make time axis go from ``(-0.5/df, 0.5/df)`` rather than ``(0, 1./df)``.
 
     Returns:
-        Array: 2 column array: first column is time, second is the complex-valued trace data.
+        a two-column array, where the first column is frequency, and the second is the complex-valued trace data.
     """
     wrapped=wrap(ft)
     column_names=["time","data"]
@@ -204,7 +204,7 @@ def power_spectral_density(trace, truncate=False, truncate_power=None, normaliza
         window_power_compensate (bool): If ``True``, the data is multiplied by a compensating factor to preserve power in the spectrum.
     
     Returns:
-        Array: 2 column array: first column is frequency, second is positive PSD.
+        a two-column array, where the first column is frequency, and the second is positive PSD.
     """
     column_names=["frequency","PSD"]
     ft=fourier_transform(trace, truncate=truncate, truncate_power=truncate_power, normalization=normalization, no_time=no_time, single_sided=single_sided, window=window, window_power_compensate=window_power_compensate)

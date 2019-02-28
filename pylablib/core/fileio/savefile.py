@@ -42,7 +42,7 @@ class IOutputFileFormat(object):
     
     Args:
         format_name (str): The name of the format (to be defined in subclasses).
-        default_kwargs (dict): Default `**kwargs` values for the :func:`write` function.
+        default_kwargs (dict): Default `**kwargs` values for the :meth:`write` method.
     """
     def __init__(self, format_name, default_kwargs=None):
         object.__init__(self)
@@ -70,7 +70,7 @@ class ITextOutputFileFormat(IOutputFileFormat):
         save_comments (bool): If ``True`` and saving `~datafile.DataFile` object, save its comments metainfo.
         save_time (bool): If ``True``, append the file creation time in the end.
         new_time (bool): If saving `~datafile.DataFile` object, determines if the time should be updated to the current time.
-        default_kwargs (dict): Default `**kwargs` values for the :func:`write` function.
+        default_kwargs (dict): Default `**kwargs` values for the :meth:`IOutputFileFormat.write` method.
     """
     def __init__(self, format_name, save_props=True, save_comments=True, save_time=True, new_time=True, default_kwargs=None):
         IOutputFileFormat.__init__(self,format_name,default_kwargs)
@@ -124,8 +124,8 @@ class CSVTableOutputFileFormat(ITextOutputFileFormat):
         save_comments (bool): If ``True`` and saving `~datafile.DataFile` object, save its comments metainfo.
         save_time (bool): If ``True``, append the file creation time in the end.
         columns_delimiter (str): Used to separate entries in a row.
-        custom_reps (str): If not ``None``, defines custom representations to be passed to :func:`~core.utils.string.to_string` function.
-        **kwargs (dict): Default `**kwargs` values for the :func:`write` function.
+        custom_reps (str): If not ``None``, defines custom representations to be passed to :func:`.utils.string.to_string` function.
+        **kwargs (dict): Default `**kwargs` values for the :meth:`IOutputFileFormat.write` method.
     """
     def __init__(self, save_props=True, save_comments=True, save_time=True, save_columns=True, columns_delimiter="\t", custom_reps=None, **kwargs):
         ITextOutputFileFormat.__init__(self,"csv",save_props,save_comments,save_time,default_kwargs=kwargs)
@@ -147,9 +147,9 @@ class CSVTableOutputFileFormat(ITextOutputFileFormat):
         
         Args:
             location_file: Location of the destination.
-            data: Data to be saved. Can be :class:`~core.datatable.table.DataTable` or an arbitrary 2D array (numpy array, 2D list, etc.).
+            data: Data to be saved. Can be :class:`.DataTable` or an arbitrary 2D array (numpy array, 2D list, etc.).
             columns ([str]): If not ``None``, the list of column names.
-                If ``None`` and data is of type :class:`~core.datatable.table.DataTable`, use its columns names.
+                If ``None`` and data is of type :class:`.DataTable`, use its columns names.
                 If ``None`` and data is of other type, don't put the column line in the output.
         """
         if not _is_table(data):
@@ -176,14 +176,14 @@ class DictionaryOutputFileFormat(ITextOutputFileFormat):
         save_props (bool): If ``True`` and saving `~datafile.DataFile` object, save its props metainfo.
         save_comments (bool): If ``True`` and saving `~datafile.DataFile` object, save its comments metainfo.
         save_time (bool): If ``True``, append the file creation time in the end.
-        table_format (str): Default format for table (numpy arrays or :class:`~core.datatable.table.DataTable` objects) entries. Can be
+        table_format (str): Default format for table (numpy arrays or :class:`.DataTable` objects) entries. Can be
             ``'inline'`` (table is written inside the file),
             ``'csv'`` (external CSV file) or
             ``'bin'`` (external binary file).
         inline_columns_delimiter (str): Used to separate entries in a row for inline tables.
-        inline_reps (str): If not ``None``, defines custom representations to be passed to :func:`~core.utils.string.to_string` function when writing inline tables.
-        param_reps (str): If not ``None``, defines custom representations to be passed to :func:`~core.utils.string.to_string` function when writing Dictionary entries.
-        **kwargs (dict): Default `**kwargs` values for the :func:`write` function.
+        inline_reps (str): If not ``None``, defines custom representations to be passed to :func:`.utils.string.to_string` function when writing inline tables.
+        param_reps (str): If not ``None``, defines custom representations to be passed to :func:`.utils.string.to_string` function when writing Dictionary entries.
+        **kwargs (dict): Default `**kwargs` values for the :meth:`IOutputFileFormat.write` method.
     """
     def __init__(self, save_props=True, save_comments=True, save_time=True, table_format="inline", inline_columns_delimiter="\t", inline_reps=None, param_reps=None, **kwargs):
         ITextOutputFileFormat.__init__(self,"dict",save_props,save_comments,save_time,default_kwargs=kwargs)
@@ -215,7 +215,7 @@ class DictionaryOutputFileFormat(ITextOutputFileFormat):
         
         Args:
             location_file: Location of the destination.
-            data: Data to be saved. Can be :class:`~core.datatable.table.DataTable` or an arbitrary 2D array (numpy array, 2D list, etc.).
+            data: Data to be saved. Can be :class:`.DataTable` or an arbitrary 2D array (numpy array, 2D list, etc.).
         """
         if not dictionary.is_dictionary(data):
             raise ValueError("format '{0}' can't save data {1}".format(self.format_name,data))
@@ -253,7 +253,7 @@ class TableBinaryOutputFileFormat(IBinaryOutputFileFormat):
     Args:
         dtype: :class:`numpy.dtype` describing the data. By default, ``'>f8'`` for real data and ``'>c16'`` for complex data.
         transposed (bool): If ``False``, write the data row-wise; otherwise, write it column-wise.
-        **kwargs (dict): Default `**kwargs` values for the :func:`write` function.
+        **kwargs (dict): Default `**kwargs` values for the :meth:`IOutputFileFormat.write` method.
     """
     def __init__(self, dtype=None, transposed=False, **kwargs):
         IBinaryOutputFileFormat.__init__(self,"bin",default_kwargs=kwargs)
@@ -290,7 +290,7 @@ class TableBinaryOutputFileFormat(IBinaryOutputFileFormat):
         
         Args:
             location_file: Location of the destination.
-            data: Data to be saved. Can be :class:`~core.datatable.table.DataTable` or an arbitrary 2D array (numpy array, 2D list, etc.).
+            data: Data to be saved. Can be :class:`.DataTable` or an arbitrary 2D array (numpy array, 2D list, etc.).
                 Converted to numpy array before saving.
         """
         stream=location_file.stream

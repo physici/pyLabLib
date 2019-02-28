@@ -8,13 +8,13 @@ _depends_local=["..utils.general"]
 
 class CallNotifier(notifier.ISkippableNotifier):
     """
-    Wrapper for :class:`notifier.ISkippableNotifier`, with external functions provided for :meth:`_do_wait` and :meth:`_do_notify` methods.
+    Wrapper for :class:`.notifier.ISkippableNotifier`, with external functions provided for ``_do_wait`` and ``_do_notify`` methods.
 
     Args:
-        wait (Callable): function to be called for waiting; if ``None``, nothing is called.
-        notify (Callable): function to be called for notifying; if ``None``, nothing is called.
+        wait (callable): function to be called for waiting; if ``None``, nothing is called.
+        notify (callable): function to be called for notifying; if ``None``, nothing is called.
         skippable (bool): if ``True``, allows for skippable wait events
-            (if :meth:`notify` is called before :meth:`wait`, neither methods are actually called).
+            (if :meth:`.notifier.ISkippableNotifier.notify` is called before :meth:`.notifier.ISkippableNotifier.wait`, neither methods are actually called).
     """
     def __init__(self, wait=None, notify=None, skippable=False):
         notifier.ISkippableNotifier.__init__(self,skippable=skippable)
