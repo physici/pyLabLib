@@ -7,7 +7,8 @@ class DeviceThread(controller.QTaskThread):
 
     Args:
         name: thread name
-        devargs: args supplied to :math:`setup_task` method.
+        devargs: args supplied to :math:`setup_task` method
+        devkwargs: keyword args supplied to :math:`setup_task` method
         signal_pool: :class:`.SignalPool` for this thread (by default, use the default common pool)
 
     Attributes:

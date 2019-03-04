@@ -70,9 +70,9 @@ class SignalPool(object):
         
         Args:
             callback: callback function, which takes 3 arguments: signal source, signal tag, signal value.
-            src(str or [str]): signal source name or list of source names to filter the subscription;
+            srcs(str or [str]): signal source name or list of source names to filter the subscription;
                 can be ``"any"`` (any source) or ``"all"`` (only signals specifically having ``"all"`` as a source).
-            src(str or [str]): signal destination name or list of destination names to filter the subscription;
+            dsts(str or [str]): signal destination name or list of destination names to filter the subscription;
                 can be ``"any"`` (any destination) or ``"all"`` (only source specifically having ``"all"`` as a destination).
             tags: signal tag or list of tags to filter the subscription (any tag by default).
             filt(callable): additional filter function which takes 4 arguments: signal source, signal destination, signal tag, signal value,

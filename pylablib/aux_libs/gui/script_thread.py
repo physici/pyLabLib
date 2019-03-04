@@ -11,6 +11,20 @@ class ScriptStopException(Exception):
     """Exception for stopping script execution"""
 
 class ScriptThread(controller.QTaskThread):
+    """
+    A script thread.
+    
+    Designed to provide means of writing code which interacts with multiple device threads,
+    but reads similar to a standard single-threaded script.
+    To do that, it provides a mechanism of signal montiors: one can suspend execution until a signal with certain properties has been received.
+    This can be used to implement, e.g., waiting until the next stream_format/daq sample or a next camera frame.
+
+    Args:
+        name (str): thread name
+        devargs: args supplied to :math:`setup_script` method
+        devkwargs: keyword args supplied to :math:`setup_script` method
+        signal_pool: :class:`.SignalPool` for this thread (by default, use the default common pool)
+    """
     def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
         controller.QTaskThread.__init__(self,name=name,setupargs=setupargs,setupkwargs=setupkwargs,signal_pool=signal_pool)
         self._monitor_signal.connect(self._on_monitor_signal)
@@ -27,18 +41,30 @@ class ScriptThread(controller.QTaskThread):
         if tag=="control.stop":
             self.stop_request=True
         return False
-    def process_signal(self, src, tag, value):
-        return False
 
     def setup_script(self, *args, **kwargs):
+        """Setup script thread (to be overloaded in subclasses)"""
         pass
     def finalize_script(self):
+        """
+        Finalize script thread (to be overloaded in subclasses)
+        
+        By default, calls :meth:`interrupt_script`.
+        """
         self.interrupt_script()
     def run_script(self):
+        """Execute script (to be overloaded in subclasses)"""
         pass
     def interrupt_script(self):
+        """Finalize script execution (the thread is still running, i.e., the script might be started again)"""
         pass
     def check_stop(self):
+        """
+        Check if the script stop is requested.
+
+        If it is, raise :exc:`ScriptStopException` which effectively stops exeuction past this point
+        (the exception is properly caught and processed elsewhere in the service code).
+        """
         if self.stop_request:
             self.stop_request=False
             raise ScriptStopException()
@@ -79,17 +105,30 @@ class ScriptThread(controller.QTaskThread):
             self.messages=[]
             self.paused=True
     def add_signal_monitor(self, mon, srcs="any", dsts="any", tags=None, filt=None):
+        """
+        Add a new signal monitor.
+
+        The monitoring isn't started until :meth:`start_monitoring` is called.
+        `mon` specifies monitor name; the rest of the arguments are the same as :meth:`.SignalPool.subscribe`
+        """
         if mon in self._monitored_signals:
             raise KeyError("signal monitor {} already exists".format(mon))
         uid=self.subscribe_nonsync(lambda *msg: self._monitor_signal.emit((mon,signal_pool.TSignal(*msg))),srcs=srcs,dsts=dsts,tags=tags,filt=filt)
         self._monitored_signals[mon]=self.MonitoredSignal(uid)
     def remove_signal_monitor(self, mon):
+        """Remove signal monitor with a given name"""
         if mon not in self._monitored_signals:
             raise KeyError("signal monitor {} doesn't exist".format(mon))
         uid,_=self._monitored_signals.pop(mon)
         self.unsubscribe(uid)
     TWaitResult=collections.namedtuple("TWaitResult",["monitor","message"])
     def wait_for_signal_monitor(self, mons, timeout=None):
+        """
+        Wait for a signal to be received on a given monitor or several monitors 
+        
+        If several monitors are given (`mon` is a list), wait for a signal on any of them.
+        After waiting is done, pop and return signal value (see :meth:`pop_monitored_signal`).
+        """
         if not isinstance(mons,(list,tuple)):
             mons=[mons]
         for mon in mons:
@@ -102,10 +141,18 @@ class ScriptThread(controller.QTaskThread):
                     return self.TWaitResult(mon,self._monitored_signals[mon].messages.pop(0))
             self.wait_for_any_message(ctd.time_left())
     def new_monitored_signals_number(self, mon):
+        """Get number of received signals at a given montior"""
         if mon not in self._monitored_signals:
             raise KeyError("signal monitor {} doesn't exist".format(mon))
         return len(self._monitored_signals[mon].messages)
     def pop_monitored_signal(self, mon, n=None):
+        """
+        Pop data from the given signal monitor queue.
+
+        `n` specifies number of signals to pop (by default, only one).
+        Each signal is a tuple ``(mon, sig)`` of monitor name and signal,
+        where `sig` is in turn tuple ``(src, tag, value)`` describing the signal.
+        """
         if self.new_monitored_signals_number(mon):
             if n is None:
                 return self._monitored_signals[mon].messages.pop(0)
@@ -113,14 +160,19 @@ class ScriptThread(controller.QTaskThread):
                 return [self._monitored_signals[mon].messages.pop(0) for _ in range(n)]
         return None
     def reset_monitored_signal(self, mon):
+        """Reset montiored signal (clean its received signals queue)"""
         self._monitored_signals[mon].messages.clear()
     def pause_monitoring(self, mon, paused=True):
+        """Pause or un-pause signal monitoring"""
         self._monitored_signals[mon].paused=paused
     def start_monitoring(self, mon):
+        """Start signal monitoring"""
         self.pause_monitoring(mon,paused=False)
 
 
     def start_execution(self):
+        """Request starting script exectuion"""
         self.send_message("control.start",None)
     def stop_execution(self):
+        """Request stopping script exectuion"""
         self.send_message("control.stop",None)

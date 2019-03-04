@@ -1029,13 +1029,14 @@ def _unregister_controller(controller):
 
 
 
-def get_controller(name=None, wait=True, timeout=None):
+def get_controller(name=None, wait=True, timeout=None, sync=None):
     """
     Find a controller with a given name.
 
     If `name` is not supplied, yield current controller instead.
     If the controller is not present and ``wait==True``, wait (with the given timeout) until the controller is running;
     otherwise, raise error if the controller is not running.
+    If `sync` is not ``None``, synchronize to the thread `sync` point (usually, ``"run"``) before returning.
     """
     if name is None:
         return threadprop.current_controller()
@@ -1048,7 +1049,10 @@ def get_controller(name=None, wait=True, timeout=None):
                 return _running_threads[name]
             if name in _stopped_threads:
                 raise threadprop.NoControllerThreadError("thread with name {} is stopped".format(name))
-    return _running_threads_notifier.wait_until(wait_cond,timeout=timeout)
+    thread=_running_threads_notifier.wait_until(wait_cond,timeout=timeout)
+    if sync is not None:
+        thread.sync_exec(sync,timeout=timeout)
+    return thread
 def get_gui_controller(wait=False, timeout=None, create_if_missing=True):
     """
     Get GUI thread controller.
