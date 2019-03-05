@@ -91,7 +91,8 @@ class ParamTable(QtWidgets.QWidget):
         self.params[name]=params
         path=(self.display_table_root,name)
         self.display_table.add_handler(path,params.value_handler)
-        self.display_table.add_indicator_handler(path,params.indicator_handler)
+        if params.indicator_handler:
+            self.display_table.add_indicator_handler(path,params.indicator_handler)
         changed_signal=params.value_handler.value_changed_signal()
         if changed_signal:
             changed_signal.connect(lambda value: self.value_changed.emit(name,value))

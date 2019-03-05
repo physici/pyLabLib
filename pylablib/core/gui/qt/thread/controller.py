@@ -158,7 +158,7 @@ class QThreadController(QtCore.QObject):
         self._lifetime_state="stopped"
         # set up signals
         self.moveToThread(self.thread)
-        self._messaged.connect(self._get_message)
+        self._messaged.connect(self._get_message,QtCore.Qt.QueuedConnection)
         self._interrupt_called.connect(self._on_call_in_thread,QtCore.Qt.QueuedConnection)
         if self.kind=="main":
             threadprop.get_app().aboutToQuit.connect(self._on_finish_event,type=QtCore.Qt.DirectConnection)

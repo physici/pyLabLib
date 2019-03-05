@@ -185,6 +185,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         self._add_status_node("properties",self.get_all_properties)
         self._add_settings_node("trigger_interleave",self.get_trigger_interleave,self.set_trigger_interleave)
         self._add_settings_node("status_line",self.is_status_line_enabled,self.enable_status_line)
+        self._add_settings_node("bl_offset",self.get_black_level_offset,self.set_black_level_offset)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
         self._add_settings_node("cfr",self.is_CFR_enabled,self.enable_CFR)
         self._add_settings_node("frame_time",self.get_frame_time,self.set_frame_time)
@@ -410,6 +411,13 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         self.set_value("EnStatusLine",enabled,ignore_missing=True)
         return self.is_status_line_enabled()
 
+    def get_black_level_offset(self):
+        """Get the black level offset"""
+        return self.get_value("Voltages/BlackLevelOffset",0)
+    def set_black_level_offset(self, offset):
+        """Set the black level offset"""
+        self.set_value("Voltages/BlackLevelOffset",offset,ignore_missing=True)
+        return self.get_black_level_offset()
 
 
 

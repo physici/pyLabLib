@@ -30,42 +30,11 @@ class DeviceThread(controller.QTaskThread):
         self.add_command("get_full_info",self.get_full_info)
         self._full_info_job=False
         self._full_info_nodes=None
-        self.rpyc=False
         self.retry_device_connect=False
         self._tried_device_connect=False
         
     def finalize_task(self):
         self.close_device()
-
-    def rpyc_device(self, remote, module, device, *args, **kwargs):
-        """
-        Create a remote device on a different PC via RPyC.
-
-        Can replace straightforward device creation for remote devices,
-        i.e., instead of ``self.device = DeviceModule.DeviceClass(*args,**kwargs)``
-        one would call ``self.device = self.rpyc_device(host,"DeviceModule","DeviceClass",*args,**kwargs)``.
-
-        Args:
-            remote: address of the remote host (it should be running RPyC server; see :func:`.rpyc.run_device_service` for details)
-            module: device class module name
-            device: device class name
-            args: arguments supplied to the device contstructor.
-            kwargs: keyword arguments supplied to the device contstructor.
-        """
-        self.rpyc=True
-        self.rpyc_serv=rpyc_utils.connect_device_service(remote)
-        if not self.rpyc_serv:
-            return None
-        return self.rpyc_serv.get_device(module,device,*args,**kwargs)
-    def rpyc_obtain(self, obj):
-        """
-        Obtain (i.e., transfer to the local PC) an object returned by the device.
-
-        If current device is local, return `obj` as is.
-        """
-        if self.rpyc:
-            return rpyc_utils.obtain(obj,serv=self.rpyc_serv)
-        return obj
 
     def connect_device(self):
         """
@@ -110,7 +79,7 @@ class DeviceThread(controller.QTaskThread):
 
     def get_settings(self):
         """Get device settings"""
-        return self.rpyc_obtain(self.device.get_settings()) if self.device is not None else {}
+        return self.device.get_settings() if self.device is not None else {}
     
     def setup_full_info_job(self, period=2., nodes=None):
         """
@@ -132,7 +101,7 @@ class DeviceThread(controller.QTaskThread):
 
         A function for a job which is setup in :meth:`setup_full_info_job`. Normally doesn't need to be called explicitly.
         """
-        self["full_info"]=self.rpyc_obtain(self.device.get_full_info(nodes=self._full_info_nodes))
+        self["full_info"]=self.device.get_full_info(nodes=self._full_info_nodes)
     def get_full_info(self):
         """
         Get full device info
@@ -140,6 +109,60 @@ class DeviceThread(controller.QTaskThread):
         If the full info job is set up using :meth:`setup_full_info_job`, use the last cached verision of the full info;
         otherwise, request a new version from the device.
         """
+        if self.device:
+            return self["full_info"] if self._full_info_job else self.device.get_full_info(nodes=self._full_info_nodes)
+        else:
+            return {}
+
+
+
+
+
+class RemoteDeviceThread(DeviceThread):
+    """
+    Expansion of :class:`DeviceThread` equipped to deal with a remote device (via RPyC library).
+
+    All arguments, attributes and commands are the same as in :class:`DeviceThread`.
+    """
+    def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
+        RemoteDeviceThread.__init__(self,name=name,signal_pool=signal_pool,devargs=devargs,devkwargs=devkwargs)
+        self.rpyc=False
+
+    def rpyc_device(self, remote, module, device, *args, **kwargs):
+        """
+        Create a remote device on a different PC via RPyC.
+
+        Can replace straightforward device creation for remote devices,
+        i.e., instead of ``self.device = DeviceModule.DeviceClass(*args,**kwargs)``
+        one would call ``self.device = self.rpyc_device(host,"DeviceModule","DeviceClass",*args,**kwargs)``.
+
+        Args:
+            remote: address of the remote host (it should be running RPyC server; see :func:`.rpyc.run_device_service` for details)
+            module: device class module name
+            device: device class name
+            args: arguments supplied to the device contstructor.
+            kwargs: keyword arguments supplied to the device contstructor.
+        """
+        self.rpyc=True
+        self.rpyc_serv=rpyc_utils.connect_device_service(remote)
+        if not self.rpyc_serv:
+            return None
+        return self.rpyc_serv.get_device(module,device,*args,**kwargs)
+    def rpyc_obtain(self, obj):
+        """
+        Obtain (i.e., transfer to the local PC) an object returned by the device.
+
+        If current device is local, return `obj` as is.
+        """
+        if self.rpyc:
+            return rpyc_utils.obtain(obj,serv=self.rpyc_serv)
+        return obj
+
+    def get_settings(self):
+        return self.rpyc_obtain(self.device.get_settings()) if self.device is not None else {}
+    def update_full_info(self):
+        self["full_info"]=self.rpyc_obtain(self.device.get_full_info(nodes=self._full_info_nodes))
+    def get_full_info(self):
         if self.device:
             return self["full_info"] if self._full_info_job else self.rpyc_obtain(self.device.get_full_info(nodes=self._full_info_nodes))
         else:

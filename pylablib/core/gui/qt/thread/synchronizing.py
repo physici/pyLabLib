@@ -240,8 +240,8 @@ class SignalSynchronizer(object):
             self.queue_size-=1
             
     def __call__(self, src, tag, value):
+        t=time.time()
         with self.lock:
-            t=time.time()
             if self.limit_queue and self.queue_size>=self.limit_queue:
                 return
             if self.limit_period:
