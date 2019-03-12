@@ -13,7 +13,13 @@ class DeviceThread(controller.QTaskThread):
 
     Attributes:
         device: managed device. Its opening should be specified in an overloaded :meth:`connect_device` method,
-            and it is actually opened by calling :meth:`open_device` method (which also handles status updates and duplicate opening issues).
+            and it is actually opened by calling :meth:`open_device` method (which also handles status updates and duplicate opening issues)
+
+    Methods to overload:
+        setup_task: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
+        finalize_task: executed on thread cleanup (attempts to execute in any case, including exceptions);
+            by default, close the device connection if it is opened
+        connect_device: create the device class and assign it to ``.device`` attirbute; if connection failed, can leave the attribute ``None``
         
     Commands:
         open_device: open the deivce, if not already opened

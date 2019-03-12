@@ -21,9 +21,20 @@ class ScriptThread(controller.QTaskThread):
 
     Args:
         name (str): thread name
-        devargs: args supplied to :math:`setup_script` method
-        devkwargs: keyword args supplied to :math:`setup_script` method
+        setupargs: args supplied to :math:`setup_script` method
+        setupkwargs: keyword args supplied to :math:`setup_script` method
         signal_pool: :class:`.SignalPool` for this thread (by default, use the default common pool)
+
+    Attributes:
+        executing (bool): shows whether the script is executing right now;
+            useful in :meth:`interrupt_script` to check whether it is called due to script stopping/completion (then it would be ``True``),
+            or due to thread termination (then it would be ``False``)
+
+    Methods to overload:
+        setup_script: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
+        finalize_script: executed on thread cleanup (attempts to execute in any case, including exceptions); by default, call :meth:`interrupt_script`
+        run_script: execute the script (can be run several times per script lifetime)
+        interrupt_script: executed when the script is finished or forcibly  (including due to exception or application shutdown)
     """
     def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
         controller.QTaskThread.__init__(self,name=name,setupargs=setupargs,setupkwargs=setupkwargs,signal_pool=signal_pool)

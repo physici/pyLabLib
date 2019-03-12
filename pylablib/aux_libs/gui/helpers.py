@@ -26,7 +26,7 @@ class StreamFormerThread(controller.QThreadController):
     Attributes:
         block_period: size of a row block which causes :meth:`on_new_block` call
 
-    Overload:
+    Methods to overload:
         :meth:`setup`: set up the thread
         :meth:`cleanup`: clean up the thread 
         :meth:`prepare_row`: modify the new complete row before before adding it to the block

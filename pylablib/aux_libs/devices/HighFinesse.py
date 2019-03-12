@@ -12,11 +12,14 @@ class HFError(RuntimeError):
 
 class WS(IDevice):
     """
-    WS precision wavemeter
+    HighFinesse WS6/7 precision wavemeter.
 
     Args:
         lib_path(str): path to the wlmData6.dll or wlmData7.dll (default is to use the library supplied with the package)
         idx(int): wavemeter input index
+        serv_path: path to server executable (last executed by default)
+        version: wavemeter version (3-4 digit id number)
+        hide_app: if ``True``, start the wavemeter application hidden; otherwise, start it on top
     """
     def __init__(self, lib_path=None, idx=0, serv_path=None, version=None, hide_app=False, timeout=10.):
         IDevice.__init__(self)
@@ -33,6 +36,8 @@ class WS(IDevice):
         self.dll.Operation.argtypes=[ctypes.c_short]
         self.dll.GetFrequencyNum.restype=ctypes.c_double
         self.dll.GetFrequencyNum.argtypes=[ctypes.c_long,ctypes.c_double]
+        self.dll.GetWavelengthNum.restype=ctypes.c_double
+        self.dll.GetWavelengthNum.argtypes=[ctypes.c_long,ctypes.c_double]
         self.dll.GetExposureModeNum.restype=ctypes.c_bool
         self.dll.GetExposureModeNum.argtypes=[ctypes.c_long,ctypes.c_bool]
         self.dll.SetExposureModeNum.restype=ctypes.c_long
@@ -41,6 +46,10 @@ class WS(IDevice):
         self.dll.GetExposureNum.argtypes=[ctypes.c_long,ctypes.c_long,ctypes.c_long]
         self.dll.SetExposureNum.restype=ctypes.c_long
         self.dll.SetExposureNum.argtypes=[ctypes.c_long,ctypes.c_long,ctypes.c_long]
+        self.dll.GetSwitcherMode.restype=ctypes.c_bool
+        self.dll.GetSwitcherMode.argtypes=[ctypes.c_long]
+        self.dll.SetSwitcherMode.restype=ctypes.c_long
+        self.dll.SetSwitcherMode.argtypes=[ctypes.c_long]
         self.idx=idx
         self.serv_path=serv_path
         self.version=version
@@ -48,8 +57,10 @@ class WS(IDevice):
         self.timeout=timeout
         self.open()
         self._add_status_node("frequency",self.get_frequency)
+        self._add_status_node("wavelength",self.get_wavelength)
         self._add_settings_node("exposure_mode",self.get_exposure_mode,self.set_exposure_mode)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
+        self._add_settings_node("switcher_mode",self.get_switcher_mode,self.set_switcher_mode)
 
     def open(self):
         self.dll.ControlWLM(2 if self.hide_app else 1,self.serv_path,self.version or 0)
@@ -122,6 +133,24 @@ class WS(IDevice):
             self._check_getfunc_error("GetFrequencyNum",err)
         return res*1E12
 
+    def get_wavelength(self, return_exp_error=True):
+        """
+        Get the wavemeter readings (in m, and in vacuum).
+
+        If ``return_exp_error==True``, return ``"under"`` if the meter is underexposed or ``"over"`` is it is overexposed.
+        Otherwise, raise an error.
+        """
+        res=self.dll.GetWavelengthNum(self.idx,0)
+        if int(res)<=0:
+            err=int(res)
+            if return_exp_error:
+                if err==-3:
+                    return "under"
+                if err==-4:
+                    return "over"
+            self._check_getfunc_error("GetWavelengthNum",err)
+        return res*1E9
+
     def start_measurement(self):
         self.dll.Operation(2)
     def stop_measurement(self):
@@ -146,3 +175,12 @@ class WS(IDevice):
         err=self.dll.SetExposureNum(self.idx,sensor,exposure)
         self._check_setfunc_error("SetExposureNum",err)
         return self.get_exposure()
+
+    def get_switcher_mode(self):
+        """Get the switcher mode (0 for off, 1 for on)"""
+        return self.dll.GetSwitcherMode(0)
+    def set_switcher_mode(self, switching=True):
+        """Set the switcher mode (True or False)"""        
+        err=self.dll.SetSwitcherMode(1 if switching else 0)
+        self._check_setfunc_error("SetSwitcherMode",err)
+        return self.get_switcher_mode()

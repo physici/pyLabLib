@@ -35,6 +35,7 @@ class ANC300(backend_mod.IBackendWrapper):
         self._add_settings_node("offsets",self.get_all_offsets,self.set_all_offsets)
         self._add_settings_node("frequencies",self.get_all_frequencies,self.set_all_frequencies)
         self._add_status_node("voltage_output",self.get_all_outputs)
+        self._add_status_node("capacitance",self.get_all_capacitances)
 
     def open(self):
         """Open the connection to the stage"""
@@ -84,6 +85,18 @@ class ANC300(backend_mod.IBackendWrapper):
                 self.set_mode(ax,mode)
             return
         self.query("setm {} {}".format(axis,mode))
+    def get_mode(self, axis="all"):
+        """
+        Get axis mode
+
+        `axis` is either an axis index (starting from 1), or ``"all"`` (all axes).
+        """
+        if axis=="all":
+            return [self.get_mode(ax) for ax in self.axes]
+        reply=py3.as_str(self.query("getm {}".format(axis))).strip()
+        if reply.startswith("mode = "):
+            return reply[7:].strip()
+        raise AttocubeError("unexpected reply: {}".format(reply))
     def enable_axis(self, axis, mode="stp"):
         """Enable specific axis (set to step mode)"""
         self.set_mode(axis,mode=mode)
@@ -96,6 +109,23 @@ class ANC300(backend_mod.IBackendWrapper):
     def disable_all(self):
         """Disable all axes (set to ground mode)"""
         self.set_mode("all",mode="gnd")
+    def measure_capacitance(self, axis="all", wait=True):
+        """
+        Measure axis capacitance; finish in the GND mode.
+        
+        If ``wait==True``, wait unitl the capacitance measurement is finished (takes about a second per axis).
+        """
+        if axis=="all":
+            for ax in self.axes:
+                self.measure_capacitance(ax,wait=wait)
+            return
+        self.set_mode(axis,mode="gnd")
+        time.sleep(0.05)
+        self.set_mode(axis,mode="cap")
+        if wait:
+            time.sleep(0.05)
+            while self.get_mode(axis)!="gnd":
+                time.sleep(0.1)
 
     def _parse_reply(self, reply, name, units):
         patt=name+r"\s*=\s*([\d.]+)\s*"+units
@@ -132,6 +162,16 @@ class ANC300(backend_mod.IBackendWrapper):
         """Set axis step frequency in Hz"""
         self.query("setf {} {}".format(axis,freq))
         return self.get_frequency(axis)
+    def get_capacitance(self, axis, measure=False):
+        """
+        Get capacitance mesurement on the axis.
+        
+        If ``measure==True``, re-measure axis capacitance (takes about a second); otherwise, get the last measurement value.
+        """
+        if measure:
+            self.measure_capacitance(axis,wait=True)
+        reply=self.query("getc {}".format(axis))
+        return self._parse_reply(reply,"capacitance","nF")*1E-9
 
     def _get_all_axes_data(self, getter):
         return dict([(a,getter(a)) for a in self.axes])
@@ -147,6 +187,13 @@ class ANC300(backend_mod.IBackendWrapper):
     def get_all_frequencies(self):
         """Get the list of all axes step frequencies"""
         return self._get_all_axes_data(self.get_frequency)
+    def get_all_capacitances(self, measure=False):
+        """
+        Get the list of all axes capacitances
+        
+        If ``measure==True``, re-measure axes capacitances (takes about a secon0d per axis); otherwise, get the last measurement values.
+        """
+        return self._get_all_axes_data(lambda axis: self.get_capacitance(axis,measure=measure))
     
     def _set_all_axes_data(self, setter, values):
         if isinstance(values,(tuple,list)):

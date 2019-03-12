@@ -35,17 +35,17 @@ def exint(error_msg_template="{}:"):
         with _exception_print_lock:
             try:
                 ctl_name=get_controller(wait=False).name
-                print(error_msg_template.format("Exception raised in thread '{}'".format(ctl_name)))
+                print(error_msg_template.format("Exception raised in thread '{}'".format(ctl_name)),file=sys.stderr)
             except threadprop.NoControllerThreadError:
-                print(error_msg_template.format("Exception raised in an uncontrolled thread"))
+                print(error_msg_template.format("Exception raised in an uncontrolled thread"),file=sys.stderr)
             traceback.print_exc()
-            sys.stdout.flush()
+            sys.stderr.flush()
         try:
             stop_controller("gui",code=1,sync=False,require_controller=True)
         except threadprop.NoControllerThreadError:
             with _exception_print_lock:
-                print("Can't stop GUI thread; quitting the application")
-                sys.stdout.flush()
+                print("Can't stop GUI thread; quitting the application",file=sys.stderr)
+                sys.stderr.flush()
             sys.exit(1)
         except threadprop.InterruptExceptionStop:
             pass
@@ -114,6 +114,31 @@ call_in_gui_thread=call_in_thread("gui")
 
 
 class QThreadController(QtCore.QObject):
+    """
+    Generic Qt thread controller.
+
+    Responsible for all inter-thread synchronization. There is one controller per thread, and 
+
+    Args:
+        name(str): thread name (by default, generate a new unique name);
+            this name can be used to obtain thread controller via :func:`get_controller`
+        kind(str): thread kind; can be ``"loop"`` (thread is running in the Qt message loop; behavior is implemented in :meth:`process_message` and remote calls),
+            ``"run"`` (thread executes :meth:`run` method and quits after it is complete), or ``"main"`` (can only be created in the main GUI thread)
+        signal_pool: :class:`.SignalPool` for this thread (by default, use the default common pool)
+
+    Methods to overload:
+        on_start: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
+        on_finish: executed on thread cleanup (attempts to execute in any case, including exceptions)
+        run: executed once per thread; thread is stopped afterwards (only if ``kind=="run"``)
+        process_message: function that takes 2 arguments (tag and value) of the message and processes it; returns ``True`` if the message has been processed
+            and ``False`` otherwise (in which case it is stored and can be recoverd via :meth:`wait_for_message`/:meth:`pop_message`); by default, always return ``False``
+        process_interrupt: function that tales 2 arguments (tag and value) of the interrupt message (message with a tag starting with ``"interrupt."``) and processes it;
+            by default, assumes that any value with tag ``"execute"`` is a function and executes it
+    
+    Signals:
+        started: emitted on thread start (after :meth:`on_start` is executed)
+        finished: emitted on thread finish (before :meth:`on_finish` is executed)
+    """
     def __init__(self, name=None, kind="loop", signal_pool=None):
         QtCore.QObject.__init__(self)
         funcargparse.check_parameter_range(kind,"kind",{"loop","run","main"})
@@ -658,7 +683,19 @@ class QThreadController(QtCore.QObject):
 
 
 class QMultiRepeatingThreadController(QThreadController):
-    _new_jobs_check_period=0.1
+    """
+    Thread which allows to set up and run jobs and batch jobs with a certain time period, and execute commands in the meantime.
+
+    Args:
+        name(str): thread name (by default, generate a new unique name)
+        signal_pool: :class:`.SignalPool` for this thread (by default, use the default common pool)
+
+    Methods to overload:
+        on_start: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
+        on_finish: executed on thread cleanup (attempts to execute in any case, including exceptions)
+        check_commands: executed once a scheduling cycle to check for new commands / events and execute them
+    """
+    _new_jobs_check_period=0.02 # command refresh period if no jobs are scheduled (otherwise, after every job)
     def __init__(self, name=None, signal_pool=None):
         QThreadController.__init__(self,name,kind="run",signal_pool=signal_pool)
         self.sync_period=0
@@ -844,6 +881,35 @@ class QMultiRepeatingThreadController(QThreadController):
 
 
 class QTaskThread(QMultiRepeatingThreadController):
+    """
+    Thread which allows to set up and run jobs and batch jobs with a certain time period, and execute commands in the meantime.
+
+    Extension of :class:`QMultiRepeatingThreadController` with an interface for command creating and scheduling
+
+    Args:
+        name(str): thread name (by default, generate a new unique name)
+        setupargs: args supplied to :math:`setup_task` method
+        setupkwargs: keyword args supplied to :math:`setup_task` method
+        signal_pool: :class:`.SignalPool` for this thread (by default, use the default common pool)
+
+    Attributes:
+        c: command accessor, which makes calls more function-like;
+            ``ctl.c.comm(*args,**kwarg)`` is equaivalent to ``ctl.call_command("comm",args,kwargs)``
+        q: query accessor, which makes calls more function-like;
+            ``ctl.q.comm(*args,**kwarg)`` is equaivalent to ``ctl.call_query("comm",args,kwargs)``
+        qs: query accessor which is made 'exception-safe' via :func:`exsave` wrapper (i.e., safe to directly connect to slots)
+            ``ctl.qi.comm(*args,**kwarg)`` is equaivalent to ``with exint(): ctl.call_query("comm",args,kwargs)``
+        qi: query accessor which ignores and silences any exceptions (including missing /stopped controller)
+            useful for sending queries during thread finalizing / application shutdown, when it's not guaranteed that the query recepient is running
+            (commands already ignore any errors, unless their results are specifically requested)
+
+    Methods to overload:
+        setup_task: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
+        finalize_task: executed on thread cleanup (attempts to execute in any case, including exceptions)
+        process_signal: process a directed signal (signal with ``dst`` equal to this thread name); by default, does nothing
+        process_command: process a command with given name and arguments; by default, check for commands set up with :meth:`add_command`
+        process_query: process a query with given name and arguments; by default, check for commands set up with :meth:`add_command`
+    """
     def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
         QMultiRepeatingThreadController.__init__(self,name=name,signal_pool=signal_pool)
         self.setupargs=setupargs or []

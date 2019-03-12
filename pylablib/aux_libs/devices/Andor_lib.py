@@ -312,7 +312,6 @@ def errcheck(passing=None):
 	passing.add(20002) # always allow success
 	def checker(result, func, arguments):
 		if result not in passing:
-			# print("function '{}' raised error {}({})".format(func.__name__,result,Andor_statuscodes.get(result,"UNKNOWN")))
 			raise AndorLibError(func.__name__,result)
 		return Andor_statuscodes[result]
 	return checker
