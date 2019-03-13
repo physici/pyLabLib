@@ -53,7 +53,7 @@ class DCAMCamera(IDevice):
         self._add_settings_node("ext_trigger",self.get_ext_trigger_parameters,self.setup_ext_trigger)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
         self._add_status_node("readout_time",self.get_readout_time)
-        self._add_status_node("ring_buffer_size",self.get_ring_buffer_size)
+        self._add_status_node("buffer_size",self.get_buffer_size)
         self._add_status_node("data_dimensions",self.get_data_dimensions)
         self._add_full_info_node("detector_size",self.get_detector_size)
         self._add_settings_node("roi",self.get_roi,self.set_roi)
@@ -238,7 +238,7 @@ class DCAMCamera(IDevice):
         data=ct.from_address(buffer.buf)
         img=np.array(data).reshape((buffer.height,buffer.width))
         return image_utils.convert_image_indexing(img,"rct",self.image_indexing)
-    def get_ring_buffer_size(self):
+    def get_buffer_size(self):
         """Get the size of the allocated ring buffer (0 if no buffer is allocated)"""
         return self._alloc_nframes
     FrameInfo=collections.namedtuple("FrameInfo",["framestamp","timestamp_us","camerastamp","left","top","pixeltype"])
@@ -370,8 +370,8 @@ class DCAMCamera(IDevice):
         """
         if self._last_frame is None:
             return None
-        last_buff,frame_count=self.get_transfer_info()
-        oldest_frame=max(self._last_frame+1,frame_count-self.get_ring_buffer_size())
+        _,frame_count=self.get_transfer_info()
+        oldest_frame=max(self._last_frame+1,frame_count-self.get_buffer_size())
         if oldest_frame==frame_count:
             return None
         return oldest_frame,frame_count-1

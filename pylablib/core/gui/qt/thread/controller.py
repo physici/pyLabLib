@@ -178,7 +178,6 @@ class QThreadController(QtCore.QObject):
         self._stop_notifiers=[]
         # set up life control
         self._stop_requested=(self.kind!="main")
-        # self._running=not self._stop_requested
         self._lifetime_state_lock=threading.Lock()
         self._lifetime_state="stopped"
         # set up signals
@@ -215,7 +214,9 @@ class QThreadController(QtCore.QObject):
             else:
                 self._sync_queue.setdefault(tag,set()).add(value)
         elif kind=="stop":
-            self._stop_requested=True
+            with self._lifetime_state_lock:
+                if self._lifetime_state!="finishing":
+                    self._stop_requested=True
     _interrupt_called=QtCore.pyqtSignal("PyQt_PyObject")
     @exsafeSlot("PyQt_PyObject")
     def _on_call_in_thread(self, call): # call signal processing
@@ -722,6 +723,7 @@ class QMultiRepeatingThreadController(QThreadController):
         self.timers[name]=general.Timer(period)
         self._jobs_list.append(name)
         if initial_call:
+            self._acknowledge_job(name)
             job()
     def change_job_period(self, name, period):
         """Change the period of the job `name`"""

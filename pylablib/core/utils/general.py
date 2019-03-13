@@ -687,6 +687,7 @@ class StreamFileLogger(object):
         stream: an optional output stream into which the output will be duplicated; usually, the original stream which is being replaced
         lock: a thread lock object, which is used for any file writing operation;
             necessary if replacing standard streams (such as ``sys.stdout`` or ``sys.stderr``) in a multithreading envornment.
+        autoflush: if ``True``, flush after any write operation into `stream`
 
     It is also possible to subclass the file and overload :meth:`write_header` method to write a header before the first file write operation during the execution.
     
@@ -695,12 +696,13 @@ class StreamFileLogger(object):
         import sys, threading
         sys.stderr = StreamFileLogger("error_log.txt", stream=sys.stderr, lock=threading.Lock())
     """
-    def __init__(self, path, stream=None, lock=None):
+    def __init__(self, path, stream=None, lock=None, autoflush=False):
         object.__init__(self)
         self.path=path
         self.stream=stream
         self.header_done=False
         self.lock=lock or DummyResource()
+        self.autoflush=autoflush
     def write_header(self, f):
         """Write header to file stream `f`"""
         pass
@@ -720,6 +722,8 @@ class StreamFileLogger(object):
                 pass
             if self.stream is not None:
                 self.stream.write(s)
+                if self.autoflush:
+                    self.stream.flush()
     def flush(self):
         with self.lock:
             if self.stream is not None:

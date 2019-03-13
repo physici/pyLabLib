@@ -4,6 +4,7 @@ from .misc import default_lib_folder, load_lib
 import ctypes
 import collections
 import os.path
+import platform
 
 ##### Constants #####
 
@@ -256,12 +257,21 @@ class AndorSDK3Lib(object):
 		object.__init__(self)
 		self._initialized=False
 
-	lib_path=os.path.join(default_lib_folder,"atcore.dll")
 	def initlib(self):
 		if self._initialized:
 			return
 
-		self.lib=load_lib(self.lib_path,locally=True,call_conv="stdcall")
+		try:
+			arch=platform.architecture()[0]
+			winarch="64bit" if platform.machine().endswith("64") else "32bit"
+			if arch=="32bit" and winarch=="64bit":
+				self.lib_path=r"C:\Program Files (x86)\Andor SOLIS\atcore.dll"
+			else:
+				self.lib_path=r"C:\Program Files\Andor SOLIS\atcore.dll"
+			self.lib=load_lib(self.lib_path,locally=True,call_conv="stdcall",global_first=True)
+		except OSError:
+			self.lib_path=os.path.join(default_lib_folder,"atcore.dll")
+			self.lib=load_lib(self.lib_path,locally=True,call_conv="stdcall")
 		lib=self.lib
 
 		AT_H=ctypes.c_int
