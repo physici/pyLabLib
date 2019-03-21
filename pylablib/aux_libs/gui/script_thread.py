@@ -29,6 +29,7 @@ class ScriptThread(controller.QTaskThread):
         executing (bool): shows whether the script is executing right now;
             useful in :meth:`interrupt_script` to check whether it is called due to script stopping/completion (then it would be ``True``),
             or due to thread termination (then it would be ``False``)
+        stop_request (bool): shows whether stop has been requested from another thread (by calling :meth:`stop_execution`).
 
     Methods to overload:
         setup_script: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
@@ -73,8 +74,9 @@ class ScriptThread(controller.QTaskThread):
         """
         Check if the script stop is requested.
 
-        If it is, raise :exc:`ScriptStopException` which effectively stops exeuction past this point
+        If it is, raise :exc:`ScriptStopException` which effectively stops execution past this point
         (the exception is properly caught and processed elsewhere in the service code).
+        To only check if the stop has been requested without exception raising, use ``stop_request`` attribute.
         """
         if self.stop_request:
             self.stop_request=False

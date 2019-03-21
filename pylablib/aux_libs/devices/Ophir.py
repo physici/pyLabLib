@@ -100,10 +100,19 @@ class VegaPowerMeter(OphirDevice):
         """Get current power range (maximal power in W)"""
         return self.get_range_info().curr_range
     def get_range_idx(self):
-        """Get current power range index"""
+        """
+        Get current power range index
+
+        Index goes from 0 (highest) to maximal (lowest); auto-ranging is -1.
+        """
+        
         return self.get_range_info().curr_idx
     def set_range_idx(self, rng_idx):
-        """Set current range index"""
+        """
+        Set current range index.
+
+        `rng_idx` is the range index from 0 (highest) to maximal (lowest); auto-ranging is -1.
+        """
         self.query("$WN{:d}".format(rng_idx))
         return self.get_range_idx()
 

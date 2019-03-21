@@ -14,6 +14,9 @@ class DeviceThread(controller.QTaskThread):
     Attributes:
         device: managed device. Its opening should be specified in an overloaded :meth:`connect_device` method,
             and it is actually opened by calling :meth:`open_device` method (which also handles status updates and duplicate opening issues)
+        qd: device query accessor, which routes device method call through a command
+            ``ctl.qd.method(*args,**kwarg)`` is equaivalent to ``ctl.device.method(args,kwargs)`` called as a query in the device thread
+        qdi: device query accessor, ignores and silences any exceptions (including missing /stopped controller); similar to ``.qi`` accessor for queries
 
     Methods to overload:
         setup_task: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
@@ -34,10 +37,13 @@ class DeviceThread(controller.QTaskThread):
         self.add_command("close_device",self.close_device)
         self.add_command("get_settings",self.get_settings)
         self.add_command("get_full_info",self.get_full_info)
+        self.add_command("_device_method",self._device_method)
         self._full_info_job=False
         self._full_info_nodes=None
         self.retry_device_connect=False
         self._tried_device_connect=False
+        self.qd=self.DeviceMethodAccessor(self,ignore_errors=False)
+        self.qdi=self.DeviceMethodAccessor(self,ignore_errors=True)
         
     def finalize_task(self):
         self.close_device()
@@ -119,6 +125,29 @@ class DeviceThread(controller.QTaskThread):
             return self["full_info"] if self._full_info_job else self.device.get_full_info(nodes=self._full_info_nodes)
         else:
             return {}
+    def _device_method(self, name, args, kwargs):
+        """Call a device method"""
+        if self.open_device():
+            return getattr(self.device,name)(*args,**kwargs)
+        return None
+    class DeviceMethodAccessor(object):
+        """
+        Accessor object designed to simplify calling device commands.
+
+        Automatically created by the thread, so doesn't need to be invoked externally.
+        """
+        def __init__(self, parent, ignore_errors=False):
+            object.__init__(self)
+            self.parent=parent
+            self.ignore_errors=ignore_errors
+            self._calls={}
+        def __getattr__(self, name):
+            if name not in self._calls:
+                parent=self.parent
+                def remcall(*args, **kwargs):
+                    return parent.call_query("_device_method",[name,args,kwargs],ignore_errors=self.ignore_errors)
+                self._calls[name]=remcall
+            return self._calls[name]
 
 
 

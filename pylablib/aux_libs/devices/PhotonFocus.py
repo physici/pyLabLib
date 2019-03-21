@@ -423,6 +423,10 @@ class PhotonFocusIMAQCamera(IMAQCamera):
 
 
 
+
+
+##### Dealing with status line #####
+
 _status_line_magic=0x55AA00FF
 def _check_magic(line):
     """Check if the status line satisfies the magic 4-byte requirement"""
@@ -485,6 +489,52 @@ def get_status_line_position(frame, check_transposed=True):
             return res[0],True
     return None
 
+def remove_status_line(frame, sl_pos="calculate", policy="duplicate", copy=True):
+    """
+    Remove status line from the frame.
+    
+    Args:
+        frame: a frame to process (2D or 3D numpy array; if 3D, the first axis is the frame number)
+        sl_pos: status line position (returned by :func:`get_status_line_position`); if equal to ``"calculate"``, calculate here;
+            for a 3D array, assumed to be the same for all frames
+        policy: determines way to deal with the status line;
+            can be ``"keep"`` (keep as is), ``"cut"`` (cut off the status line row), ``"zero"`` (set it to zero),
+            ``"median"`` (set it to the image median), or ``"duplicate"`` (set it equal to the previos row; default)
+        copy: if ``True``, make copy of the original frames; otherwise, attempt to remove the line in-place
+    """
+    if sl_pos is "calculate":
+        sl_pos=get_status_line_position(frame) if frame.ndim==2 else get_status_line_position(frame[0])
+    if sl_pos and policy!="keep":
+        if copy:
+            frame=frame.copy()
+        if frame.ndim==2:
+            if sl_pos[1]:
+                frame=frame.T
+            if policy=="median":
+                frame[sl_pos[0]:,:]=np.median(frame[:,:sl_pos[0]]) if frame.shape[0]>abs(sl_pos[0]) else 0
+            elif policy=="zero":
+                frame[sl_pos[0]:,:]=0
+            elif policy=="cut":
+                frame=frame[:sl_pos[0],:]
+            else:
+                frame[sl_pos[0]:,:]=frame[sl_pos[0]-1,:].reshape((1,-1)) if frame.shape[0]>abs(sl_pos[0]) else 0
+            if sl_pos[1]:
+                frame=frame.T
+        else:
+            if sl_pos[1]:
+                frame=frame.transpose((0,2,1))
+            if policy=="median":
+                frame[:,sl_pos[0]:,:]=np.median(frame[:,:sl_pos[0],:],axis=(1,2)).reshape((-1,1,1)) if frame.shape[1]>abs(sl_pos[0]) else 0
+            elif policy=="zero":
+                frame[:,sl_pos[0]:,:]=0
+            elif policy=="cut":
+                frame=frame[:,:sl_pos[0],:]
+            else:
+                frame[:,sl_pos[0]:,:]=frame[:,sl_pos[0]-1,:].reshape((len(frame),1,-1)) if frame.shape[1]>abs(sl_pos[0]) else 0
+            if sl_pos[1]:
+                frame=frame.transpose((0,2,1))
+    return frame
+
 
 def find_skipped_frames(lines):
     """
@@ -496,4 +546,4 @@ def find_skipped_frames(lines):
     dfs=(lines[1:,1]-lines[:-1,1])%(2**24) # the internal counter is only 24-bit
     skipped_idx=(dfs!=1)
     skipped_idx=skipped_idx.nonzero()[0]
-    return list(zip(skipped_idx,dfs[skipped_idx])) if len(skipped_idx) else None
+    return list(zip(skipped_idx,dfs[skipped_idx])) if len(skipped_idx) else []
