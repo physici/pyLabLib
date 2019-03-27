@@ -130,10 +130,8 @@ class QThreadController(QtCore.QObject):
         on_start: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
         on_finish: executed on thread cleanup (attempts to execute in any case, including exceptions)
         run: executed once per thread; thread is stopped afterwards (only if ``kind=="run"``)
-        process_message: function that takes 2 arguments (tag and value) of the message and processes it; returns ``True`` if the message has been processed
-            and ``False`` otherwise (in which case it is stored and can be recoverd via :meth:`wait_for_message`/:meth:`pop_message`); by default, always return ``False``
-        process_interrupt: function that tales 2 arguments (tag and value) of the interrupt message (message with a tag starting with ``"interrupt."``) and processes it;
-            by default, assumes that any value with tag ``"execute"`` is a function and executes it
+        process_message: function that takes 2 arguments (tag and value) of the message and processes it; returns ``True`` if the message has been processed and ``False`` otherwise (in which case it is stored and can be recovered via :meth:`wait_for_message`/:meth:`pop_message`); by default, always return ``False``
+        process_interrupt: function that tales 2 arguments (tag and value) of the interrupt message (message with a tag starting with ``"interrupt."``) and processes it; by default, assumes that any value with tag ``"execute"`` is a function and executes it
     
     Signals:
         started: emitted on thread start (after :meth:`on_start` is executed)
@@ -498,7 +496,7 @@ class QThreadController(QtCore.QObject):
 
         Can be called in any thread (controlled or external).
         If ``missing_error==False`` and no variable exists, return `default`; otherwise, raise and error.
-        If ``copy_branch==True`` and the variable is a :class:`.Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignements.
+        If ``copy_branch==True`` and the variable is a :class:`.Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignments.
         """
         with self._params_val_lock:
             if missing_error and name not in self._params_val:
@@ -511,7 +509,7 @@ class QThreadController(QtCore.QObject):
         return self.get_variable(name,missing_error=True)
     def wait_for_variable(self, name, pred, timeout=None):
         """
-        Wait until thread variable with the given `name` satisfies the given condtion.
+        Wait until thread variable with the given `name` satisfies the given condition.
         
         `pred` is a function which takes one argument (variable value) and returns whether the condition is satisfied.
         """
@@ -896,13 +894,13 @@ class QTaskThread(QMultiRepeatingThreadController):
 
     Attributes:
         c: command accessor, which makes calls more function-like;
-            ``ctl.c.comm(*args,**kwarg)`` is equaivalent to ``ctl.call_command("comm",args,kwargs)``
+            ``ctl.c.comm(*args,**kwarg)`` is equivalent to ``ctl.call_command("comm",args,kwargs)``
         q: query accessor, which makes calls more function-like;
-            ``ctl.q.comm(*args,**kwarg)`` is equaivalent to ``ctl.call_query("comm",args,kwargs)``
-        qs: query accessor which is made 'exception-safe' via :func:`exsave` wrapper (i.e., safe to directly connect to slots)
-            ``ctl.qi.comm(*args,**kwarg)`` is equaivalent to ``with exint(): ctl.call_query("comm",args,kwargs)``
+            ``ctl.q.comm(*args,**kwarg)`` is equivalent to ``ctl.call_query("comm",args,kwargs)``
+        qs: query accessor which is made 'exception-safe' via :func:`exsafe` wrapper (i.e., safe to directly connect to slots)
+            ``ctl.qi.comm(*args,**kwarg)`` is equivalent to ``with exint(): ctl.call_query("comm",args,kwargs)``
         qi: query accessor which ignores and silences any exceptions (including missing /stopped controller)
-            useful for sending queries during thread finalizing / application shutdown, when it's not guaranteed that the query recepient is running
+            useful for sending queries during thread finalizing / application shutdown, when it's not guaranteed that the query recipient is running
             (commands already ignore any errors, unless their results are specifically requested)
 
     Methods to overload:
@@ -938,7 +936,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         """Process a query call (by default, look for an earlier created command)"""
         return self._process_named_command(name,*args,**kwargs)
     def finalize_task(self):
-        """Finlize the thread (always called on thread termination, regardless of the reason)"""
+        """Finalize the thread (always called on thread termination, regardless of the reason)"""
         pass
 
     ### Status update function ###

@@ -16,7 +16,7 @@ class ScriptThread(controller.QTaskThread):
     
     Designed to provide means of writing code which interacts with multiple device threads,
     but reads similar to a standard single-threaded script.
-    To do that, it provides a mechanism of signal montiors: one can suspend execution until a signal with certain properties has been received.
+    To do that, it provides a mechanism of signal montors: one can suspend execution until a signal with certain properties has been received.
     This can be used to implement, e.g., waiting until the next stream_format/daq sample or a next camera frame.
 
     Args:
@@ -154,7 +154,7 @@ class ScriptThread(controller.QTaskThread):
                     return self.TWaitResult(mon,self._monitored_signals[mon].messages.pop(0))
             self.wait_for_any_message(ctd.time_left())
     def new_monitored_signals_number(self, mon):
-        """Get number of received signals at a given montior"""
+        """Get number of received signals at a given monitor"""
         if mon not in self._monitored_signals:
             raise KeyError("signal monitor {} doesn't exist".format(mon))
         return len(self._monitored_signals[mon].messages)
@@ -173,7 +173,7 @@ class ScriptThread(controller.QTaskThread):
                 return [self._monitored_signals[mon].messages.pop(0) for _ in range(n)]
         return None
     def reset_monitored_signal(self, mon):
-        """Reset montiored signal (clean its received signals queue)"""
+        """Reset monitored signal (clean its received signals queue)"""
         self._monitored_signals[mon].messages.clear()
     def pause_monitoring(self, mon, paused=True):
         """Pause or un-pause signal monitoring"""
@@ -184,8 +184,8 @@ class ScriptThread(controller.QTaskThread):
 
 
     def start_execution(self):
-        """Request starting script exectuion"""
+        """Request starting script execution"""
         self.send_message("control.start",None)
     def stop_execution(self):
-        """Request stopping script exectuion"""
+        """Request stopping script execution"""
         self.send_message("control.stop",None)

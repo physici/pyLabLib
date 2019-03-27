@@ -21,7 +21,7 @@ class IGUIController(QtCore.QObject):
         """
         Add a widget description under a given name.
 
-        If params_path` is not ``None``, it sepcifies path under which the widget is stored in the parameters' table
+        If params_path` is not ``None``, it specifies path under which the widget is stored in the parameters' table
         (by default, same as the widget's name).
         """
         self.widgets_desc[name]=self.TWidget(params_path)

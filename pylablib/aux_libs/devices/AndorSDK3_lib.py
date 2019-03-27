@@ -385,7 +385,7 @@ def nb_read_uint12(raw_data, width):
 	`raw_data` is a 2D numpy array with the raw frame data of dimensions ``(nrows, stride)``, where ``stride`` is the size of one row in bytes.
 	`width` is the size of the resulting row in pixels; if it is 0, assumed to be maximal possible size.
 
-	Funcation semantics is identical to :func:`read_uint12`, but it is implmeneted with Numba to speed up calculations.
+	Funcation semantics is identical to :func:`read_uint12`, but it is implemented with Numba to speed up calculations.
 	"""
 	h,s=raw_data.shape
 	if width==0:

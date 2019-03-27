@@ -15,18 +15,17 @@ class DeviceThread(controller.QTaskThread):
         device: managed device. Its opening should be specified in an overloaded :meth:`connect_device` method,
             and it is actually opened by calling :meth:`open_device` method (which also handles status updates and duplicate opening issues)
         qd: device query accessor, which routes device method call through a command
-            ``ctl.qd.method(*args,**kwarg)`` is equaivalent to ``ctl.device.method(args,kwargs)`` called as a query in the device thread
+            ``ctl.qd.method(*args,**kwarg)`` is equivalent to ``ctl.device.method(args,kwargs)`` called as a query in the device thread
         qdi: device query accessor, ignores and silences any exceptions (including missing /stopped controller); similar to ``.qi`` accessor for queries
 
     Methods to overload:
         setup_task: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
-        finalize_task: executed on thread cleanup (attempts to execute in any case, including exceptions);
-            by default, close the device connection if it is opened
-        connect_device: create the device class and assign it to ``.device`` attirbute; if connection failed, can leave the attribute ``None``
+        finalize_task: executed on thread cleanup (attempts to execute in any case, including exceptions); by default, close the device connection if it is opened
+        connect_device: create the device class and assign it to ``.device`` attribute; if connection failed, can leave the attribute ``None``
         
     Commands:
-        open_device: open the deivce, if not already opened
-        close_device: close the deivce, if opened
+        open_device: open the device, if not already opened
+        close_device: close the device, if opened
         get_settings: get device settings
         get_full_info: get full info of the device
     """
@@ -111,14 +110,14 @@ class DeviceThread(controller.QTaskThread):
         """
         Update full info of the device.
 
-        A function for a job which is setup in :meth:`setup_full_info_job`. Normally doesn't need to be called explicitly.
+        A function for a job which is setup in :meth:`DeviceThread.setup_full_info_job`. Normally doesn't need to be called explicitly.
         """
         self["full_info"]=self.device.get_full_info(nodes=self._full_info_nodes)
     def get_full_info(self):
         """
         Get full device info
         
-        If the full info job is set up using :meth:`setup_full_info_job`, use the last cached verision of the full info;
+        If the full info job is set up using :meth:`DeviceThread.setup_full_info_job`, use the last cached version of the full info;
         otherwise, request a new version from the device.
         """
         if self.device:
@@ -175,8 +174,8 @@ class RemoteDeviceThread(DeviceThread):
             remote: address of the remote host (it should be running RPyC server; see :func:`.rpyc.run_device_service` for details)
             module: device class module name
             device: device class name
-            args: arguments supplied to the device contstructor.
-            kwargs: keyword arguments supplied to the device contstructor.
+            args: arguments supplied to the device constructor.
+            kwargs: keyword arguments supplied to the device constructor.
         """
         self.rpyc=True
         self.rpyc_serv=rpyc_utils.connect_device_service(remote)

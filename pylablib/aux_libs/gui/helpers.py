@@ -167,9 +167,9 @@ class StreamFormerThread(controller.QThreadController):
             func: function used to get the channel value if no data has been suppled
             max_queue_len (int): maximal queue length
             enabled (bool): determines if the channel is enabled by default (disabled channel always returns ``None``)
-            requried: determines if the channel is required to receive the value to complete the row;
+            required: determines if the channel is required to receive the value to complete the row;
                 by default, ``False`` if `func` is specified and ``True`` otherwise
-            fill_on (str): determines when `func` is called to get the cahnnel value;
+            fill_on (str): determines when `func` is called to get the channel value;
                 can be either ``"started"`` (when the new row is created) or ``"finished"`` (when the new row is complete)
             latching (bool): determines value of non-`required` channel if `func` is not supplied;
                 if ``True``, it is equal to the last received values; otherwise, it is default
@@ -186,7 +186,7 @@ class StreamFormerThread(controller.QThreadController):
         """
         Subscribe a source signal to a channels.
 
-        Called automatically for subscribed channels, so it is rearely called explicitly.
+        Called automatically for subscribed channels, so it is rarely called explicitly.
 
         Args:
             name (str): channel name
@@ -212,7 +212,7 @@ class StreamFormerThread(controller.QThreadController):
         Args:
             name (str): channel name
             enabled (bool): determines if the channel is enabled by default (disabled channel always returns ``None``)
-            requried: determines if the channel is required to receive the value to complete the row;
+            required: determines if the channel is required to receive the value to complete the row;
                 by default, ``False`` if `func` is specified and ``True`` otherwise
             clear (bool): if ``True``, clear all channels after reconfiguring
         """
@@ -226,12 +226,12 @@ class StreamFormerThread(controller.QThreadController):
         """
         Add a value to the channel.
 
-        Called automatically for subscribed channels, so it is rearely called explicitly.
+        Called automatically for subscribed channels, so it is rarely called explicitly.
 
         Args:
             name (str): channel name
             value: value to add
-            src (str): specifies values sorce; supplied to the `parse` function
+            src (str): specifies values source; supplied to the `parse` function
             tag (str): specifies values tag; supplied to the `parse` function
             parse: if not ``None``, specifies a parsing function which takes 3 arguments (`src`, `tag` and `value`)
                 and returns a dictionary ``{name: value}`` of channel values to add
@@ -472,7 +472,7 @@ class TableAccumulatorThread(controller.QTaskThread):
         Args:
             path (str): path to the file
             source_trigger (bool): if ``True``, start streaming only after source ``"reset"`` signal; otherwise, start streaming immediately
-            append (bool): if ``True``, append new data to the exisiting file; otherwise, overwrite the file
+            append (bool): if ``True``, append new data to the existing file; otherwise, overwrite the file
         """
         self.streaming=not source_trigger
         if not append and os.path.exists(path):
