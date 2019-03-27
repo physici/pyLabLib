@@ -6,6 +6,7 @@ from imp import reload
 
 import pkg_resources
 import sys
+import subprocess
 import os.path
 from . import general, files as file_utils
 
@@ -35,6 +36,8 @@ def cmp_package_version(pkg, ver):
     cver=get_package_version(pkg)
     if cver is None:
         return None
+    if ver=="":
+        return ">"
     ver=[_tryint(v.strip()) for v in ver.split(".")]
     cver=[_tryint(v.strip()) for v in cver.split(".")]
     if cver>ver:
@@ -138,3 +141,24 @@ def get_library_name():
     """
     module_name=__name__
     return ".".join(module_name.split(".")[:-3])
+
+
+def pip_install(pkg, upgrade=True):
+    """
+    Call ``pip install`` for a given package.
+    
+    If ``upgrade==True``, call with ``--upgrade`` key (upgrade current version if it is already installed).
+    """
+    if upgrade:
+        subprocess.call([sys.executable, "-m", "pip", "install", "--upgrade", pkg])
+    else:
+        subprocess.call([sys.executable, "-m", "pip", "install", pkg])
+
+def install_if_older(pkg, min_ver=""):
+    """
+    Install `pkg` from the default PyPI repository if its version is lower that `min_ver`
+    
+    If `min_ver` is ``None``, upgrade to the newest version regardless; if ``min_ver==""``, install only if no version is installed
+    """
+    if get_package_version(pkg) is None or cmp_package_version(pkg,min_ver)=="<":
+        pip_install(pkg,upgrade=True)

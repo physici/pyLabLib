@@ -16,7 +16,7 @@ with open(path.join(here, 'README.rst')) as f:
 
 setup(
     name='pylablib',
-    version='0.3.0',
+    version='0.3.2',
     description='Collection of Python code for using in lab environment (data acquisition, device communication, data analysis)',
     long_description=long_description,
     long_description_content_type="text/x-rst",
@@ -34,6 +34,7 @@ setup(
     'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3',
     'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
     'Operating System :: Microsoft :: Windows'
     ],
     project_urls={
@@ -43,5 +44,5 @@ setup(
     },
     packages=find_packages(exclude=['docs']),
     package_data={'pylablib.core.dataproc': ['*.c','*.pyd']},
-    install_requires=['future','numpy','scipy','matplotlib'],
+    install_requires=['future','numpy','scipy','matplotlib','numba'],
 )
