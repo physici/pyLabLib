@@ -6,6 +6,7 @@ Small extension of the struct module.
 from builtins import range, bytes
 
 import struct
+import numpy as np
 from . import funcargparse
 
 
@@ -95,3 +96,16 @@ def unpack_int(msg, bo=">"):
     val=unpack_uint(msg,bo)
     maxint=1<<(len(msg)*8-1)
     return ((val+maxint)%(maxint*2))-maxint
+
+
+def unpack_numpy_u12bit(buffer, byteorder="<", count=-1):
+    u8count=count*3//2 if count>0 else -1
+    data=np.frombuffer(buffer,dtype="u1",count=u8count)
+    fst_uint8,mid_uint8,lst_uint8=np.reshape(data,(len(data)//3,3)).astype(np.uint16).T
+    if byteorder==">":
+        fst_uint12=(fst_uint8<<4)+(mid_uint8>>4)
+        snd_uint12=((mid_uint8%16)<<8)+lst_uint8
+    else:
+        fst_uint12=fst_uint8+((mid_uint8>>4)<<8)
+        snd_uint12=(mid_uint8%16)+(lst_uint8<<4)
+    return np.concatenate((fst_uint12[:,None],snd_uint12[:,None]),axis=1).flatten()

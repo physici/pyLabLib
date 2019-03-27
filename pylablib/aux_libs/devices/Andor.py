@@ -1,5 +1,5 @@
 from .Andor_lib import lib, AndorLibError
-from .AndorSDK3_lib import lib as lib3, AndorSDK3LibError, AndorSDK3_feature_types
+from .AndorSDK3_lib import lib as lib3, AndorSDK3LibError, AndorSDK3_feature_types, nb_read_uint12, read_uint12
 
 from ...core.devio import data_format
 from ...core.devio.interface import IDevice
@@ -1463,6 +1463,28 @@ class AndorSDK3Camera(IDevice):
         lib3.AT_QueueBuffer(self.handle,ctypes.cast(ring_buffer,ctypes.POINTER(ctypes.c_uint8)),self._ring_buffer.size)
         self._ring_buffer.advance()
         self._frame_counter.read()
+    # def _unpack_12bit(self, buffer, stride=None, width=None):
+    #     """
+    #     Unpack 12-bit Andor packing.
+        
+    #     `stride` is the buffer stride (row size in bytes); if it is ``None``, assume that the rows are tightly packed.
+    #     """
+    #     if stride is None:
+    #         data=np.frombuffer(buffer,dtype="u1")
+    #         result=np.empty(len(data)*2//3,dtype="u2")
+    #         result[0::2]=data[::3]
+    #         result[1::2]=data[2::3]
+    #         result<<=4
+    #         result[0::2]|=data[1::3]&0x0F
+    #         result[1::2]|=data[1::3]>>4
+    #         return result.reshape((-1,width)) if width else result
+    #     else:
+    #         data=np.frombuffer(buffer,dtype="u1").reshape((-1,stride)).astype("<u2")
+    #         fst_uint8,mid_uint8,lst_uint8=data[:,::3],data[:,1::3],data[:,2::3]
+    #         result=np.empty(shape=(fst_uint8.shape[0],lst_uint8.shape[1]+mid_uint8.shape[1]),dtype="<u2")
+    #         result[:,::2]=(fst_uint8[:,:mid_uint8.shape[1]]<<4)|(mid_uint8&0x0F)
+    #         result[:,1::2]=(mid_uint8[:,:lst_uint8.shape[1]]>>4)|(lst_uint8<<4)
+    #         return result[:,:width] if width else result
     def _parse_image(self, img):
         if img is None:
             return None
@@ -1484,18 +1506,33 @@ class AndorSDK3Camera(IDevice):
         else:
             metadata={}
         bpp=self.get_value("BytesPerPixel")
-        if bpp%1:
-            raise ValueError("can't process fractional pixel byte size: {}".format(bpp))
+        if bpp not in [1,1.5,2,4]:
+            raise ValueError("unexpected pixel byte size: {}".format(bpp))
         stride=self.get_value("AOIStride")
-        if stride!=int(bpp*width):
-            raise AndorError("unexpected stride: expected {}x{}={}, got {}".format(width,bpp,int(width*bpp),stride))
-        if len(img)!=int(width*height*bpp):
-            exp_len=int(width*height*bpp)
-            rnd_len=((exp_len-1)//4+1)*4
-            if len(img)!=rnd_len: # exclude length rounding
-                raise AndorError("unexpected image byte size: expected {}x{}x{}={}, got {}".format(width,height,bpp,int(width*height*bpp),len(img)))
-        dtype=data_format.DataFormat(int(bpp),"u","<")
-        img=np.frombuffer(img,dtype=dtype.to_desc("numpy"),count=width*height).reshape(height,width)
+        if stride<int(np.ceil(bpp*width)):
+            raise AndorError("unexpected stride: expected at least {}x{}={}, got {}".format(width,bpp,int(np.ceil(width*bpp)),stride))
+        exp_len=int(stride*height)
+        if len(img)!=exp_len:
+            if len(img)<exp_len or len(img)>=exp_len+8: # sometimes image size gets rounded to nearest 4/8 bytes
+                raise AndorError("unexpected image byte size: expected {}x{}={}, got {}".format(stride,height,int(stride*height),len(img)))
+        if bpp==1.5:
+            img=nb_read_uint12(np.frombuffer(img,"u1",count=exp_len).reshape(-1,stride),width=width)
+        else:
+            dtype=data_format.DataFormat(int(bpp),"u","<")
+            if stride==bpp*width:
+                img=np.frombuffer(img,dtype=dtype.to_desc("numpy"),count=width*height).reshape(height,width)
+            elif stride%bpp==0:
+                img=np.frombuffer(img,dtype=dtype.to_desc("numpy"),count=(stride//bpp)*height).reshape(height,-1)[:,:width]
+            else: # only possible with bpp==2 or 4 and non-divisible stride
+                bpp=int(bpp)
+                byteimg=np.frombuffer(img,dtype="u1",count=exp_len).reshape(height,stride)
+                byteimg=byteimg[:,:width*bpp].astype(dtype)
+                if bpp==2:
+                    img=(byteimg[:,::2])+(byteimg[:,1::2]<<8)
+                else:
+                    img=byteimg[:,::bpp]
+                    for b in range(1,bpp):
+                        img+=byteimg[:,b::bpp]<<(b*8)
         img=image_utils.convert_image_indexing(img,"rct",self.image_indexing)
         return img,metadata
 

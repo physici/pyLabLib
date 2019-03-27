@@ -1,6 +1,9 @@
 from ...core.utils import ctypes_wrap
 from .misc import default_lib_folder, load_lib
 
+import numpy as np
+import numba as nb
+
 import ctypes
 import collections
 import os.path
@@ -359,5 +362,47 @@ class AndorSDK3Lib(object):
 			buffs.append(b)
 		return buffs
 
+
+def read_uint12(raw_data, width):
+	"""
+	Convert packed 12bit data (3 bytes per 2 pixels) into unpacked 16bit data (2 bytes per pixel).
+
+	`raw_data` is a 2D numpy array with the raw frame data of dimensions ``(nrows, stride)``, where ``stride`` is the size of one row in bytes.
+	`width` is the size of the resulting row in pixels; if it is 0, assumed to be maximal possible size.
+	"""
+	data=raw_data.astype("<u2")
+	fst_uint8,mid_uint8,lst_uint8=data[:,::3],data[:,1::3],data[:,2::3]
+	result=np.empty(shape=(fst_uint8.shape[0],lst_uint8.shape[1]+mid_uint8.shape[1]),dtype="<u2")
+	result[:,::2]=(fst_uint8[:,:mid_uint8.shape[1]]<<4)|(mid_uint8&0x0F)
+	result[:,1::2]=(mid_uint8[:,:lst_uint8.shape[1]]>>4)|(lst_uint8<<4)
+	return result[:,:width] if width else result
+
+@nb.njit(nb.uint16[:,:](nb.uint8[:,:],nb.int64),parallel=False)
+def nb_read_uint12(raw_data, width):
+	"""
+	Convert packed 12bit data (3 bytes per 2 pixels) into unpacked 16bit data (2 bytes per pixel).
+
+	`raw_data` is a 2D numpy array with the raw frame data of dimensions ``(nrows, stride)``, where ``stride`` is the size of one row in bytes.
+	`width` is the size of the resulting row in pixels; if it is 0, assumed to be maximal possible size.
+
+	Funcation semantics is identical to :func:`read_uint12`, but it is implmeneted with Numba to speed up calculations.
+	"""
+	h,s=raw_data.shape
+	if width==0:
+		width=(s*2)//3
+	out=np.empty((width,h),dtype=nb.uint16)
+	chwidth=width//2
+	for i in range(h):
+		for j in range(chwidth):
+			fst_uint8=nb.uint16(raw_data[i,j*3])
+			mid_uint8=nb.uint16(raw_data[i,j*3+1])
+			lst_uint8=nb.uint16(raw_data[i,j*3+2])
+			out[i,j*2]=(fst_uint8<<4)|(mid_uint8&0x0F)
+			out[i,j*2+1]=(mid_uint8>>4)|(lst_uint8<<4)
+		if width%2==1:
+			fst_uint8=nb.uint16(raw_data[i,chwidth*3])
+			mid_uint8=nb.uint16(raw_data[i,chwidth*3+1])
+			out[i,width-1]=(fst_uint8 << 4  ) + (mid_uint8 >> 4)
+	return out
 
 lib=AndorSDK3Lib()
