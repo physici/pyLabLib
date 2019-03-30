@@ -1,5 +1,5 @@
 from ...core.utils import ctypes_wrap
-from .misc import default_lib_folder, load_lib
+from .misc import load_lib, default_source_message, default_placing_message
 
 import numpy as np
 import numba as nb
@@ -264,17 +264,16 @@ class AndorSDK3Lib(object):
 		if self._initialized:
 			return
 
-		try:
-			arch=platform.architecture()[0]
-			winarch="64bit" if platform.machine().endswith("64") else "32bit"
-			if arch=="32bit" and winarch=="64bit":
-				self.lib_path=r"C:\Program Files (x86)\Andor SOLIS\atcore.dll"
-			else:
-				self.lib_path=r"C:\Program Files\Andor SOLIS\atcore.dll"
-			self.lib=load_lib(self.lib_path,locally=True,call_conv="stdcall",global_first=True)
-		except OSError:
-			self.lib_path=os.path.join(default_lib_folder,"atcore.dll")
-			self.lib=load_lib(self.lib_path,locally=True,call_conv="stdcall")
+		arch=platform.architecture()[0]
+		winarch="64bit" if platform.machine().endswith("64") else "32bit"
+		if arch=="32bit" and winarch=="64bit":
+			solis_path=r"C:\Program Files (x86)\Andor SOLIS"
+		else:
+			solis_path=r"C:\Program Files\Andor SOLIS"
+		error_message=(	"The library is supplied with Andor Solis software, or {};\n"
+						"Additional required libraries:  atblkbx.dll, atcl_bitflow.dll, atdevapogee.dll, atdevregcam.dll, atusb_libusb.dll, atusb_libusb10.dll;\n"
+						"{}").format(default_source_message,default_placing_message)
+		self.lib=load_lib("atcore.dll",locations=(solis_path,"local","global"),call_conv="stdcall",locally=True,error_message=error_message)
 		lib=self.lib
 
 		AT_H=ctypes.c_int
@@ -385,7 +384,7 @@ def nb_read_uint12(raw_data, width):
 	`raw_data` is a 2D numpy array with the raw frame data of dimensions ``(nrows, stride)``, where ``stride`` is the size of one row in bytes.
 	`width` is the size of the resulting row in pixels; if it is 0, assumed to be maximal possible size.
 
-	Funcation semantics is identical to :func:`read_uint12`, but it is implmeneted with Numba to speed up calculations.
+	Funcation semantics is identical to :func:`read_uint12`, but it is implemented with Numba to speed up calculations.
 	"""
 	h,s=raw_data.shape
 	if width==0:

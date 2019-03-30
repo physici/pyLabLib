@@ -226,7 +226,7 @@ class ImageView(QtWidgets.QWidget):
         """
         Add or change parameters of a rectangle with a given name.
 
-        Rectangle coordiantes are specified in the original image cooredinate system
+        Rectangle coordinates are specified in the original image coordinate system
         (i.e., rectangles are automatically flipped/transposed with the image).
         """
         if name not in self.rectangles:
@@ -250,7 +250,7 @@ class ImageView(QtWidgets.QWidget):
         rect.rect.setPos(rcenter)
         rect.rect.setSize(rsize)
     def update_rectangles(self):
-        """Update rectange coordinates"""
+        """Update rectangle coordinates"""
         for name in self.rectangles:
             self.set_rectangle(name)
     def del_rectangle(self, name):

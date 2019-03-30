@@ -16,7 +16,7 @@ with open(path.join(here, 'README.rst')) as f:
 
 setup(
     name='pylablib',
-    version='0.3.2',
+    version='0.3.3',
     description='Collection of Python code for using in lab environment (data acquisition, device communication, data analysis)',
     long_description=long_description,
     long_description_content_type="text/x-rst",
@@ -44,5 +44,10 @@ setup(
     },
     packages=find_packages(exclude=['docs']),
     package_data={'pylablib.core.dataproc': ['*.c','*.pyd']},
-    install_requires=['future','numpy','scipy','matplotlib','numba'],
+    install_requires=['future','numpy','scipy','matplotlib','numba','rpyc'],
+    extras_require={
+        'devio-basic':['pyft232','pyvisa','pyserial','pyusb','websocket-client'],
+        'devio':['pyft232','pyvisa','pyserial','nidaqmx','pywinusb','websocket-client'],
+        'gui':['pyqt5','sip','pyqtgraph'],
+    }
 )

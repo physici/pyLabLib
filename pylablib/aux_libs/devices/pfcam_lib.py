@@ -1,5 +1,6 @@
 from ...core.utils import general, py3, ctypes_wrap
 from .misc import load_lib
+from .IMAQ_lib import IMAQLibError
 
 import numpy as np
 import ctypes
@@ -167,12 +168,11 @@ class PfcamLib(object):
         object.__init__(self)
         self._initialized=False
 
-    lib_path="pfcam.dll"
-
     def initlib(self):
         if self._initialized:
             return
-        self.lib=load_lib(self.lib_path)
+        error_message="The library is automatically supplied with PhotonFocus PFRemote software"
+        self.lib=load_lib("pfcam.dll",error_message=error_message)
         lib=self.lib
 
         generic_wrapper=ctypes_wrap.CTypesWrapper()

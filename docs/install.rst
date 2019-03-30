@@ -8,6 +8,10 @@ You can install the library using pip::
 
     pip install pylablib
 
+This will install only the minimal subset of dependencies. To add packages needed for device communication, you can specify ``devio`` extra (on non-Windows systems use ``devio-basic``, as some of the packages are not available there). To add packages needed for GUI, you can specify ``gui`` extra (note that one of the required packages is ``PyQt5``, which is not available on pip for Python 2.7; hence, it needs to be installed prior to installing pyLabLib). To grab full set of required packages, call::
+
+    pip install pylablib[devio,gui]
+
 -----
 Usage
 -----
@@ -33,7 +37,13 @@ The package has been tested with Python 3.6 and Python 3.7. Python 2.7 might not
 Installing from  GitHub
 -----------------------
 
-The most recent and extensive, but less documented, version of this library is available in the `dev` branch on GitHub at https://github.com/AlexShkarin/pyLabLib/tree/dev. To simply get the most recent version, you can download it as a zip-file (make sure `dev` branch is selected in the dropdown branch menu, so the file is called `pyLabLib-dev.zip`) and unpack it into any appropriate place (can be folder of the project you're working on, Python site-packages folder, or any folder added to Python path variable). In order to easily get updates, you can instead clone the repository to your computer. For that, you need to install Git (https://git-scm.com/), and use the following commands in the command line (in the folder where you want to store the library)::
+The most recent and extensive, but less documented, version of this library is available in the `dev` branch on GitHub at https://github.com/AlexShkarin/pyLabLib/tree/dev. To simply get the most recent version, you can download it as a zip-file (make sure `dev` branch is selected in the dropdown branch menu, so the file is called `pyLabLib-dev.zip`) and unpack it into any appropriate place (can be folder of the project you're working on, Python site-packages folder, or any folder added to Python path variable). Keep in mind that required packages will not be automatically installed, so this has to be done manually::
+
+    pip install future numpy scipy matplotlib numba rpyc
+    pip install pyft232 pyvisa pyserial nidaqmx pywinusb websocket-client
+    pip install pyqt5 sip pyqtgraph
+
+In order to easily get updates, you can clone the repository to your computer. For that, you need to install Git (https://git-scm.com/), and use the following commands in the command line (in the folder where you want to store the library)::
 
     git clone https://github.com/AlexShkarin/pyLabLib
     cd ./pyLabLib

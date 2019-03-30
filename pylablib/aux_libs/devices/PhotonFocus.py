@@ -50,7 +50,7 @@ class PfcamProperty(object):
             raise PFGenericError("property type {} not supported".format(self._type))
         self._flags=lib.pfProperty_GetFlags(port,self._token)
         if self._flags&0x02:
-            raise PFGenericError("propery {} is private".format(self.name))
+            raise PFGenericError("property {} is private".format(self.name))
         self.is_command=self._type=="PF_COMMAND"
         self.readable=not (self._flags&0x20 or self.is_command)
         self.writable=not (self._flags&0x10 or self.is_command)
@@ -499,7 +499,7 @@ def remove_status_line(frame, sl_pos="calculate", policy="duplicate", copy=True)
             for a 3D array, assumed to be the same for all frames
         policy: determines way to deal with the status line;
             can be ``"keep"`` (keep as is), ``"cut"`` (cut off the status line row), ``"zero"`` (set it to zero),
-            ``"median"`` (set it to the image median), or ``"duplicate"`` (set it equal to the previos row; default)
+            ``"median"`` (set it to the image median), or ``"duplicate"`` (set it equal to the previous row; default)
         copy: if ``True``, make copy of the original frames; otherwise, attempt to remove the line in-place
     """
     if sl_pos is "calculate":

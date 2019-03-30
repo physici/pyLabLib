@@ -1,4 +1,4 @@
-from .misc import default_lib_folder, load_lib
+from .misc import default_lib_folder, load_lib, default_source_message, default_placing_message
 from ...core.devio.interface import IDevice
 from ...core.utils import general
 
@@ -23,11 +23,13 @@ class WS(IDevice):
     """
     def __init__(self, lib_path=None, idx=0, serv_path=None, version=None, hide_app=False, timeout=10.):
         IDevice.__init__(self)
-        if lib_path==6:
-            lib_path=os.path.join(default_lib_folder,"wlmData6.dll")
-        if lib_path in [None,7]:
-            lib_path=os.path.join(default_lib_folder,"wlmData7.dll")
-        self.dll=load_lib(lib_path)
+        error_message="The library is supplied with the designated HighFinesse wavemeter software, or {};\n{}".format(default_source_message,default_placing_message)
+        if lib_path in [6,7,None]:
+            lib_path="wlmData6.dll" if lib_path==6 else "wlmData7.dll"
+            self.dll=load_lib(lib_path,locations=("local","global"),error_message=error_message)
+        else:
+            self.dll=load_lib(lib_path,error_message=error_message)
+        
         self.dll.Instantiate.restype=ctypes.c_long
         self.dll.Instantiate.argtypes=[ctypes.c_long,ctypes.c_long,ctypes.c_long,ctypes.c_long]
         self.dll.ControlWLM.restype=ctypes.c_long

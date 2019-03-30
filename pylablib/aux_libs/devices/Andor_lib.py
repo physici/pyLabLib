@@ -1,9 +1,10 @@
 from ...core.utils import ctypes_wrap
-from .misc import default_lib_folder, load_lib
+from .misc import default_source_message, default_placing_message, load_lib
 
 import ctypes
 import collections
 import os.path
+import platform
 
 ##### Constants #####
 
@@ -363,12 +364,17 @@ class AndorLib(object):
 		object.__init__(self)
 		self._initialized=False
 
-	lib_path=os.path.join(default_lib_folder,"atmcd.dll")
 	def initlib(self):
 		if self._initialized:
 			return
-
-		self.lib=load_lib(self.lib_path)
+		arch=platform.architecture()[0]
+		winarch="64bit" if platform.machine().endswith("64") else "32bit"
+		if arch=="32bit" and winarch=="64bit":
+			solis_path=r"C:\Program Files (x86)\Andor SOLIS"
+		else:
+			solis_path=r"C:\Program Files\Andor SOLIS"
+		error_message="The library is supplied with Andor Solis software, or {};\n{}".format(default_source_message,default_placing_message)
+		self.lib=load_lib("atmcd.dll",locations=(solis_path,"local","global"),call_conv="stdcall",error_message=error_message)
 		lib=self.lib
 
 		self.Andor_statuscodes=Andor_statuscodes

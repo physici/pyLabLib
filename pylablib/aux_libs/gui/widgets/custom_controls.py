@@ -9,7 +9,7 @@ class BinROICtl(QtWidgets.QWidget):
     """
     Class for ROI control.
 
-    Has 2 rows (for X and Y coordiantes), each with 3 numerical edits: min, max (or width, depedning on :func:`setupUi` parameters), and bin.
+    Has 2 rows (for X and Y coordinates), each with 3 numerical edits: min, max (or width, depending on :func:`setupUi` parameters), and bin.
 
     Like most widgets, requires calling :meth:`setupUi` to set up before usage.
 
@@ -139,8 +139,8 @@ class BinROICtl(QtWidgets.QWidget):
         """
         Set limits for various parameters.
 
-        If value is ``"keep"``, keep the current value; if value is ``None``, impose no contraints.
-        `maxbin`, `minsize` and `maxsize` can be integers or 2-tuples dependingon whether the limits are the same or different for two axes.
+        If value is ``"keep"``, keep the current value; if value is ``None``, impose no constraints.
+        `maxbin`, `minsize` and `maxsize` can be integers or 2-tuples depending on whether the limits are the same or different for two axes.
         """
         if xlim!="keep":
             self.xlim=xlim
@@ -234,7 +234,7 @@ class RangeCtl(QtWidgets.QWidget):
         Args:
             name (str): widget name
             lim (tuple): limit containing min and max values
-            order (bool): if ``True``, firt value is always smaller than the second one (values are swapped otherwise)
+            order (bool): if ``True``, first value is always smaller than the second one (values are swapped otherwise)
             formatter (str): formatter for all edit boxes; see :func:`.format.as_formatter` for details
             labels (tuple): tuple of 5 labels for 5 controls: min, max, center, span, and step (need to always specify 5, even if no all elements are included)
             elements (tuple): tuple specifying elements which are displayed for the control;
@@ -329,7 +329,7 @@ class RangeCtl(QtWidgets.QWidget):
         self.set_value(rng)
 
     def set_limit(self, lim):
-        """Set range vlaues limit (2-tuple)"""
+        """Set range values limit (2-tuple)"""
         self.lim=lim
         self.set_value(self.rng)
 

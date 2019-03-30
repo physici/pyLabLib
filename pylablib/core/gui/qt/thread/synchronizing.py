@@ -9,7 +9,7 @@ class QThreadNotifier(notifier.ISkippableNotifier):
     """
     Wait-notify thread synchronizer for controlled Qt threads based on :class:`.notifier.ISkippableNotifier`.
 
-    Like :class:`.notifier.ISkippableNotifier`, the main functions are :meth:`.ISkippableNotifier.wait` (wait in a message loop until notifiedm or until timeout expirese)
+    Like :class:`.notifier.ISkippableNotifier`, the main functions are :meth:`.ISkippableNotifier.wait` (wait in a message loop until notified or until timeout expires)
     and :meth:`.ISkippableNotifier.notify` (notify the waiting thread). Both of these can only be called once and will raise and error otherwise.
     Along with notifying a variable can be passed, which can be accessed using :meth:`get_value` and :meth:`get_value_sync`.
 
@@ -63,7 +63,7 @@ class QMultiThreadNotifier(object):
         self._notifiers={}
     def wait(self, state=1, timeout=None):
         """
-        Wait until notifier counter is eqaul to at least `state`
+        Wait until notifier counter is equal to at least `state`
         
         Return current counter state plus 1, which is the next smallest value resulting in waiting.
         """
@@ -80,7 +80,7 @@ class QMultiThreadNotifier(object):
         """
         Wait until `condition` is met.
 
-        `condition` is a function which is called (in the waiting thread) every time the synchronzier is notified.
+        `condition` is a function which is called (in the waiting thread) every time the synchronizer is notified.
         If it return non-``False``, the waiting is complete and its result is returned.
         """
         ctd=general.Countdown(timeout)

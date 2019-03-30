@@ -26,7 +26,7 @@ class ParamTable(QtWidgets.QWidget):
     """
     GUI parameter table.
     
-    Simplifes creating code-generated controls and displays table layouts.
+    Simplifies creating code-generated controls and displays table layouts.
     
     Has methods for adding various kinds of controls (labels, edit boxes, combo boxes, check boxes),
     automatically creates values table for easy settings/getting.
@@ -308,7 +308,7 @@ class ParamTable(QtWidgets.QWidget):
         self.formLayout.addWidget(label,*location)
         return label
     def add_padding(self, prop=1):
-        """Add a padding (expandable spacer) with the given proprtion"""
+        """Add a padding (expandable spacer) with the given proportion"""
         self.add_spacer(0)
         self.formLayout.setRowStretch(self.formLayout.rowCount(),prop)
 

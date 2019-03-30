@@ -28,7 +28,7 @@ def has_methods(widget, methods_sets):
     """
     Chick if the widget has methods from given set.
 
-    `methods_sets` is a list of method sets. The function returs ``True`` iff the widget has at least one method from each of the sets.
+    `methods_sets` is a list of method sets. The function returns ``True`` iff the widget has at least one method from each of the sets.
     """
     for ms in methods_sets:
         if not any([hasattr(widget,m) for m in ms]):
@@ -455,7 +455,7 @@ class ValuesTable(object):
             
     def repr_value(self, name, value):
         """
-        Get a textual represntation of a value under a given name.
+        Get a textual representation of a value under a given name.
 
         Automatically handles complex widgets and sub-names
         """
@@ -665,7 +665,7 @@ class IndicatorValuesTable(ValuesTable):
         """
         Add label-based indicator with a given name.
 
-        `repr_func` can specify represntation function which turns values into text.
+        `repr_func` can specify representation function which turns values into text.
         `ind_name` can distinguish different sub-indicators with the same name, if the same value has multiple indicators.
         """
         return self.add_indicator_handler(name,FuncLabelIndicatorHandler(label,repr_func=repr_func),ind_name=ind_name)
