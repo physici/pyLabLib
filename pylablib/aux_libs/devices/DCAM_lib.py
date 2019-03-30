@@ -214,11 +214,11 @@ class DCAMLib(object):
         object.__init__(self)
         self._initialized=False
 
-    lib_path="dcamapi.dll"
     def initlib(self):
         if self._initialized:
             return
-        self.lib=load_lib(self.lib_path)
+        error_message="The library is automatically supplied with Hamamatsu HOKAWO or DCAM-API software"
+        self.lib=load_lib("dcamapi.dll",error_message=error_message)
         lib=self.lib
 
         wrapper=ctypes_wrap.CTypesWrapper(restype=ctypes.c_int, return_res=False, errcheck=errcheck())

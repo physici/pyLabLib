@@ -170,9 +170,7 @@ class IMAQdxLib(object):
         object.__init__(self)
         self._initialized=False
 
-    lib_path="niimaqdx.dll"
-
-
+    
     def _new_attr_value(self, attr_type):
         if attr_type==0:
             return ctypes.c_uint32()
@@ -224,7 +222,8 @@ class IMAQdxLib(object):
     def initlib(self):
         if self._initialized:
             return
-        self.lib=load_lib(self.lib_path)
+        error_message="The library is automatically supplied with National Instruments NI-IMAQdx software"
+        self.lib=load_lib("niimaqdx.dll",error_message=error_message)
         lib=self.lib
 
         wrapper=ctypes_wrap.CTypesWrapper(restype=IMAQdxError, return_res=False, errcheck=errcheck(lib=self))

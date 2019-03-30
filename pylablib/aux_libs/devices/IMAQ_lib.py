@@ -57,12 +57,11 @@ class IMAQLib(object):
         object.__init__(self)
         self._initialized=False
 
-    lib_path="imaq.dll"
-
     def initlib(self):
         if self._initialized:
             return
-        self.lib=load_lib(self.lib_path)
+        error_message="The library is automatically supplied with National Instruments NI-IMAQ software"
+        self.lib=load_lib("imaq.dll",error_message=error_message)
         lib=self.lib
 
         wrapper=ctypes_wrap.CTypesWrapper(restype=IMAQError, return_res=False, errcheck=errcheck(lib=self))

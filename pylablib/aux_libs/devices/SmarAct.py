@@ -1,7 +1,7 @@
 from ...core.utils import general
 from ...core.devio.interface import IDevice
 
-from .misc import default_lib_folder, load_lib
+from .misc import default_source_message, default_placing_message, load_lib
 
 import os.path
 import ctypes
@@ -22,9 +22,11 @@ class SCU3D(IDevice):
     """
     def __init__(self, lib_path=None, idx=0, axis_mapping="xyz", axis_dir="+++"):
         IDevice.__init__(self)
+        error_message="The library is supplied {};\n{}".format(default_source_message,default_placing_message)
         if lib_path is None:
-            lib_path=os.path.join(default_lib_folder,"SCU3DControl.dll")
-        self.dll=load_lib(lib_path)
+            self.dll=load_lib("SCU3DControl.dll",locations=("local","global"),error_message=error_message)
+        else:
+            self.dll=load_lib(lib_path,error_message=error_message)
         self.dll.SA_MoveStep_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.c_int,ctypes.c_uint,ctypes.c_uint]
         self.dll.SA_GetStatus_S.argtypes=[ctypes.c_uint,ctypes.c_uint,ctypes.POINTER(ctypes.c_uint)]
         self.idx=idx

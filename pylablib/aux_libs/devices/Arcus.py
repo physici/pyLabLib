@@ -1,4 +1,4 @@
-from .misc import default_lib_folder, load_lib
+from .misc import default_source_message, default_placing_message, load_lib
 from ...core.utils import py3
 from ...core.devio.interface import IDevice
 
@@ -24,9 +24,7 @@ class GenericPerformaxStage(IDevice):
     """
     def __init__(self, lib_path=None, idx=0):
         IDevice.__init__(self)
-        if lib_path is None:
-            lib_path=os.path.join(default_lib_folder,"PerformaxCom.dll")
-        self.dll=load_lib(lib_path,locally=True,call_conv="stdcall")
+        self.dll=self._load_dll(lib_path=lib_path)
         self.dll.fnPerformaxComOpen.argtypes=[DWORD,ctypes.c_char_p]
         self.dll.fnPerformaxComOpen.restype=BOOL
         self.dll.fnPerformaxComClose.argtypes=[HANDLE]
@@ -45,9 +43,17 @@ class GenericPerformaxStage(IDevice):
 
 
     @staticmethod
-    def get_devices_num():
+    def _load_dll(lib_path=None):
+        error_message="The library is supplied {};\n{}".format(default_source_message,default_placing_message)
+        if lib_path is None:
+            return load_lib("PerformaxCom.dll",locations=("local","global"),call_conv="stdcall",locally=True,error_message=error_message)
+        else:
+            return load_lib(lib_path,call_conv="stdcall",locally=True,error_message=error_message)
+    @staticmethod
+    def get_devices_num(lib_path=None):
+        """Get number of connected Arcus devices"""
         ndev=DWORD(0)
-        dll=ctypes.windll.PerformaxCom
+        dll=GenericPerformaxStage._load_dll(lib_path=lib_path)
         dll.fnPerformaxComGetNumDevices.argtypes=[ctypes.POINTER(DWORD)]
         dll.fnPerformaxComGetNumDevices.restype=BOOL
         dll.fnPerformaxComGetNumDevices(ctypes.byref(ndev))
