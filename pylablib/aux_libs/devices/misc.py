@@ -41,7 +41,7 @@ def load_lib(name, locations=("global",), call_conv="cdecl", locally=False, erro
     Load DLL.
 
     Args:
-        name: name or path of the library
+        name: name or path of the library (can also be a list or a tuple with several names, which are tried in that order).
         locations: list or tuple of locations to search for a library; the function tries locations in order and returns the first successfully loaded library
             a location is a string which can be a path to the containing folder, ``"local"`` (local package path given by :func:`get_default_lib_folder`),
             or ``"global"`` (load path as is; also searches in the standard OS specified locations determined by ``PATH`` variable, e.g., ``System32`` folder)
@@ -51,30 +51,36 @@ def load_lib(name, locations=("global",), call_conv="cdecl", locally=False, erro
     """
     if platform.system()!="Windows":
         raise OSError("DLLs are not available on non-Windows platform")
+    if not isinstance(name,(list,tuple)):
+        name=[name]
     for loc in locations:
-        if loc=="local":
-            folder=default_lib_folder
-        elif loc=="global":
-            folder=""
-        else:
-            folder=loc
-        path=os.path.join(folder,name)
-        if locally:
-            loc_folder,loc_name=os.path.split(path)
-            old_env_path=os.environ["PATH"]
-            env_paths=old_env_path.split(";")
-            if not any([files.paths_equal(loc_folder,ep) for ep in env_paths if ep]):
-                os.environ["PATH"]=files.normalize_path(loc_folder)+";"+os.environ["PATH"]
-            path=loc_name
-        try:
-            if call_conv=="cdecl":
-                return ctypes.cdll.LoadLibrary(path)
-            elif call_conv=="stdcall":
-                return ctypes.windll.LoadLibrary(path)
+        for n in name:
+            if loc=="local":
+                folder=default_lib_folder
+            elif loc=="global":
+                folder=""
             else:
-                raise ValueError("unrecognized call convention: {}".format(call_conv))
-        except OSError:
+                if loc.lower().endswith(".dll"):
+                    folder,n=os.path.split(loc)
+                else:
+                    folder=loc
+            path=os.path.join(folder,n)
             if locally:
-                os.environ["PATH"]=old_env_path
+                loc_folder,loc_name=os.path.split(path)
+                old_env_path=os.environ["PATH"]
+                env_paths=old_env_path.split(";")
+                if not any([files.paths_equal(loc_folder,ep) for ep in env_paths if ep]):
+                    os.environ["PATH"]=files.normalize_path(loc_folder)+";"+os.environ["PATH"]
+                path=loc_name
+            try:
+                if call_conv=="cdecl":
+                    return ctypes.cdll.LoadLibrary(path)
+                elif call_conv=="stdcall":
+                    return ctypes.windll.LoadLibrary(path)
+                else:
+                    raise ValueError("unrecognized call convention: {}".format(call_conv))
+            except OSError:
+                if locally:
+                    os.environ["PATH"]=old_env_path
     error_message="\n"+error_message if error_message else ""
-    raise OSError("can't import module {}".format(name)+error_message)
+    raise OSError("can't import module {}".format(" or".join(name))+error_message)
