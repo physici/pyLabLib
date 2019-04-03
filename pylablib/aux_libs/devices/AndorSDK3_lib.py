@@ -275,8 +275,7 @@ class AndorSDK3Lib(object):
 						"{}").format(default_source_message,default_placing_message)
 		self.lib=load_lib("atcore.dll",locations=(solis_path,"local","global"),call_conv="stdcall",locally=True,error_message=error_message)
 		lib=self.lib
-
-		AT_H=ctypes.c_int
+AT_H=ctypes.c_int
 		AT_pWC=ctypes.c_wchar_p
 		AT_BOOL=ctypes.c_int
 		AT_64=ctypes.c_int64
@@ -376,7 +375,8 @@ def read_uint12(raw_data, width):
 	result[:,1::2]=(mid_uint8[:,:lst_uint8.shape[1]]>>4)|(lst_uint8<<4)
 	return result[:,:width] if width else result
 
-@nb.njit(nb.uint16[:,:](nb.uint8[:,:],nb.int64),parallel=False)
+nb_uint8_ro=nb.typeof(np.frombuffer(b"\x00",dtype="u1").reshape((1,1))) # for readonly attribute of a numpy array
+@nb.njit(nb.uint16[:,:](nb_uint8_ro,nb.int64),parallel=False)
 def nb_read_uint12(raw_data, width):
 	"""
 	Convert packed 12bit data (3 bytes per 2 pixels) into unpacked 16bit data (2 bytes per pixel).
@@ -389,7 +389,7 @@ def nb_read_uint12(raw_data, width):
 	h,s=raw_data.shape
 	if width==0:
 		width=(s*2)//3
-	out=np.empty((width,h),dtype=nb.uint16)
+	out=np.empty((h,width),dtype=nb.uint16)
 	chwidth=width//2
 	for i in range(h):
 		for j in range(chwidth):
@@ -401,7 +401,7 @@ def nb_read_uint12(raw_data, width):
 		if width%2==1:
 			fst_uint8=nb.uint16(raw_data[i,chwidth*3])
 			mid_uint8=nb.uint16(raw_data[i,chwidth*3+1])
-			out[i,width-1]=(fst_uint8 << 4  ) + (mid_uint8 >> 4)
+			out[i,width-1]=(fst_uint8<<4)|(mid_uint8&0x0F)
 	return out
 
 lib=AndorSDK3Lib()
