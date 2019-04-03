@@ -275,7 +275,7 @@ class AndorSDK3Lib(object):
 						"{}").format(default_source_message,default_placing_message)
 		self.lib=load_lib("atcore.dll",locations=(solis_path,"local","global"),call_conv="stdcall",locally=True,error_message=error_message)
 		lib=self.lib
-AT_H=ctypes.c_int
+		AT_H=ctypes.c_int
 		AT_pWC=ctypes.c_wchar_p
 		AT_BOOL=ctypes.c_int
 		AT_64=ctypes.c_int64
