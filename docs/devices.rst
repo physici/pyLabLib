@@ -117,10 +117,10 @@ First, any device using ``PyVISA`` require NI VISA to be installed. See `PyVISA 
 
 Second, some devices need dlls supplied by the manufacturer:
 
-    - Andor SDK2 cameras: require `atmcd.dll` (currently supplied for x64 and x86).
-    - Andor SDK3 cameras: require several `at*.dll` (currently supplied only for x64). Has potential incompatibilities between different versions of Windows; tested with Windows 7 x64 and Andor Solis 4.30.30034.0.
+    - Andor SDK2 cameras: require `atmcd.dll` (currently supplied for x64 and x86). Can be obrained with Andor Solis software. It might be called `atmcd64d_legacy.dll` or `atmcd32d_legacy.dll` (depending on the Solis version and Python bitness), but it needs to be renamed to `atmcd.dll` when placed into `aux_libs/devices/libs/x64` (or `x32`) folder.
+    - Andor SDK3 cameras: require several `at*.dll`: `atcore.dll`, `atblkbx.dll`, `atcl_bitflow.dll`, `atdevapogee.dll`, `atdevregcam.dll`, `atusb_libusb.dll`, `atusb_libusb10.dll` (currently supplied only for x64). Has potential incompatibilities between different versions of Windows; tested with Windows 7 x64 and Andor Solis 4.30.30034.0.
     - Arcus PerforMax translation stages: require `PerformaxCom.dll` and `SiUSBXp.dll` (currently supplied only for x64).
-    - HighFinesse WS/6 and WS/7 wavemeters: require `wlmData.dll`. Each device needs a unique dll supplied by the manufacturer. Currently generic version for WS/6 and WS/7 are given, but they are not guaranteed to not work properly.
+    - HighFinesse WS/6 and WS/7 wavemeters: require `wlmData.dll`. Each device needs a unique dll supplied by the manufacturer. Currently generic version for WS/6 and WS/7 are given, but they are not guaranteed to not work properly. One can either supply DLL path on creation of the device class, or place it into `aux_libs/devices/libs/x64` (or `x32`) folder; in the latter case, it should be renamed to `wlmData6.dll` or `wlmData7.dll` depending on the wavemeter model (WS/6 or WS/7).
     - SmarAct SCU3D translation stage controller: requires `SCU3DControl.dll` (currently supplied only for x64).
 
 Many of these are supplied with this library (only on GitHub), but they can be removed in future versions (e.g., for compatibility or legal reasons), and not all of them are present for x86 applications. If you installed the library using pip, you can download the dll's on GitHub (they are located in ``pylablib/aux_libs/devices/libs/``) and place them into the package folder (correspondingly, into ``aux_libs/devices/libs/`` inside the main package folder, which is usually something like ``Python36/Lib/site-packages/pylablib/``).

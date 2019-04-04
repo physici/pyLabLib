@@ -16,7 +16,7 @@ with open(path.join(here, 'README.rst')) as f:
 
 setup(
     name='pylablib',
-    version='0.3.3',
+    version='0.3.4',
     description='Collection of Python code for using in lab environment (data acquisition, device communication, data analysis)',
     long_description=long_description,
     long_description_content_type="text/x-rst",
@@ -43,7 +43,6 @@ setup(
     'Tracker': 'https://github.com/AlexShkarin/pyLabLib/issues'
     },
     packages=find_packages(exclude=['docs']),
-    package_data={'pylablib.core.dataproc': ['*.c','*.pyd']},
     install_requires=['future','numpy','scipy','matplotlib','numba','rpyc'],
     extras_require={
         'devio-basic':['pyft232','pyvisa','pyserial','pyusb','websocket-client'],

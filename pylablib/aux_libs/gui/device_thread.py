@@ -159,7 +159,7 @@ class RemoteDeviceThread(DeviceThread):
     All arguments, attributes and commands are the same as in :class:`DeviceThread`.
     """
     def __init__(self, name=None, devargs=None, devkwargs=None, signal_pool=None):
-        RemoteDeviceThread.__init__(self,name=name,signal_pool=signal_pool,devargs=devargs,devkwargs=devkwargs)
+        DeviceThread.__init__(self,name=name,signal_pool=signal_pool,devargs=devargs,devkwargs=devkwargs)
         self.rpyc=False
 
     def rpyc_device(self, remote, module, device, *args, **kwargs):

@@ -52,6 +52,7 @@ class DCAMCamera(IDevice):
         self._add_settings_node("trigger_mode",self.get_trigger_mode,self.set_trigger_mode)
         self._add_settings_node("ext_trigger",self.get_ext_trigger_parameters,self.setup_ext_trigger)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
+        self._add_settings_node("readout_speed",self.get_readout_speed,self.set_readout_speed)
         self._add_status_node("readout_time",self.get_readout_time)
         self._add_status_node("buffer_size",self.get_buffer_size)
         self._add_status_node("data_dimensions",self.get_data_dimensions)
@@ -152,15 +153,29 @@ class DCAMCamera(IDevice):
         props=self.list_properties()
         for p in props:
             self.properties[py3.as_str(p.name)]=p
-    def get_value(self, name):
-        """Get value of a property with the given name"""
+    def get_value(self, name, error_on_missing=True, default=None):
+        """
+        Get value of a property with the given name.
+        
+        If the value doesn't exist and ``error_on_missing==True``, raise :exc:`DCAMError`; otherwise, return `default`.
+        """
         if name not in self.properties:
-            raise DCAMError("can't find property {}".format(name))
+            if error_on_missing:
+                raise DCAMError("can't find property {}".format(name))
+            else:
+                return default
         return self.properties[name].get_value()
-    def set_value(self, name, value):
-        """Set value of a property with the given name"""
+    def set_value(self, name, value, error_on_missing=True):
+        """
+        Set value of a property with the given name.
+        
+        If the value doesn't exist and ``error_on_missing==True``, raise :exc:`DCAMError`; otherwise, do nothing.
+        """
         if name not in self.properties:
-            raise DCAMError("can't find property {}".format(name))
+            if error_on_missing:
+                raise DCAMError("can't find property {}".format(name))
+            else:
+                return
         return self.properties[name].set_value(value)
 
 
@@ -199,10 +214,18 @@ class DCAMCamera(IDevice):
         lib.dcamcap_firetrigger(self.handle)
     def set_exposure(self, exposure):
         """Set camera exposure"""
-        return self.set_value("EXPOSURE TIME",exposure)
+        self.set_value("EXPOSURE TIME",exposure)
+        return self.get_exposure()
     def get_exposure(self):
         """Set current exposure"""
         return self.get_value("EXPOSURE TIME")
+    def set_readout_speed(self, speed="fast"):
+        """Set readout speed (can be ``"fast"`` or ``"slow"``)"""
+        self.set_value("READOUT SPEED",1 if speed=="slow" else 2,error_on_missing=False)
+        return self.get_readout_speed()
+    def get_readout_speed(self):
+        """Set current readout speed"""
+        return "fast" if self.get_value("READOUT SPEED",default=2,error_on_missing=False)==2 else "slow"
     def get_readout_time(self):
         return self.get_value("TIMING READOUT TIME")
 

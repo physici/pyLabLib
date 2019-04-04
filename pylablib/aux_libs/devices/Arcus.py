@@ -44,7 +44,7 @@ class GenericPerformaxStage(IDevice):
 
     @staticmethod
     def _load_dll(lib_path=None):
-        error_message="The library is supplied {};\n{}".format(default_source_message,default_placing_message)
+        error_message="The library is supplied {};\nAdditional required library: SiUSBXp.dll\n{}".format(default_source_message,default_placing_message)
         if lib_path is None:
             return load_lib("PerformaxCom.dll",locations=("local","global"),call_conv="stdcall",locally=True,error_message=error_message)
         else:

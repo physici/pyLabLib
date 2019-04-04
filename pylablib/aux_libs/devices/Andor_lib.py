@@ -374,7 +374,8 @@ class AndorLib(object):
 		else:
 			solis_path=r"C:\Program Files\Andor SOLIS"
 		error_message="The library is supplied with Andor Solis software, or {};\n{}".format(default_source_message,default_placing_message)
-		self.lib=load_lib("atmcd.dll",locations=(solis_path,"local","global"),call_conv="stdcall",error_message=error_message)
+		self.lib=load_lib(("atmcd.dll","atmcd{}d_legacy.dll".format(arch[:2])),
+			locations=(solis_path,"local","global"),call_conv="stdcall",error_message=error_message)
 		lib=self.lib
 
 		self.Andor_statuscodes=Andor_statuscodes
