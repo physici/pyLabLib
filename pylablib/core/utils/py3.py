@@ -1,3 +1,6 @@
+"""
+Dealing with Python2 / Python3 compatibility.
+"""
 from builtins import bytes as new_bytes
 
 if str is bytes: # Python 2
@@ -15,12 +18,21 @@ if str is bytes: # Python 2
 
 else:
 
+    import locale
+    locenc=locale.getpreferredencoding()
+    use_locenc=True
+
     textstring=(str,)
     bytestring=(bytes,)
     anystring=(str,bytes)
 
     def as_str(data):
-        return data if isinstance(data,str) else data.decode()
+        try:
+            return data if isinstance(data,str) else data.decode()
+        except UnicodeDecodeError as e:
+            if use_locenc:
+                return data.decode(encoding=locenc)
+            raise e from None
     def as_bytes(data):
         return data if isinstance(data,bytes) else (data.encode("utf-8") if isinstance(data,str) else bytes(data))
     as_builtin_bytes=as_bytes

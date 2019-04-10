@@ -49,7 +49,9 @@ PFCAM_MAX_API_STRING_LENGTH=512
 
 
 
-TPropertyType = {
+## There are at least two different version of SDK DLLs around, with the only difference being mapping of TPropertyType (specifically, the position of PF_UINT)
+## Can be detected by querying a type of "Header" property, which should be PF_STRUCT (9 in v1, 10 in v2)
+TPropertyType_v1 = {
 	0: "PF_INVALID",
 	1: "PF_ROOT",
 	2: "PF_INT",
@@ -65,8 +67,30 @@ TPropertyType = {
 	12: "PF_EVENT",
 	13: "PF_UINT"
 }
-TPropertyType_inv=general.invert_dict(TPropertyType)
+TPropertyType_v2 = {
+	0: "PF_INVALID",
+	1: "PF_ROOT",
+	2: "PF_INT",
+	3: "PF_UINT",
+	4: "PF_FLOAT",
+	5: "PF_BOOL",
+	6: "PF_MODE",
+	7: "PF_REGISTER",
+	8: "PF_STRING",
+	9: "PF_BUFFER",
+	10: "PF_STRUCT",
+	11: "PF_ARRAY",
+	12: "PF_COMMAND",
+	13: "PF_EVENT"
+}
+TPropertyType_inv_v1=general.invert_dict(TPropertyType_v1)
+TPropertyType_inv_v2=general.invert_dict(TPropertyType_v2)
 ValuePropertyTypes={"PF_INT","PF_FLOAT","PF_BOOL","PF_MODE","PF_STRING","PF_UINT"}
+def _get_ptype_dicts(ptype_v=1):
+    if ptype_v==2:
+        return TPropertyType_v2,TPropertyType_inv_v2
+    else:
+        return TPropertyType_v1,TPropertyType_inv_v1
 
 TPropertyFlag = {
     0x02: "F_PRIVATE",
@@ -97,7 +121,8 @@ def _autodetect_ptype(value):
     if isinstance(value,py3.anystring):
         return "PF_STRING"
     raise ValueError("can't autodetect value {}".format(value))
-def build_pf_value(value, ptype="auto", buffer=None):
+def build_pf_value(value, ptype="auto", buffer=None, ptype_v=1):
+    TPropertyType,TPropertyType_inv=_get_ptype_dicts(ptype_v)
     if ptype=="auto":
         ptype=_autodetect_ptype(value)
     ptype=TPropertyType.get(ptype,ptype)
@@ -122,7 +147,8 @@ def build_pf_value(value, ptype="auto", buffer=None):
         raise ValueError("don't know how to build PFValue for value type {}".format(ptype))
     iptype=TPropertyType_inv.get(ptype,ptype)
     return CPFValue(val=value,ptype=iptype,plen=plen)
-def allocate_pf_value(ptype, buffer=None):
+def allocate_pf_value(ptype, buffer=None, ptype_v=1):
+    TPropertyType,TPropertyType_inv=_get_ptype_dicts(ptype_v)
     ptype=TPropertyType.get(ptype,ptype)
     plen=0
     if ptype in {"PF_INT","PF_UINT","PF_BOOL","PF_MODE","PF_COMMAND","PF_FLOAT"}:
@@ -138,7 +164,8 @@ def allocate_pf_value(ptype, buffer=None):
         raise ValueError("don't know how to build PFValue for value type {}".format(ptype))
     iptype=TPropertyType_inv.get(ptype,ptype)
     return CPFValue(val=value,ptype=iptype,plen=plen)
-def parse_pf_value(pf_value):
+def parse_pf_value(pf_value, ptype_v=1):
+    TPropertyType,_=_get_ptype_dicts(ptype_v)
     iptype=pf_value.ptype
     ptype=TPropertyType[iptype]
     value=pf_value.val
@@ -209,24 +236,40 @@ class PfcamLib(object):
             ["port","token",None,None], rvref=[False,False], rvprep=[strprep, lambda *args: PFCAM_MAX_API_STRING_LENGTH], rvnames=["val",None])
         self.pfDevice_SetProperty_String=wrapper.wrap(lib.pfDevice_SetProperty_String, [TPfPort,TPfToken,ctypes.c_char_p], ["port","token","value"])
 
+        self.ptype_v=None
+
         self._initialized=True
+    
+    def get_ptype_v(self, port):
+        if self.ptype_v is None:
+            header_tok=self.pfProperty_ParseName(port,"Header")
+            header_type=self.pfProperty_GetType(port,header_tok)
+            if header_type==9:
+                self.ptype_v=1
+            elif header_type==10:
+                self.ptype_v=2
+            else:
+                raise RuntimeError("can't determine pflib version")
+        return self.ptype_v
+    def get_ptype_dicts(self, port):
+        return _get_ptype_dicts(self.get_ptype_v(port))
     
     def pfDevice_GetProperty(self, port, token, ptype=None):
         if isinstance(token,py3.anystring):
             token=self.pfProperty_ParseName(port,token)
         if ptype is None:
             ptype=self.pfProperty_GetType(port,token)
-        value=allocate_pf_value(ptype,buffer=self.string_buffer)
+        value=allocate_pf_value(ptype,buffer=self.string_buffer,ptype_v=self.get_ptype_v(port))
         ret_value=self.pfDevice_GetProperty_lib(port,token,value)
-        return parse_pf_value(ret_value)
+        return parse_pf_value(ret_value,ptype_v=self.get_ptype_v(port))
     def pfDevice_SetProperty(self, port, token, value, ptype=None):
         if isinstance(token,py3.anystring):
             token=self.pfProperty_ParseName(port,token)
         if ptype is None:
             ptype=self.pfProperty_GetType(port,token)
-        value=build_pf_value(value,ptype,buffer=self.string_buffer)
+        value=build_pf_value(value,ptype,buffer=self.string_buffer,ptype_v=self.get_ptype_v(port))
         ret_value=self.pfDevice_SetProperty_lib(port,token,value)
-        return parse_pf_value(ret_value)
+        return parse_pf_value(ret_value,ptype_v=self.get_ptype_v(port))
 
     def get_property_by_name(self, port, name, ptype=None, default=None):
         token=self.pfProperty_ParseName(port,name)
@@ -234,6 +277,7 @@ class PfcamLib(object):
             return default
         return self.pfDevice_GetProperty(port,token,ptype=ptype)
     def collect_properties(self, port, root=0, backbone=True, pfx="", include_types=None):
+        TPropertyType,_=self.get_ptype_dicts(port)
         tok=root
         props=[]
         while True:

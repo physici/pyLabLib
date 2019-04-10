@@ -661,21 +661,30 @@ try:
                 term_read=[term_read]
             IDeviceBackend.__init__(self,conn_dict.copy(),term_write=term_write,term_read=term_read,datatype=datatype)
             port=conn_dict.pop("port")
+            self.opened=False
             try:
                 self.instr=ft232.Ft232(port,**conn_dict)
+                self.opened=True
                 self._operation_cooldown=self._default_operation_cooldown
-                self._opened_stack=0
                 self._open_retry_times=open_retry_times
                 self.cooldown()
                 self.set_timeout(timeout)
+                self._conn_params=(port,conn_dict,timeout)
             except self.Error as e:
                 raise self.BackendOpenError(e)
             
         def _do_open(self):
-            general.retry_wait(self.instr.open, self._open_retry_times, 0.3)
+            if self.is_opened():
+                return
+            def reopen():
+                self.instr=ft232.Ft232(self._conn_params[0],**self._conn_params[1])
+                self.set_timeout(self._conn_params[2])
+                self.opened=True
+            general.retry_wait(reopen, self._open_retry_times, 0.3)
         def _do_close(self):
-            #general.retry_wait(self.instr.flush, self._open_retry_times, 0.3)
-            general.retry_wait(self.instr.close, self._open_retry_times, 0.3)
+            if self.is_opened():
+                general.retry_wait(self.instr.close, self._open_retry_times, 0.3)
+                self.opened=False
         def open(self):
             """Open the connection."""
             self._do_open()
@@ -683,7 +692,7 @@ try:
             """Close the connection."""
             self._do_close()
         def is_opened(self):
-            return not self.instr.closed
+            return self.opened
         @contextlib.contextmanager
         def single_op(self):
             """

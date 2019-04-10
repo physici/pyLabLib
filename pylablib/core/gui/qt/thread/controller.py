@@ -166,7 +166,7 @@ class QThreadController(QtCore.QObject):
         # set up variable handling
         self._params_val=dictionary.Dictionary()
         self._params_val_lock=threading.Lock()
-        self._params_exp=dictionary.Dictionary()
+        self._params_exp={}
         self._params_exp_lock=threading.Lock()
         # set up high-level synchronization
         self._exec_notes={}
@@ -307,6 +307,7 @@ class QThreadController(QtCore.QObject):
         """
         Wait for a single message with a given tag.
 
+        Return value of a received message with this tag.
         If timeout is passed, raise :exc:`.threadprop.TimeoutThreadError`.
         """
         def done_check():
@@ -458,10 +459,16 @@ class QThreadController(QtCore.QObject):
         Can be called in any thread (controlled or external).
         If ``notify==True``, send a signal with the given `notify_tag` (where ``"*"`` symbol is replaced by the variable name).
         """
+        split_name=tuple(dictionary.normalize_path(name))
+        notify_list=[]
         with self._params_val_lock:
             self._params_val.add_entry(name,value,force=True)
-        for ctl in self._params_exp.get(name,[]):
-            ctl.send_message(self._variable_change_tag,value)
+            for exp_name in self._params_exp:
+                if exp_name==split_name[:len(exp_name)] or split_name==exp_name[:len(split_name)]:
+                    notify_list.append((self._params_val[exp_name],self._params_exp[exp_name]))
+        for val,lst in notify_list:
+            for ctl in lst:
+                ctl.send_message(self._variable_change_tag,val)
         if notify:
             notify_tag.replace("*",name)
             self.send_signal("any",notify_tag,value)
@@ -471,6 +478,9 @@ class QThreadController(QtCore.QObject):
         with self._params_val_lock:
             if name in self._params_val:
                 del self._params_val[name]
+    def __contains__(self, name):
+        with self._params_val_lock:
+            return name in self._params_val
 
 
     ##########  EXTERNAL CALLS  ##########
@@ -520,18 +530,21 @@ class QThreadController(QtCore.QObject):
             else:
                 pred=lambda x: x==v
         ctl=threadprop.current_controller()
+        split_name=tuple(dictionary.normalize_path(name))
         with self._params_exp_lock:
-            self._params_exp.setdefault(name,[]).append(ctl)
+            self._params_exp.setdefault(split_name,[]).append(ctl)
         ctd=general.Countdown(timeout)
         try:
+            value=self.get_variable(name)
             while True:
-                value=self.get_variable(name)
                 if pred(value):
                     return value
-                ctl.wait_for_message(self._variable_change_tag,timeout=ctd.time_left())
+                value=ctl.wait_for_message(self._variable_change_tag,timeout=ctd.time_left())
         finally:
             with self._params_exp_lock:
-                self._params_exp[name].remove(ctl)
+                self._params_exp[split_name].remove(ctl)
+                if not self._params_exp[split_name]:
+                    del self._params_exp[split_name]
 
 
     ### Thread execution control ###
@@ -555,7 +568,7 @@ class QThreadController(QtCore.QObject):
             self.call_in_thread_callback(exit_main)
         else:
             self.thread.quit_sync()
-        if threadprop.current_controller() is self:
+        if self.is_in_controlled():
             raise threadprop.InterruptExceptionStop
     def poke(self):
         """
@@ -627,6 +640,12 @@ class QThreadController(QtCore.QObject):
                 return True
             except ValueError:
                 return False
+
+
+    ### Simple inquiring methods ###
+    def is_in_controlled(self):
+        """Check if the thread execution this code is controlled by this controller"""
+        return threadprop.current_controller(require_controller=False) is self
     
 
     ### External call management ###
@@ -666,7 +685,7 @@ class QThreadController(QtCore.QObject):
                 return res
         else:
             call_func=func
-        if same_thread_shortcut and tag is None and sync and threadprop.current_controller() is self:
+        if same_thread_shortcut and tag is None and sync and self.is_in_controlled():
             return call_func(*(args or []),**(kwargs or {}))
         call=synchronizing.QSyncCall(call_func,args=args,kwargs=kwargs,pass_exception=pass_exception,error_on_fail=error_on_stopped)
         if self.add_stop_notifier(call.fail):
@@ -902,6 +921,10 @@ class QTaskThread(QMultiRepeatingThreadController):
         qi: query accessor which ignores and silences any exceptions (including missing /stopped controller)
             useful for sending queries during thread finalizing / application shutdown, when it's not guaranteed that the query recipient is running
             (commands already ignore any errors, unless their results are specifically requested)
+        m: method accessor; directly calles the method corresponding to the command;
+            ``ctl.m.comm(*args,**kwarg)`` is equivalent to ``ctl.call_command("comm",*args,**kwargs)``, which is often also equivalent to ``ctl.comm(*args,**kwargs)``;
+            for most practical purposes it's the same as directly invoking the class method, but it makes intent more explicit
+            (as command methods are usually not called directly from other threads), and it doesn't invoke warning about calling method instead of query from another thread.
 
     Methods to overload:
         setup_task: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
@@ -910,17 +933,47 @@ class QTaskThread(QMultiRepeatingThreadController):
         process_command: process a command with given name and arguments; by default, check for commands set up with :meth:`add_command`
         process_query: process a query with given name and arguments; by default, check for commands set up with :meth:`add_command`
     """
+    ## Action performed when another thread explicitly calls a method corresponding to a command (which is usally a typo)
+    ## Can be used to overload default behavior in children classes or instances
+    ## Can be ``"warning"``, which prints warning about this call (default),
+    ## or one of the accessor names (e.g., ``"c"`` or ``"q"``), which routes the call through this accessor
+    _direct_comm_call_action="warning"
     def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
         QMultiRepeatingThreadController.__init__(self,name=name,signal_pool=signal_pool)
         self.setupargs=setupargs or []
         self.setupkwargs=setupkwargs or {}
         self._directed_signal.connect(self._on_directed_signal)
         self._commands={}
+        self._command_warned=set()
         self._command_priorities={}
         self.c=self.CommandAccess(self,sync=False)
         self.q=self.CommandAccess(self,sync=True)
         self.qs=self.CommandAccess(self,sync=True,safe=True)
         self.qi=self.CommandAccess(self,sync=True,safe=True,ignore_errors=True)
+        self.m=self.CommandAccess(self,sync=True,direct=True)
+
+    
+    def _call_command_method(self, name, original_method, args, kwargs):
+        """Call given method taking into account ``_direct_comm_call_action``"""
+        if threadprop.current_controller() is not self:
+            action=self._direct_comm_call_action
+            if action=="warning":
+                if name not in self._command_warned:
+                    print("Warning: direct call of command '{}' of thread '{}' from a different thread '{}'".format(
+                            name,self.name,threadprop.current_controller().name),file=sys.stderr)
+                    self._command_warned.add(name)
+            else:
+                accessor=QMultiRepeatingThreadController.__getattribute__(self,action)
+                return accessor.__getattr__(name)(*args,**kwargs)
+        return original_method(*args,**kwargs)
+    def _override_command_method(self, name):
+        """Replace given method with the one that checks conflicts with the command names"""
+        method=getattr(self,name,None)
+        if method is not None:
+            @func_utils.getargsfrom(method)
+            def new_method(*args, **kwargs):
+                return self._call_command_method(name,method,args,kwargs)
+            setattr(self,name,new_method)
 
     ### Functions to be overloaded in subclasses ###
     def setup_task(self, *args, **kwargs):
@@ -987,6 +1040,7 @@ class QTaskThread(QMultiRepeatingThreadController):
             command=getattr(self,name)
         self._commands[name]=command
         self._command_priorities[name]=priority
+        self._override_command_method(name)
     def _process_named_command(self, name, *args, **kwargs):
         if name in self._commands:
             return self._commands[name](*args,**kwargs)
@@ -1025,10 +1079,11 @@ class QTaskThread(QMultiRepeatingThreadController):
 
         Automatically created by the thread, so doesn't need to be invoked externally.
         """
-        def __init__(self, parent, sync, timeout=None, safe=False, ignore_errors=False):
+        def __init__(self, parent, sync, direct=False, timeout=None, safe=False, ignore_errors=False):
             object.__init__(self)
             self.parent=parent
             self.sync=sync
+            self.direct=direct
             self.timeout=timeout
             self.safe=safe
             self.ignore_errors=ignore_errors
@@ -1037,7 +1092,9 @@ class QTaskThread(QMultiRepeatingThreadController):
             if name not in self._calls:
                 parent=self.parent
                 def remcall(*args, **kwargs):
-                    if self.sync:
+                    if self.direct:
+                        return self.process_command(name,*args,**kwargs)
+                    elif self.sync:
                         return parent.call_query(name,args,kwargs,timeout=self.timeout,ignore_errors=self.ignore_errors)
                     else:
                         return parent.call_command(name,args,kwargs)

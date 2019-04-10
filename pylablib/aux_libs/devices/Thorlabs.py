@@ -183,8 +183,10 @@ class KinesisDevice(backend.IBackendWrapper):
     def __init__(self, conn, timeout=3.):
         conn=backend.FT232DeviceBackend.combine_conn(conn,(None,115200))
         instr=backend.FT232DeviceBackend(conn,term_write=b"",term_read=b"",timeout=timeout)
+        instr._operation_cooldown=0.01
         backend.IBackendWrapper.__init__(self,instr)
         self._add_full_info_node("device_info",self.get_info)
+        self._bg_msg_counters={}
 
     @staticmethod
     def list_devices(filter_ids=True):
@@ -228,19 +230,25 @@ class KinesisDevice(backend.IBackendWrapper):
         (fixed length with two parameters, or variable length with associated data).
         For details, see APT communications protocol.
         """
-        msg=self.instr.read(6)
-        messageID=strpack.unpack_uint(msg[0:2],"<")
-        source=strpack.unpack_uint(msg[5:6])
-        dest=strpack.unpack_uint(msg[4:5])
-        if dest&0x80:
-            dest=dest&0x7F
-            datalen=strpack.unpack_uint(msg[2:4],"<")    
-            data=self.instr.read(datalen)
-            return self.CommData(messageID,data,source,dest)
-        else:
-            param1=strpack.unpack_uint(msg[2:3])
-            param2=strpack.unpack_uint(msg[3:4])    
-            return self.CommNoData(messageID,param1,param2,source,dest)
+        while True:
+            msg=self.instr.read(6)
+            messageID=strpack.unpack_uint(msg[0:2],"<")
+            source=strpack.unpack_uint(msg[5:6])
+            dest=strpack.unpack_uint(msg[4:5])
+            if dest&0x80:
+                dest=dest&0x7F
+                datalen=strpack.unpack_uint(msg[2:4],"<")    
+                data=self.instr.read(datalen)
+                comm=self.CommData(messageID,data,source,dest)
+            else:
+                param1=strpack.unpack_uint(msg[2:3])
+                param2=strpack.unpack_uint(msg[3:4])    
+                comm=self.CommNoData(messageID,param1,param2,source,dest)
+            if messageID in self._bg_msg_counters:
+                cnt,_=self._bg_msg_counters[messageID]
+                self._bg_msg_counters[messageID]=(cnt+1,comm)
+            else:
+                return comm
     def recv_comm_nodata(self):
         """
         Receive a fixed-length message with two parameters and no associated data.
@@ -263,6 +271,16 @@ class KinesisDevice(backend.IBackendWrapper):
         if isinstance(msg,self.CommNoData):
             raise KinesisError("expected variable length message, got fixed length: {}".format(msg))
         return msg
+    def add_background_comm(self, messageID):
+        """
+        Mark given messageID as a 'background' message, which can be sent at any point without prompt (e.g., some operation confirmation).
+
+        If it is received instead during ``recv_comm_`` operations, it is ignored, and the corresponding counter is increased.
+        """
+        self._bg_msg_counters.setdefault(messageID,(0,None))
+    def check_background_comm(self, messageID):
+        """Return message counter and the last message value (``None`` if not message received yet) of a given 'background' message."""
+        return self._bg_msg_counters[messageID]
 
     DeviceInfo=collections.namedtuple("DeviceInfo",["serial_no","model_no","fw_ver","hw_type","hw_ver","mod_state","nchannels"])
     def get_info(self, dest=0x50):
@@ -330,8 +348,12 @@ class KDC101(KinesisDevice):
     def __init__(self, conn):
         KinesisDevice.__init__(self,conn)
         self._forward_pos=False
+        self.add_background_comm(0x0464) # move completed
+        self.add_background_comm(0x0466) # move stopped
+        self.add_background_comm(0x0444) # homed
         self._add_status_node("position",self.get_position)
         self._add_status_node("status",self.get_status)
+        self._add_settings_node("velocity_params",self.get_velocity_params,self.set_velocity_params)
 
     def get_status_n(self):
         """
@@ -342,8 +364,8 @@ class KDC101(KinesisDevice):
         self.send_comm_nodata(0x0429,0x01)
         data=self.recv_comm_data().data
         return strpack.unpack_uint(data[2:6],"<")
-    status_bits=[(1<<0,"sw_fw_lim"),(1<<1,"sw_bk_lim"),
-                (1<<4,"moving_fw"),(1<<5,"moving_bk"),(1<<6,"jogging_fw"),(1<<7,"jogging_bk"),
+    status_bits=[(1<<0,"sw_bk_lim"),(1<<1,"sw_fw_lim"),
+                (1<<4,"moving_bk"),(1<<5,"moving_fw"),(1<<6,"jogging_bk"),(1<<7,"jogging_fw"),
                 (1<<9,"homing"),(1<<10,"homed"),(1<<12,"tracking"),(1<<13,"settled"),
                 (1<<14,"motion_error"),(1<<24,"current_limit"),(1<<31,"enabled")]
     def get_status(self):
@@ -401,6 +423,37 @@ class KDC101(KinesisDevice):
         """Wait until the device is homes"""
         return self.wait_for_status("homed",True,timeout=timeout)
 
+    _time_conv=2048/6E6 # time conversion factor
+    def get_velocity_params(self, scale=True):
+        """
+        Get current velocity parameters ``(max_velocity, acceleration)``
+        
+        If ``scale==True``, return these in counts/sec and counts/sec^2 respecively; otherwise, return in internal units.
+        """
+        self.send_comm_nodata(0x0414,1)
+        msg=self.recv_comm_data()
+        data=msg.data
+        acceleration=strpack.unpack_int(data[6:10],"<")
+        max_velocity=strpack.unpack_int(data[10:14],"<")
+        if scale:
+            acceleration/=(self._time_conv**2*2**16)
+            max_velocity/=(self._time_conv*2**16)
+        return max_velocity,acceleration
+    def set_velocity_params(self, max_velocity, acceleration=None):
+        """
+        Set current velocity parameters.
+        
+        The parameters are given in counts/sec and counts/sec^2 respecively (as returned by :meth:`get_velocity_params` with ``scale=True``).
+        If `acceleration` is ``None``, use current value.
+        """
+        if acceleration is None:
+            acceleration=self.get_velocity_params(scale=False)[1]
+        else:
+            acceleration*=self._time_conv**2*2**16
+        max_velocity*=(self._time_conv*2**16)
+        data=b"\x01\x00"+b"\x00\x00\x00\x00"+strpack.pack_int(int(acceleration),4,"<")+strpack.pack_int(int(max_velocity),4,"<")
+        self.send_comm_data(0x0413,data)
+        return self.get_velocity_params()
     def get_position(self):
         """Get current position"""
         self.send_comm_nodata(0x0411,1)
@@ -409,14 +462,14 @@ class KDC101(KinesisDevice):
         return strpack.unpack_int(data[2:6],"<")
     def set_position_reference(self, position=0):
         """Set position reference (actual motor position stays the same)"""
-        self.send_comm_data(0x0410,b"\x01\x00"+strpack.pack_int(position,4,"<"))
+        self.send_comm_data(0x0410,b"\x01\x00"+strpack.pack_int(int(position),4,"<"))
         return self.get_position()
     def move(self, steps=1):
         """Move by `steps` (positive or negative) from the current position"""
-        self.send_comm_data(0x0448,b"\x01\x00"+strpack.pack_int(steps,4,"<"))
+        self.send_comm_data(0x0448,b"\x01\x00"+strpack.pack_int(int(steps),4,"<"))
     def move_to(self, position):
         """Move to `position` (positive or negative)"""
-        self.send_comm_data(0x0453,b"\x01\x00"+strpack.pack_int(position,4,"<"))
+        self.send_comm_data(0x0453,b"\x01\x00"+strpack.pack_int(int(position),4,"<"))
     def jog(self, direction):
         """Jog in the given direction (``"+"`` or ``"-"``)"""
         if not direction: # 0 or False also mean left

@@ -22,6 +22,8 @@ class DeviceThread(controller.QTaskThread):
         setup_task: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
         finalize_task: executed on thread cleanup (attempts to execute in any case, including exceptions); by default, close the device connection if it is opened
         connect_device: create the device class and assign it to ``.device`` attribute; if connection failed, can leave the attribute ``None``
+        device_open: re-open currently closed device (by default, call ``.open`` method of the device)
+        device_close: close currently opened device (by default, call ``.close`` method of the device)
         
     Commands:
         open_device: open the device, if not already opened
@@ -55,6 +57,20 @@ class DeviceThread(controller.QTaskThread):
         In case of connection error, can leave ``self.device`` as ``None``, which symbolizes connection failure.
         """
         pass
+    def device_open(self):
+        """
+        Open the device which has been previously closed.
+
+        By default, call ``.open`` method of the device.
+        """
+        self.device.open()
+    def device_close(self):
+        """
+        Close the device which is currently opened.
+
+        By default, call ``.close`` method of the device.
+        """
+        self.device.close()
     def open_device(self):
         """
         Open the device by calling :meth:`connect_device`.
@@ -70,7 +86,7 @@ class DeviceThread(controller.QTaskThread):
             self.connect_device()
         if self.device is not None:
             if not self.device.is_opened():
-                self.device.open()
+                self.device_open()
             if self.device.is_opened():
                 self.update_status("connection","opened","Connected")
                 return True
@@ -85,7 +101,7 @@ class DeviceThread(controller.QTaskThread):
         """
         if self.device is not None and self.device.is_opened():
             self.update_status("connection","closing","Disconnecting...")
-            self.device.close()
+            self.device_close()
             self.update_status("connection","closed","Disconnected")
 
     def get_settings(self):

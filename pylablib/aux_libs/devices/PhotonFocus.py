@@ -45,7 +45,7 @@ class PfcamProperty(object):
         self._token=lib.pfProperty_ParseName(port,self.name)
         if self._token==pfcam_lib.PfInvalidToken:
             raise PFGenericError("property {} doesn't exist".format(name))
-        self._type=pfcam_lib.TPropertyType[lib.pfProperty_GetType(port,self._token)]
+        self._type=pfcam_lib.lib.get_ptype_dicts(port)[0][lib.pfProperty_GetType(port,self._token)]
         if self._type not in pfcam_lib.ValuePropertyTypes|{"PF_COMMAND"}:
             raise PFGenericError("property type {} not supported".format(self._type))
         self._flags=lib.pfProperty_GetFlags(port,self._token)
