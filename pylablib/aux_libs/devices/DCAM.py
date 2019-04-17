@@ -227,6 +227,7 @@ class DCAMCamera(IDevice):
         """Set current readout speed"""
         return "fast" if self.get_value("READOUT SPEED",default=2,error_on_missing=False)==2 else "slow"
     def get_readout_time(self):
+        """Set current readout time"""
         return self.get_value("TIMING READOUT TIME")
 
     def _allocate_buffer(self, nframes):

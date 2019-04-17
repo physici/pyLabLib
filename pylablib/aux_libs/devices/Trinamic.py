@@ -26,6 +26,11 @@ class TMCM1100(backend.IBackendWrapper):
         self._add_settings_node("speed",self.get_speed,self.set_speed)
         self._add_status_node("current_speed",self.get_current_speed)
         self._add_status_node("moving",self.is_moving)
+        self.open()
+
+    def open(self):
+        backend.IBackendWrapper.open(self)
+        self.instr.flush_read()
     
     @staticmethod
     def _build_command(comm, comm_type, value, bank=0, addr=0):

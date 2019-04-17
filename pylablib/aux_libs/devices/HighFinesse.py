@@ -128,6 +128,10 @@ class WS(IDevice):
         if int(res)<=0:
             err=int(res)
             if return_exp_error:
+                if err==-1:
+                    return "nosig"
+                if err==-2:
+                    return "badsig"
                 if err==-3:
                     return "under"
                 if err==-4:
@@ -146,6 +150,10 @@ class WS(IDevice):
         if int(res)<=0:
             err=int(res)
             if return_exp_error:
+                if err==-1:
+                    return "nosig"
+                if err==-2:
+                    return "badsig"
                 if err==-3:
                     return "under"
                 if err==-4:

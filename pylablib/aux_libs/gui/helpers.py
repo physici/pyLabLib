@@ -379,9 +379,44 @@ class TableAccumulator(object):
     def __init__(self, channels, memsize=1000000):
         object.__init__(self)
         self.channels=channels
-        self.data=[[] for _ in channels]
-        self.memsize=memsize
+        self.data=[self.ChannelData(memsize) for _ in channels]
 
+    class ChannelData(object):
+        """
+        Single channel data manager.
+
+        Manages the internal buffer to keep continuous list, but reduce number of list appends / removals.
+        """
+        def __init__(self, memsize, chunk_size=None):
+            object.__init__(self)
+            self.memsize=memsize
+            if chunk_size is None:
+                chunk_size=max(100,self.memsize//50)
+            self.chunk_size=chunk_size
+            self.start=0
+            self.end=0
+            self.data=[]
+        def add_data(self, data):
+            """Add data (list of values) to the buffer"""
+            l=len(data)
+            if l+self.end>len(self.data):
+                self.data.extend([0]*(len(data)+self.chunk_size))
+            self.data[self.end:self.end+l]=data
+            self.end+=l
+            self.start=max(0,self.end-self.memsize)
+            if self.start>self.chunk_size:
+                del self.data[:self.start]
+                self.end-=self.start
+                self.start=0
+        def reset_data(self):
+            """Clean the buffer"""
+            self.start=0
+            self.end=0
+            self.data=[]
+        def get_data(self, l=None):
+            """Get last at most `l` samples from the buffer (if `l` is ``None``, get all samples)"""
+            start=max(0,(self.end-self.start)-l) if l is not None else 0
+            return self.data[self.start+start:self.end]
     def add_data(self, data):
         """
         Add new data to the table.
@@ -397,14 +432,12 @@ class TableAccumulator(object):
             data=table_data
         minlen=min([len(incol) for incol in data])
         for col,incol in zip(self.data,data):
-            col.extend(incol[:minlen])
-            if len(col)>self.memsize:
-                del col[:len(col)-self.memsize]
+            col.add_data(incol[:minlen])
         return minlen
     def reset_data(self, maxlen=0):
         """Clear all data in the table"""
         for col in self.data:
-            del col[:len(col)-maxlen]
+            col.reset_data()
     
     def get_data_columns(self, channels=None, maxlen=None):
         """
@@ -415,13 +448,8 @@ class TableAccumulator(object):
             maxlen: maximal column length (if stored length is larger, return last `maxlen` rows)
         """
         channels=channels or self.channels
-        data=[]
-        for ch in channels:
-            col=self.data[self.channels.index(ch)]
-            if maxlen is not None:
-                start=max(0,len(col)-maxlen)
-                col=col[start:]
-            data.append(col)
+        chidx=[self.channels.index(ch) for ch in channels]
+        data=[self.data[i].get_data(maxlen) for i in chidx]
         return data
     def get_data_rows(self, channels=None, maxlen=None):
         """
@@ -457,7 +485,7 @@ class TableAccumulatorThread(controller.QTaskThread):
         self.channels=channels
         self.fmt=[None]*len(channels)
         self.table_accum=TableAccumulator(channels=channels,memsize=memsize)
-        self.subscribe(self._accum_data,srcs=data_source,dsts="any",tags="points",limit_queue=1000)
+        self.subscribe(self._accum_data,srcs=data_source,dsts="any",tags="points",limit_queue=100)
         self.subscribe(self._on_source_reset,srcs=data_source,dsts="any",tags="reset")
         self.logger=None
         self.streaming=False

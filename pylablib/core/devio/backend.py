@@ -560,7 +560,7 @@ try:
                 else:
                     result=self.instr.read(size=size)
                     if len(result)!=size:
-                        raise self.Error("read returned less than expected")
+                        raise self.Error("read returned less than expected: {} instead of {}".format(len(result),size))
                 self.cooldown()
                 return self._to_datatype(result)
         def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):
@@ -1139,7 +1139,7 @@ try:
             else:
                 result=self.instr.read(self.ep_read,size,timeout=self._timeout()).tobytes()
                 if len(result)!=size and self.check_read_size:
-                    raise self.Error("read returned less than expected")
+                    raise self.Error("read returned less than expected {} instead of {}".format(len(result),size))
             self.cooldown()
             return self._to_datatype(result)
         def read_multichar_term(self, term, remove_term=True, timeout=None, error_on_timeout=True):

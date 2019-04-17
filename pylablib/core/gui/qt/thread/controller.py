@@ -755,13 +755,16 @@ class QMultiRepeatingThreadController(QThreadController):
         del self.jobs[name]
         del self.timers[name]
 
-    def add_batch_job(self, name, job, cleanup=None):
+    def add_batch_job(self, name, job, cleanup=None, min_runtime=0):
         """
         Add a batch `job` which is executed once, but with continuations.
 
         After this call the job is just created, but is not running. To start it, call :meth:`start_batch_job`.
         If specified, `cleanup` is a finalizing function which is called both when the job terminates normally,
         and when it is forcibly stopped (including thread termination).
+        `min_runtime` specifies minimal expected runtime of a job; if a job executes faster than this time,
+        it is repeated again unless at least `min_runtime` seconds passed; useful for high-throughput jobs,
+        as it reduces overhead from the job scheduling mechanism (repeating within `min_runtime` time window is fast)
 
         Unlike the usual recurrent jobs, here `job` is a generator (usually defined by a function with ``yield`` statement).
         When the job is running, the generator is periodically called until it raises :exc:`StopIteration` exception, which signifies that the job is finished.
@@ -770,7 +773,7 @@ class QMultiRepeatingThreadController(QThreadController):
         """
         if name in self.jobs or name in self.batch_jobs:
             raise ValueError("job {} already exists".format(name))
-        self.batch_jobs[name]=(job,cleanup)
+        self.batch_jobs[name]=(job,cleanup,min_runtime)
     def start_batch_job(self, name, period, *args, **kwargs):
         """
         Start the batch job with the given name.
@@ -783,13 +786,17 @@ class QMultiRepeatingThreadController(QThreadController):
             self.stop_batch_job(name)
         self._batch_jobs_args[name]=(args,kwargs)
         job=self.batch_jobs[name][0]
+        min_runtime=self.batch_jobs[name][2]
         gen=job(*args,**kwargs)
         def do_step():
+            cnt=general.Countdown(min_runtime) if min_runtime else None
             try:
-                p=next(gen)
-                if p is not None:
-                    self.change_job_period(name,p)
-                return
+                while True:
+                    p=next(gen)
+                    if p is not None:
+                        self.change_job_period(name,p)
+                    if cnt is None or cnt.passed():
+                        return
             except StopIteration:
                 pass
             self.stop_batch_job(name)

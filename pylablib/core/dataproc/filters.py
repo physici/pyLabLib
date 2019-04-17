@@ -273,7 +273,7 @@ def _decimate(wf, n=1, dec_mode="skip", axis=0, mode="drop"):
         def _dec_fun(wf, axis):
             slices=[slice(s) for s in np.shape(wf)]
             slices[axis]=0
-            return wf[slices]
+            return wf[tuple(slices)]
         res=_decimation_filter(wf,_dec_fun,n,axis=axis,mode=mode)
     else:
         raise ValueError("unrecognized decimation type: {0}".format(dec_mode))

@@ -520,7 +520,7 @@ class ECamReader(object):
         """Read all available frames"""
         return list(self.iterrange())
 
-def load_ecam(path, return_format="frame"):
+def load_ecam(path, return_format="image"):
     """
     Read .ecam file.
 
