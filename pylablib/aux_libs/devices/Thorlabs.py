@@ -44,6 +44,7 @@ class ThorlabsInterface(SCPI.SCPIDevice):
     """
     _default_operation_cooldown=0.01
     _default_failsafe=True
+    _allow_concatenate_write=False
     def __init__(self, conn):
         conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",115200))
         SCPI.SCPIDevice.__init__(self,conn,backend="serial",term_read=["\r","\n"],term_write="\r",timeout=5.)
@@ -80,6 +81,7 @@ class FW(ThorlabsInterface):
         self.pcount=self.get_pcount()
         self.respect_bound=respect_bound
 
+    _id_comm="*idn?"
     def get_position(self):
         """Get the wheel position (starting from 1)"""
         self.flush()

@@ -22,17 +22,21 @@ class GenericPerformaxStage(IDevice):
         lib_path(str): path to the PerformaxCom.dll (default is to use the library supplied with the package)
         idx(int): stage index
     """
+    _default_operation_cooldown=0.01
     def __init__(self, lib_path=None, idx=0):
         IDevice.__init__(self)
+        self._operation_cooldown=self._default_operation_cooldown
         self.dll=self._load_dll(lib_path=lib_path)
         self.dll.fnPerformaxComOpen.argtypes=[DWORD,ctypes.c_char_p]
         self.dll.fnPerformaxComOpen.restype=BOOL
         self.dll.fnPerformaxComClose.argtypes=[HANDLE]
         self.dll.fnPerformaxComClose.restype=BOOL
-        self.dll.fnPerformaxCommandReply.argtypes=[HANDLE,ctypes.c_char_p,ctypes.c_char_p]
-        self.dll.fnPerformaxCommandReply.restype=BOOL
+        self.dll.fnPerformaxComSendRecv.argtypes=[HANDLE,ctypes.c_char_p,DWORD,DWORD,ctypes.c_char_p]
+        self.dll.fnPerformaxComSendRecv.restype=BOOL
         self.dll.fnPerformaxComSetTimeouts.argtypes=[DWORD,DWORD]
         self.dll.fnPerformaxComSetTimeouts.restype=BOOL
+        self.dll.fnPerformaxComFlush.argtypes=[HANDLE]
+        self.dll.fnPerformaxComFlush.restype=BOOL
         self.dll.fnPerformaxComGetProductString.argtypes=[DWORD,ctypes.c_char_p,DWORD]
         self.dll.fnPerformaxComGetProductString.restype=BOOL
         self.idx=idx
@@ -62,12 +66,13 @@ class GenericPerformaxStage(IDevice):
         """Open the connection to the stage"""
         self.close()
         self.dll.fnPerformaxComSetTimeouts(5000,5000)
-        handle=ctypes.create_string_buffer(b"\x00"*8)
+        phandle=ctypes.create_string_buffer(b"\x00"*8)
         hlen=ctypes.sizeof(ctypes.c_void_p)
         for _ in range(5):
-            code=self.dll.fnPerformaxComOpen(DWORD(int(self.idx)),handle)
+            code=self.dll.fnPerformaxComOpen(DWORD(int(self.idx)),phandle)
             if code:
-                self.handle=int.from_bytes(handle.raw[:hlen],sys.byteorder,signed=False)
+                self.handle=int.from_bytes(phandle.raw[:hlen],sys.byteorder,signed=False)
+                self.dll.fnPerformaxComFlush(self.handle)
                 return
             time.sleep(0.3)
         raise ArcusError("can't connect to the stage with index {}, return code {}".format(self.idx,code))
@@ -90,6 +95,7 @@ class GenericPerformaxStage(IDevice):
         """Get the device ID"""
         devs=[]
         for n in range(5):
+            time.sleep(self._operation_cooldown)
             if not self.dll.fnPerformaxComGetProductString(self.idx,self.rbuff,n):
                 raise ArcusError("can't get info for the device with index {}".format(self.idx))
             devs.append(py3.as_str(self.rbuff.value))
@@ -97,7 +103,9 @@ class GenericPerformaxStage(IDevice):
     def query(self, comm):
         """Send a query to the stage and return the reply"""
         self._check_handle()
-        if self.dll.fnPerformaxCommandReply(self.handle,py3.as_builtin_bytes(comm),self.rbuff):
+        time.sleep(self._operation_cooldown)
+        comm=py3.as_builtin_bytes(comm)
+        if self.dll.fnPerformaxComSendRecv(self.handle,py3.as_builtin_bytes(comm),64,64,self.rbuff):
             return py3.as_str(self.rbuff.value)
         else:
             raise ArcusError("error sending command {}".format(comm))

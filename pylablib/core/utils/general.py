@@ -307,11 +307,11 @@ class RetryOnException(object):
                 
     is analogue of::
     
-        for i in range(tries+1):
+        for i in range(tries):
             try:
                 ... do stuff ...
             except exceptions:
-                if i==tries:
+                if i==tries-1:
                     raise
     """
     def __init__(self, tries=None, exceptions=None):
@@ -341,7 +341,7 @@ class RetryOnException(object):
                     return True
             return False
         def reraise(self):
-            raise self.error
+            raise self.error from None
     def __iter__(self):
         cnt=0
         while True:

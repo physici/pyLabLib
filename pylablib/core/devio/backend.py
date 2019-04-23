@@ -446,7 +446,7 @@ try:
                 self.cooldown()
                 self.set_timeout(timeout)
             except self.Error as e:
-                raise self.BackendOpenError(e)
+                raise self.BackendOpenError(e) from None
             
         def _do_open(self):
             general.retry_wait(self.instr.open, self._open_retry_times, 0.3)

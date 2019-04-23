@@ -1,4 +1,6 @@
 ### Interface for a generic device class ###
+
+from ..utils import functions
  
 _info_node_kinds=["settings","status","full_info"]
 
@@ -65,7 +67,7 @@ class IDevice(object):
             ignore_error=(ignore_error,)
         if multiarg and setter:
             osetter=setter
-            setter=lambda v: osetter(*v) if isinstance(v,tuple) else osetter(v)
+            setter=lambda v: functions.call_cut_args(osetter,*v) if isinstance(v,tuple) else osetter(v)
         if mux:
             getter=self._multiplex_func(getter,*mux[:2],multiarg=multiarg) if getter else None
             setter=self._multiplex_func(setter,*mux[:2],multiarg=multiarg) if setter else None

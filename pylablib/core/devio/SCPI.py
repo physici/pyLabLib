@@ -30,9 +30,9 @@ class SCPIDevice(backend_module.IBackendWrapper):
     """
     # All of the foolowing _default_* parameters can be redefined in subclasses
     # Most of these parameters are used to define object attributes, which can be altered individually for different objects (i.e., connections)
-    _default_failsafe_operation_timeout=30. # timeout for an operaton (read/write/ask) in the failsafe mode
+    _default_failsafe_operation_timeout=5. # timeout for an operaton (read/write/ask) in the failsafe mode
     _default_backend_timeout=3. # timeout for a single backend operation attempt in the failsafe mode (one operation can be attempted several times)
-    _default_retry_delay=30. # delay between retrying an operation (in seconds)
+    _default_retry_delay=5. # delay between retrying an operation (in seconds)
     _default_retry_times=5 # maximal number of operation attempts
     _default_operation_timeout=3. # timeout for an operator in the standard (non-failsafe) mode
     _default_wait_sync_timeout=600. # timeout for "sync" wait operation (waiting for the device operation to complete); an operation can be long (e.g., a single frequency sweep), thus the long timeout
@@ -118,11 +118,11 @@ class SCPIDevice(backend_module.IBackendWrapper):
             if not self._concatenate_write:
                 self._write_retry(flush=True)
                 
-    _flush_comm="*IDN?"
+    _flush_comm=None
     def _flush_retry(self):
         for t in general_utils.RetryOnException(self._retry_times,exceptions=self.instr.Error):
             with t:
-                response=self.instr.ask(self._flush_comm)
+                response=self.instr.ask(self._flush_comm or self._id_comm)
                 self.flush()
                 return response
     def _try_recover(self, cnt, silent=True):
