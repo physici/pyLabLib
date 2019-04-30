@@ -4,6 +4,7 @@ from ...core.utils import general
 from PyQt5 import QtCore
 
 import collections
+import traceback
 
 
 
@@ -27,9 +28,14 @@ class ScriptThread(controller.QTaskThread):
 
     Attributes:
         executing (bool): shows whether the script is executing right now;
-            useful in :meth:`interrupt_script` to check whether it is called due to script stopping/completion (then it would be ``True``),
-            or due to thread termination (then it would be ``False``)
+            useful in :meth:`interrupt_script` to check whether it is while the script is running and is done / stopped by user / terminated (then it would be ``True``),
+            or if the script was waiting to be executed / done executing (then it would be ``False``)
+            Duplicates ``interrupt_reason`` attribute (``executing==False`` if and only if ``interrupt_reason=="shutdown"``)
         stop_request (bool): shows whether stop has been requested from another thread (by calling :meth:`stop_execution`).
+        interrupt_reason (str): shows the reason for calling :meth:`interrupt_script`;
+            can be ``"done"`` (called in the end of regularly executed script), ``"stopped"`` (called if the script is forciply stopped),
+            ``"failed"`` (called if the program is terminated, e.g., due to error in the script or any other thread, or the GUI being closed),
+            or ``"shutdown"`` (called if the script is shut down while being inactive)
 
     Methods to overload:
         setup_script: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
@@ -42,6 +48,7 @@ class ScriptThread(controller.QTaskThread):
         self._monitor_signal.connect(self._on_monitor_signal)
         self._monitored_signals={}
         self.executing=False
+        self.interrupt_reason="shutdown"
         self.stop_request=False
         self.add_command("start_script",self._start_script)
 
@@ -93,12 +100,19 @@ class ScriptThread(controller.QTaskThread):
         self.executing=True
         self.stop_request=False
         try:
+            self.interrupt_reason="done"
             self.run_script()
-        except ScriptStopException:
-            pass
-        finally:
             self.interrupt_script()
+            self.interrupt_reason="shutdown"
             self.executing=False
+        except ScriptStopException:
+            self.interrupt_reason="stopped"
+            self.interrupt_script()
+            self.interrupt_reason="shutdown"
+            self.executing=False
+        except:
+            self.interrupt_reason="failed"
+            raise
 
     _monitor_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @QtCore.pyqtSlot("PyQt_PyObject")

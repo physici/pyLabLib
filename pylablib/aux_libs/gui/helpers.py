@@ -105,7 +105,7 @@ class StreamFormerThread(controller.QThreadController):
                 data_available=bool(self.queue)
                 if self.enabled:
                     self.queue.append(value)
-                    if self.max_queue_len>0 and len(self.queue)>self.max_queue_len:
+                    if not self.required or (self.max_queue_len>0 and len(self.queue)>self.max_queue_len):
                         self.queue.popleft()
                     if self.latching:
                         self.last_value=value

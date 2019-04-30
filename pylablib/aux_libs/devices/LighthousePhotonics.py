@@ -25,24 +25,29 @@ class SproutG(backend.IBackendWrapper):
         self._add_status_node("output_level",self.get_output_level)
         self._add_settings_node("output_setpoint",self.get_output_setpoint,self.set_output_level)
     
-    def _parse_response(self, comm, resp):
+    def _parse_response(self, comm, resp, allowed_resp=None):
         resp=py3.as_str(resp).strip()
         if comm[-1]=="?":
             if not resp.startswith(comm[:-1]+"="):
                 raise RuntimeError("Command {} returned unexpected response: {}".format(comm,resp))
             return resp[len(comm):]
         else:
-            if resp=="0":
+            allowed_resp=allowed_resp or ["0"]
+            if resp in allowed_resp:
                 return resp
             raise RuntimeError("Command {} returned unexpected response: {}".format(comm,resp))
-    def query(self, comm):
-        """Send a query to the device and parse the reply"""
+    def query(self, comm, allowed_resp=None):
+        """
+        Send a query to the device and parse the reply.
+        
+        `allowed_resp` is a list of valid responses (by default, only ``"0"``).
+        """
         comm=comm.strip().upper()
         with self.instr.single_op():
             self.instr.flush_read()
             self.instr.write(comm)
             resp=self.instr.readline()
-        return self._parse_response(comm,resp)
+        return self._parse_response(comm,resp,allowed_resp=allowed_resp)
 
     def get_device_info(self):
         """Get device information (product name, product version, serial number)"""
@@ -90,10 +95,10 @@ class SproutG(backend.IBackendWrapper):
         return self.set_output_mode("on" if enabled else "off")
 
     def get_output_level(self):
-        """Set the output power (in Watts)"""
+        """Set the actual output power (in Watts)"""
         return float(self.query("POWER?"))
     def get_output_setpoint(self):
-        """Get the actual output power (in Watts)"""
+        """Get the output setpoint power (in Watts)"""
         return float(self.query("POWER SET?"))
     def set_output_level(self, level):
         """Get the output power setpoint (in Watts)"""

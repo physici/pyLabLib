@@ -105,7 +105,7 @@ class GenericPerformaxStage(IDevice):
         self._check_handle()
         time.sleep(self._operation_cooldown)
         comm=py3.as_builtin_bytes(comm)
-        if self.dll.fnPerformaxComSendRecv(self.handle,py3.as_builtin_bytes(comm),64,64,self.rbuff):
+        if self.dll.fnPerformaxComSendRecv(self.handle,comm,len(comm),64,self.rbuff):
             return py3.as_str(self.rbuff.value)
         else:
             raise ArcusError("error sending command {}".format(comm))

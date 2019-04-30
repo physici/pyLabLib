@@ -31,6 +31,7 @@ class TMCM1100(backend.IBackendWrapper):
     def open(self):
         backend.IBackendWrapper.open(self)
         self.instr.flush_read()
+        self.instr._operation_cooldown=0.01
     
     @staticmethod
     def _build_command(comm, comm_type, value, bank=0, addr=0):
