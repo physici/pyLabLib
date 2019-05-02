@@ -76,7 +76,7 @@ class StreamFormerThread(controller.QThreadController):
         Manages adding and updating new datapoints.
         For arguments, see :meth:`.StreamFormerThread.add_channel`.
         """
-        QueueStatus=collections.namedtuple("QueueStatus",["queue_len","enabled"])
+        QueueStatus=collections.namedtuple("QueueStatus",["queue_len","enabled","max_queue_len"])
         def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True, fill_on="started", latching=True, expand_list=False, default=None):
             object.__init__(self)
             funcargparse.check_parameter_range(fill_on,"fill_on",{"started","completed"})
@@ -153,9 +153,9 @@ class StreamFormerThread(controller.QThreadController):
             """
             Get the queue status
 
-            Return tuple ``(queued_length, enabled)``
+            Return tuple ``(queue_len, enabled, max_queue_len)``
             """
-            return self.QueueStatus(len(self.queue),self.enabled)
+            return self.QueueStatus(len(self.queue),self.enabled,self.max_queue_len)
             
 
     def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", fill_on="started", latching=True, expand_list=False, default=None):

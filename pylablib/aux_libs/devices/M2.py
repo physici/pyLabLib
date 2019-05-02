@@ -109,7 +109,7 @@ class M2ICE(IDevice):
         return op if op==self._terascan_update_op else op+"_f_r"
     def _parse_report_op(self, op):
         return op if op==self._terascan_update_op else op[:-4]
-    def _recv_reply(self, expected=None):
+    def _recv_reply(self, expected_report=None):
         while True:
             reply=net.recv_JSON(self.socket)
             preply=self._parse_reply(reply)
@@ -117,7 +117,7 @@ class M2ICE(IDevice):
                 self._last_status[self._parse_report_op(preply[0])]=preply[1]
             else:
                 return preply
-            if preply[0]==expected:
+            if preply[0]==expected_report:
                 return preply
     def flush(self):
         """Flush read buffer"""
@@ -166,7 +166,7 @@ class M2ICE(IDevice):
         `error_msg` specifies the exception message if the report results in an error.
         """
         with self.socket.using_timeout(timeout):
-            preport=self._recv_reply(expected=self._make_report_op(op))
+            preport=self._recv_reply(expected_report=self._make_report_op(op))
             if not self._is_report_op(preport[0]):
                 raise M2Error("unexpected report op: '{}'".format(preport[0]))
         if "report" in preport[1] and preport[1]["report"][0]!=0:
@@ -214,6 +214,11 @@ class M2ICE(IDevice):
                     ws.close()
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
+    def _try_connect_wavemeter(self, sync=True):
+        self._send_websocket_request('{"message_type":"task_request","task":["start_wavemeter_link"]}')
+        if sync:
+            while not self.is_wavelemeter_connected():
+                time.sleep(0.02)
     def connect_wavemeter(self, sync=True):
         """Connect to the wavemeter (if ``sync==True``, wait until the connection is established)"""
         if not self.use_websocket:
@@ -221,9 +226,13 @@ class M2ICE(IDevice):
         if self.is_wavelemeter_connected():
             return
         self.stop_all_operation()
-        self._send_websocket_request('{"message_type":"task_request","task":["start_wavemeter_link"]}')
+        self._try_connect_wavemeter(sync=sync)
+    def _try_disconnect_wavemeter(self, sync=True):
+        self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
         if sync:
-            while not self.is_wavelemeter_connected():
+            for _ in range(25):
+                if not self.is_wavelemeter_connected():
+                    return
                 time.sleep(0.02)
     def disconnect_wavemeter(self, sync=True):
         """Disconnect from the wavemeter (if ``sync==True``, wait until the connection is broken)"""
@@ -232,18 +241,14 @@ class M2ICE(IDevice):
         if not self.is_wavelemeter_connected():
             return
         if not sync:
-            self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
+            self._try_disconnect_wavemeter(sync=False)
         else:
             while self.is_wavelemeter_connected():
                 self.stop_all_operation()
                 self.lock_wavemeter(False)
                 if self.is_wavelemeter_lock_on():
                     time.sleep(1.)
-                self._send_websocket_request('{"message_type":"task_request","task":["job_stop_wavemeter_link"]}')
-                for _ in range(25):
-                    if not self.is_wavelemeter_connected():
-                        return
-                    time.sleep(0.02)
+                self._try_disconnect_wavemeter(sync=True)
     def is_wavelemeter_connected(self):
         """Check if the wavemeter is connected"""
         return bool(self._read_websocket_status(present_key="wlm_fitted")["wlm_fitted"]) if self.use_websocket else None
@@ -341,7 +346,7 @@ class M2ICE(IDevice):
         """
         _,reply=self.query("move_wave_t",{"wavelength":[wavelength*1E9]},report=True)
         if reply["status"][0]==1:
-            raise M2Error("can't tune etalon: command failed")
+            raise M2Error("can't tune wavelength: command failed")
         elif reply["status"][0]==2:
             raise M2Error("can't tune wavelength: {}nm is out of range".format(wavelength*1E9))
         if sync:
@@ -739,6 +744,7 @@ class M2ICE(IDevice):
             return
         try:
             self._check_terascan_type(scan_type)
+            scan_type=scan_type.replace("line","narrow")
             scan_type=scan_type+"_scan"
         except M2Error:
             self._check_fast_scan_type(scan_type)
@@ -765,23 +771,35 @@ class M2ICE(IDevice):
                         operating=True
                         self.stop_terascan(scan_type)
                         time.sleep(0.5)
-                        if attempts>3:
+                        if attempts>2:
                             self.stop_scan_web(scan_type)
-                        if attempts>6:
+                        if attempts>4 and attempts%2==1:
                             rate=self._default_terascan_rates[scan_type]
-                            scan_center=stat["current"] or 400E12
-                            self.setup_terascan(scan_type,(scan_center,scan_center+rate*10),rate)
+                            scan_center=(stat["current"] or 400E12)-(attempts-5)*100E9
+                            self.setup_terascan(scan_type,(scan_center,scan_center+100E9),rate)
                             self.start_terascan(scan_type)
-                            time.sleep(1.)
+                            time.sleep(3.*attempts)
                             self.stop_terascan(scan_type)
+                            self.stop_scan_web(scan_type)
+                            time.sleep(3.*attempts)
+                        if attempts>4 and attempts%2==0:
+                            self._try_disconnect_wavemeter()
+                            time.sleep(4.)
+                            self._try_connect_wavemeter()
+                            time.sleep(4.)
                 for scan_type in self._fast_scan_types:
                     try:
                         if self.get_fast_scan_status(scan_type)["status"]!="stopped":
                             operating=True
                             self.stop_fast_scan(scan_type)
                             time.sleep(0.5)
-                            if attempts>3:
+                            if attempts>2:
                                 self.stop_scan_web(scan_type)
+                            if attempts>4 and attempts%2==0:
+                                self._try_disconnect_wavemeter()
+                                time.sleep(4.)
+                                self._try_connect_wavemeter()
+                                time.sleep(4.)
                     except M2Error:
                         pass
             if self.get_tuning_status()=="tuning":
@@ -794,6 +812,6 @@ class M2ICE(IDevice):
                 break
             time.sleep(0.1)
             attempts+=1
-            if (attempts>10 and ctd.passed()):
+            if (attempts>12 and ctd.passed()):
                 raise M2Error("coudn't stop all operations: timed out")
         return not operating

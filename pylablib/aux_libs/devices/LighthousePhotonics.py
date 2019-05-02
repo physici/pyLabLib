@@ -13,6 +13,7 @@ class SproutG(backend.IBackendWrapper):
     def __init__(self, conn):
         conn=backend.SerialDeviceBackend.combine_conn(conn,("COM1",19200))
         instr=backend.SerialDeviceBackend(conn,term_read="\r",term_write="\r\n")
+        instr._operation_cooldown=0.02
         backend.IBackendWrapper.__init__(self,instr)
         self._add_full_info_node("device_info",self.get_device_info)
         self._add_full_info_node("device_config",self.get_device_config)

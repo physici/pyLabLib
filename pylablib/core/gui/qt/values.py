@@ -379,7 +379,7 @@ class ValuesTable(object):
         return self.add_handler(name,get_default_value_handler(widget))
     def get_widget(self, name):
         """Get the widget corresponding to the handler under the given name"""
-        return self.get_handler[name].widget
+        return self.get_handler(name).widget
     def add_table(self, name, table):
         """Add a nested :class:`ValuesTable` under a given name"""
         return self.add_handler(name,IDefaultValueHandler(table))
