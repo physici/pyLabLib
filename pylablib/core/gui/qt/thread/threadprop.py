@@ -35,6 +35,11 @@ class NoMessageThreadError(ThreadError):
     def __init__(self, msg=None):
         msg=msg or "no message available"
         ThreadError.__init__(self, msg)
+class SkippedCallError(ThreadError):
+    """Thread error for a case of external call getting skipped (unscheduled)."""
+    def __init__(self, msg=None):
+        msg=msg or "call has been skipped"
+        ThreadError.__init__(self, msg)
 
 ### Interrupts ###
 class InterruptException(Exception):

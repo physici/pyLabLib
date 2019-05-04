@@ -1,5 +1,5 @@
 from ....utils import general, funcargparse, dictionary, functions as func_utils
-from . import signal_pool as spool, threadprop, synchronizing
+from . import signal_pool as spool, threadprop, synchronizing, callsync
 
 from PyQt5 import QtCore
 
@@ -9,7 +9,7 @@ import time
 import sys, traceback
 import heapq
     
-_depends_local=[".signal_pool",".synchronizing","....utils.functions"]
+_depends_local=[".signal_pool",".synchronizing",".callsync","....utils.functions"]
 
 _default_signal_pool=spool.SignalPool()
 
@@ -413,7 +413,7 @@ class QThreadController(QtCore.QObject):
 
 
     ### Managing signal pool interaction ###
-    def subscribe(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, add_call_info=False, id=None):
+    def subscribe(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, add_call_info=False, id=None):
         """
         Subscribe synchronous callback to a signal.
 
@@ -422,10 +422,10 @@ class QThreadController(QtCore.QObject):
         """
         if self._signal_pool:
             uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,
-                limit_queue=limit_queue,limit_period=limit_period,add_call_info=add_call_info,dest_controller=self,id=id)
+                limit_queue=limit_queue,add_call_info=add_call_info,dest_controller=self,id=id)
             self._signal_pool_uids.append(uid)
             return uid
-    def subscribe_nonsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, id=None):
+    def subscribe_nonsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, scheduler=None, id=None):
         """
         Subscribe asynchronous callback to a signal.
 
@@ -433,7 +433,7 @@ class QThreadController(QtCore.QObject):
         By default, the subscribed destination is the thread's name.
         """
         if self._signal_pool:
-            uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,id=id)
+            uid=self._signal_pool.subscribe_nonsync(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,scheduler=scheduler,id=id)
             self._signal_pool_uids.append(uid)
             return uid
     def unsubscribe(self, id):
@@ -649,6 +649,11 @@ class QThreadController(QtCore.QObject):
     
 
     ### External call management ###
+    def _place_call(self, call, tag=None, priority=0):
+        if tag is None:
+            self._interrupt_called.emit(call)
+        else:
+            self.send_message(tag,call,priority=priority)
     def call_in_thread_callback(self, func, args=None, kwargs=None, callback=None, tag=None, priority=0):
         """
         Call a function in this thread with the given arguments.
@@ -656,45 +661,39 @@ class QThreadController(QtCore.QObject):
         If `callback` is supplied, call it with the result as a single argument (call happens in the controller thread).
         If `tag` is supplied, send the call in a message with the given tag; otherwise, use the interrupt call (generally, higher priority method).
         """
-        def call():
-            res=func(*(args or []),**(kwargs or {}))
-            if callback:
-                callback(res)
-        if tag is None:
-            self._interrupt_called.emit(call)
-        else:
-            self.send_message(tag,call,priority=priority)
+        call=callsync.QScheduledCall(func,args,kwargs,result_synchronizer="async")
+        if callback:
+            call.add_callback(callback,pass_result=True,call_on_fail=False)
+        self._place_call(call,tag=tag,priority=priority)
     def call_in_thread_sync(self, func, args=None, kwargs=None, sync=True, callback=None, timeout=None, default_result=None, pass_exception=True, tag=None, priority=0, error_on_stopped=True, same_thread_shortcut=True):
         """
         Call a function in this thread with the given arguments.
 
         If ``sync==True``, calling thread is blocked until the controlled thread executes the function, and the function result is returned
         (in essence, the fact that the function executes in a different thread is transparent).
-        Otherwise, exit call immediately, and return a synchronizer object (:class:`.QThreadCallNotifier`),
-        which can be used to check if the call is done (method `is_done`) and obtain the result (method :meth:`.QThreadCallNotifier.get_value_sync`).
+        Otherwise, exit call immediately, and return a synchronizer object (:class:`.QCallResultSynchronizer`),
+        which can be used to check if the call is done (method `is_done`) and obtain the result (method :meth:`.QCallResultSynchronizer.get_value_sync`).
         If `callback` is not ``None``, call it after the function is successfully executed (from the target thread), with a single parameter being function result.
         If ``pass_exception==True`` and `func` raises and exception, re-raise it in the caller thread (applies only if ``sync==True``).
         If `tag` is supplied, send the call in a message with the given tag and priority; otherwise, use the interrupt call (generally, higher priority method).
         If ``error_on_stopped==True`` and the controlled thread is stopped before it executed the call, raise :exc:`.qt.thread.threadprop.NoControllerThreadError`; otherwise, return `default_result`.
         If ``same_thread_shortcut==True`` (default), the call is synchronous, and the caller thread is the same as the controlled thread, call the function directly.
         """
-        if callback:
-            def call_func(*args, **kwargs):
-                res=func(*args,**kwargs)
-                callback(res)
-                return res
-        else:
-            call_func=func
         if same_thread_shortcut and tag is None and sync and self.is_in_controlled():
-            return call_func(*(args or []),**(kwargs or {}))
-        call=synchronizing.QSyncCall(call_func,args=args,kwargs=kwargs,pass_exception=pass_exception,error_on_fail=error_on_stopped)
+            res=func(*(args or []),**(kwargs or {}))
+            if callback:
+                callback(res)
+            return res
+        call=callsync.QScheduledCall(func,args,kwargs)
+        if callback:
+            call.add_callback(callback,pass_result=True,call_on_fail=False)
         if self.add_stop_notifier(call.fail):
-            call.set_callback(lambda: self.remove_stop_notifier(call.fail),call_on_fail=True)
-        if tag is None:
-            self._interrupt_called.emit(call)
-        else:
-            self.send_message(tag,call,priority=priority)
-        return call.value(sync=sync,timeout=timeout,default=default_result)
+            call.add_callback(lambda: self.remove_stop_notifier(call.fail),call_on_fail=True,pass_result=False)
+        self._place_call(call,tag=tag,priority=priority)
+        result=call.result_synchronizer
+        if sync:
+            result=result.get_value_sync(timeout=timeout,default=default_result,pass_exception=pass_exception,error_on_fail=error_on_stopped)
+        return result
 
 
 
@@ -703,6 +702,8 @@ class QThreadController(QtCore.QObject):
 class QMultiRepeatingThreadController(QThreadController):
     """
     Thread which allows to set up and run jobs and batch jobs with a certain time period, and execute commands in the meantime.
+
+    Mostly serves as a base to a much more flexible :class:`QTaskThread` class; should rarele be considered directly.
 
     Args:
         name(str): thread name (by default, generate a new unique name)
@@ -824,32 +825,13 @@ class QMultiRepeatingThreadController(QThreadController):
         if cleanup:
             cleanup(*args,**kwargs)
 
-    def subscribe_commsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, limit_period=0, add_call_info=False, id=None):
-        """
-        Subscribe callback to a signal which is synchronized with commands and jobs execution.
-
-        Unlike the standard :meth:`.QThreadController.subscribe` method, the subscribed callback will only be executed between jobs or commands, not during one of these.
-
-        See :meth:`.SignalPool.subscribe` for details.
-        By default, the subscribed destination is the thread's name.
-        """
-        if self._signal_pool:
-            uid=self._signal_pool.subscribe(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,
-                limit_queue=limit_queue,limit_period=limit_period,add_call_info=add_call_info,dest_controller=self,call_tag="control.execute",id=id)
-            self._signal_pool_uids.append(uid)
-            return uid
-
     def check_commands(self):
         """
         Check for commands to execute.
 
-        Called once every scheduling cycle: after any recurrent or batch job, but at least every `self._new_jobs_check_period` seconds (by default 0.1s).
-        By default, simply executed all commands passed in ``"control.execute"`` messages.
+        Called once every scheduling cycle: after any recurrent or batch job, but at least every `self._new_jobs_check_period` seconds (by default 20ms).
         """
-        while self.new_messages_number("control.execute"):
-            call=self.pop_message("control.execute")
-            call()
-    
+        pass
 
 
     def _get_next_job(self, ct):
@@ -910,7 +892,7 @@ class QTaskThread(QMultiRepeatingThreadController):
     """
     Thread which allows to set up and run jobs and batch jobs with a certain time period, and execute commands in the meantime.
 
-    Extension of :class:`QMultiRepeatingThreadController` with an interface for command creating and scheduling
+    Extension of :class:`QMultiRepeatingThreadController` with more powerful command scheduling and more user-friendly interface.
 
     Args:
         name(str): thread name (by default, generate a new unique name)
@@ -937,8 +919,6 @@ class QTaskThread(QMultiRepeatingThreadController):
         setup_task: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
         finalize_task: executed on thread cleanup (attempts to execute in any case, including exceptions)
         process_signal: process a directed signal (signal with ``dst`` equal to this thread name); by default, does nothing
-        process_command: process a command with given name and arguments; by default, check for commands set up with :meth:`add_command`
-        process_query: process a query with given name and arguments; by default, check for commands set up with :meth:`add_command`
     """
     ## Action performed when another thread explicitly calls a method corresponding to a command (which is usally a typo)
     ## Can be used to overload default behavior in children classes or instances
@@ -951,8 +931,8 @@ class QTaskThread(QMultiRepeatingThreadController):
         self.setupkwargs=setupkwargs or {}
         self._directed_signal.connect(self._on_directed_signal)
         self._commands={}
+        self._signal_schedulers={}
         self._command_warned=set()
-        self._command_priorities={}
         self.c=self.CommandAccess(self,sync=False)
         self.q=self.CommandAccess(self,sync=True)
         self.qs=self.CommandAccess(self,sync=True,safe=True)
@@ -989,12 +969,6 @@ class QTaskThread(QMultiRepeatingThreadController):
     def process_signal(self, src, tag, value):
         """Process a named signal (with `dst` equal to the thread name) from the signal pool"""
         pass
-    def process_command(self, name, *args, **kwargs):
-        """Process a command call (by default, look for an earlier created command)"""
-        return self._process_named_command(name,*args,**kwargs)
-    def process_query(self, name, *args, **kwargs):
-        """Process a query call (by default, look for an earlier created command)"""
-        return self._process_named_command(name,*args,**kwargs)
     def finalize_task(self):
         """Finalize the thread (always called on thread termination, regardless of the reason)"""
         pass
@@ -1025,6 +999,8 @@ class QTaskThread(QMultiRepeatingThreadController):
     def on_finish(self):
         QMultiRepeatingThreadController.on_finish(self)
         self.finalize_task()
+        for name in self._commands:
+            self._commands[name][1].clear()
 
     _directed_signal=QtCore.pyqtSignal("PyQt_PyObject")
     @exsafeSlot("PyQt_PyObject")
@@ -1034,51 +1010,104 @@ class QTaskThread(QMultiRepeatingThreadController):
         self._directed_signal.emit((tag,src,value))
 
     ### Command control ###    
-    def add_command(self, name, command=None, priority=0):
+    def add_command(self, name, command=None, scheduler=None, limit_queue=None, on_full_queue="skip_current"):
         """
         Add a new command to the command set (by default same set applies both to commands and queries).
 
         If `command' is ``None``, look for the method with the given `name`; otherwise, it is a command function to be called.
-        `priority` specifies command priority (if several commands are in a queue, higher-priority commands are executed first).
+        `scheduler` specifies a command scheduler. By default, it is a :class:`QQueueLengthLimitScheduler`,
+        which maintains a call queue with the given length limit `limit_queue` (``None`` means no limit).
+
+        `on_full_queue` defines the call queue overflow behavior, and can be ``"skip_current"`` (skip the call which is being scheduled),
+        ``"skip_newest"`` (skip the most recent call, place the current), ``"skip_oldest"`` (skip the oldest call in the queue, place the current),
+        ``"wait"`` (wait until queue has at least one free spot, place the call),
+        or ``"call"`` (execute the call directly in the calling thread; should be used with caution).
         """
         if name in self._commands:
             raise ValueError("command {} already exists".format(name))
         if command is None:
             command=getattr(self,name)
-        self._commands[name]=command
-        self._command_priorities[name]=priority
+        if scheduler is None:
+            scheduler=callsync.QQueueLengthLimitScheduler(max_len=limit_queue or 0,on_full_queue=on_full_queue)
+        self._commands[name]=(command,scheduler)
         self._override_command_method(name)
-    def _process_named_command(self, name, *args, **kwargs):
-        if name in self._commands:
-            return self._commands[name](*args,**kwargs)
-        else:
-            raise KeyError("unrecognized command {}".format(name))
+    def _exhaust_scheduler(self, scheduler, fail=False):
+        while True:
+            call=scheduler.pop_call()
+            if call is None:
+                return
+            if fail:
+                call.fail()
+            else:
+                call()
+                self.check_messages()
+    def check_commands(self):
+        for name in self._commands:
+            self._exhaust_scheduler(self._commands[name][1])
+        for name in self._signal_schedulers:
+            self._exhaust_scheduler(self._signal_schedulers[name])
 
+    def subscribe_commsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, on_full_queue="skip_current", add_call_info=False, id=None):
+        """
+        Subscribe callback to a signal which is synchronized with commands and jobs execution.
+
+        Unlike the standard :meth:`.QThreadController.subscribe` method, the subscribed callback will only be executed between jobs or commands, not during one of these.
+
+        See :meth:`.SignalPool.subscribe` for details. By default, the subscribed destination is the thread's name.
+        The only additional parameter is `on_full_queue`, which defines the call queue overflow behavior.
+        It can be ``"skip_current"`` (skip the call which is being scheduled), ``"skip_newest"`` (skip the most recent call, place the current),
+        ``"skip_oldest"`` (skip the oldest call in the queue, place the current), ``"wait"`` (wait until queue has at least one free spot, place the call),
+        or ``"call"`` (execute the call directly in the calling thread; should be used with caution).
+        """
+        if self._signal_pool:
+            scheduler=callsync.QQueueLengthLimitScheduler(max_len=limit_queue or 0,on_full_queue=on_full_queue,call_info_argname="call_info" if add_call_info else None)
+            uid=self.subscribe_nonsync(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,scheduler=scheduler,id=id)
+            self._signal_schedulers[uid]=scheduler
+            return uid
+
+    def unsubscribe(self, id):
+        QMultiRepeatingThreadController.unsubscribe(self,id)
+        if id in self._signal_schedulers:
+            del self._signal_schedulers[id]
 
     ##########  EXTERNAL CALLS  ##########
     ## Methods to be called by functions executing in other thread ##
 
     ### Request calls ###
-    def _sync_call(self, func, name, args, kwargs, sync, callback=None, timeout=None, priority=0, ignore_errors=False):
-        priority=self._command_priorities.get(name,0)
-        return self.call_in_thread_sync(func,args=(name,)+tuple(args or []),kwargs=kwargs,sync=sync,callback=callback,timeout=timeout,tag="control.execute",
-                priority=priority,error_on_stopped=not ignore_errors,pass_exception=not ignore_errors)
+    def _schedule_comm(self, name, args, kwargs, callback=None, sync_result=True):
+        try:
+            comm,sched=self._commands[name]
+        except KeyError:
+            raise KeyError("unrecognized command {}".format(name)) from None
+        call=sched.build_call(comm,args,kwargs,callback=callback,pass_result=True,callback_on_fail=False,sync_result=sync_result)
+        sched.schedule(call)
+        return call.result_synchronizer
+    def call_command_direct(self, name, args=None, kwargs=None):
+        """
+        Invoke a command directly and immediately in the current thread.
+        """
+        try:
+            comm,_=self._commands[name]
+        except KeyError:
+            raise KeyError("unrecognized command {}".format(name)) from None
+        return comm(*(args or []),**(kwargs or {}))
     def call_command(self, name, args=None, kwargs=None, callback=None):
         """
         Invoke command call with the given name and arguments
         
         If `callback` is not ``None``, call it after the command is successfully executed (from the target thread), with a single parameter being the command result.
-        Return :class:`.QThreadCallNotifier` object which can be used to wait for and read the command result.
+        Return :class:`.QCallResultSynchronizer` object which can be used to wait for and read the command result.
         """
-        return self._sync_call(self.process_command,name,args,kwargs,sync=False,callback=callback)
+        return self._schedule_comm(name,args,kwargs,callback=callback)
     def call_query(self, name, args=None, kwargs=None, timeout=None, ignore_errors=False):
         """
         Invoke query call with the given name and arguments, and return the result.
         
         Unlike :meth:`call_command`, wait until the call is done before returning.
-        If ``ignore_errors==True``, ignore all possible problems with the call (controller stopped, call raised an exception) and return ``None`` instead.
+        If ``ignore_errors==True``, ignore all possible problems with the call (controller stopped, call raised an exception, call was skipped) and return ``None`` instead.
         """
-        return self._sync_call(self.process_query,name,args,kwargs,sync=True,timeout=timeout,ignore_errors=ignore_errors)
+        synch=self._schedule_comm(name,args,kwargs)
+        return synch.get_value_sync(timeout=timeout,error_on_fail=not ignore_errors,error_on_skip=not ignore_errors,pass_exception=not ignore_errors)
 
     class CommandAccess(object):
         """
@@ -1100,7 +1129,7 @@ class QTaskThread(QMultiRepeatingThreadController):
                 parent=self.parent
                 def remcall(*args, **kwargs):
                     if self.direct:
-                        return self.process_command(name,*args,**kwargs)
+                        return self.call_command_direct(name,*args,**kwargs)
                     elif self.sync:
                         return parent.call_query(name,args,kwargs,timeout=self.timeout,ignore_errors=self.ignore_errors)
                     else:

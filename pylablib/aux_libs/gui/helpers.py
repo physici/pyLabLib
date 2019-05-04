@@ -9,7 +9,10 @@ import collections
 from future.utils import viewitems
 import os.path
 
-class StreamFormerThread(controller.QThreadController):
+
+
+
+class StreamFormerThread(controller.QTaskThread):
     """
     Thread that combines data from different sources and aligns it in complete rows.
 
@@ -26,36 +29,26 @@ class StreamFormerThread(controller.QThreadController):
     Attributes:
         block_period: size of a row block which causes :meth:`on_new_block` call
 
+    Commands:
+        get_data: get the completed aligned data
+        pop_data: pop the completed aligned data (return the data and remove it from the internal storage)
+        clear_table: clear the table with the completed aligned data
+        clear_all: remove all data (table and all filled channels)
+        configure_channel: configure a channel behavior (enable or disable)
+        get_channel_status: get channel status (number of datapoints in the queue, maximal queue size, etc.)
+        get_source_status: get lengths of signal queues for all the data sources
+
     Methods to overload:
         :meth:`setup`: set up the thread
         :meth:`cleanup`: clean up the thread 
         :meth:`prepare_row`: modify the new complete row before before adding it to the block
     """
-    def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
-        controller.QThreadController.__init__(self,name=name,kind="loop",signal_pool=signal_pool)
-        self.channels={}
-        self.table={}
-        self._channel_lock=threading.RLock()
-        self._row_lock=threading.RLock()
-        self._row_cnt=0
-        self._partial_rows=[]
-        self.block_period=1
-        self._new_block_done.connect(self._on_new_block_slot,type=QtCore.Qt.QueuedConnection)
-        self._new_row_done.connect(self._add_new_row,type=QtCore.Qt.QueuedConnection)
-        self._new_row_started.connect(self._start_new_row,type=QtCore.Qt.QueuedConnection)
-        self.setupargs=setupargs or []
-        self.setupkwargs=setupkwargs or {}
-
     def setup(self):
         """Set up the thread"""
         pass
     def prepare_row(self, row):
         """Prepare the row"""
         return row
-    _new_block_done=QtCore.pyqtSignal()
-    @controller.exsafeSlot()
-    def _on_new_block_slot(self):
-        self.on_new_block()
     def on_new_block(self):
         """Gets called every time a new block is complete"""
         pass
@@ -63,10 +56,21 @@ class StreamFormerThread(controller.QThreadController):
         """Clean up the thread"""
         pass
 
-    def on_start(self):
-        controller.QThreadController.on_start(self)
-        self.setup(*self.setupargs,**self.setupkwargs)
-    def on_finish(self):
+    def setup_task(self, *args, **kwargs):
+        self.channels={}
+        self.table={}
+        self.source_schedulers={}
+        self.add_command("get_data")
+        self.add_command("pop_data")
+        self.add_command("clear_table")
+        self.add_command("clear_all")
+        self.add_command("configure_channel")
+        self.add_command("get_channel_status")
+        self.add_command("get_source_status")
+        self._row_cnt=0
+        self.block_period=1
+        self.setup(*args,**kwargs)
+    def finalize_task(self):
         self.cleanup()
 
     class ChannelQueue(object):
@@ -130,9 +134,6 @@ class StreamFormerThread(controller.QThreadController):
         def set_requried(self, required="auto"):
             """Specify if receiving value is required"""
             self.required=(self.func is None) if required=="auto" else required
-        def need_completion(self):
-            """Check if the queue needs to be completed by a function"""
-            return self.enabled and (not self.queue) and (self.func is not None)
         def get(self):
             """Pop the oldest value"""
             if not self.enabled:
@@ -204,23 +205,8 @@ class StreamFormerThread(controller.QThreadController):
         """
         def on_signal(src, tag, value):
             self._add_data(name,value,src=src,tag=tag,parse=parse)
-        self.subscribe_nonsync(on_signal,srcs=srcs,dsts=dsts,tags=tags,filt=filt)
-    def configure_channel(self, name, enable=True, required="auto", clear=True):
-        """
-        Reconfigure existing channel.
-
-        Args:
-            name (str): channel name
-            enabled (bool): determines if the channel is enabled by default (disabled channel always returns ``None``)
-            required: determines if the channel is required to receive the value to complete the row;
-                by default, ``False`` if `func` is specified and ``True`` otherwise
-            clear (bool): if ``True``, clear all channels after reconfiguring
-        """
-        with self._channel_lock:
-            self.channels[name].enable(enable)
-            self.channels[name].set_requried(required)
-            if clear:
-                self.clear_all()
+        uid=self.subscribe_commsync(on_signal,srcs=srcs,dsts=dsts,tags=tags,filt=filt,limit_queue=-1)
+        self.source_schedulers[name]=self._signal_schedulers[uid]
             
     def _add_data(self, name, value, src=None, tag=None, parse=None):
         """
@@ -238,61 +224,38 @@ class StreamFormerThread(controller.QThreadController):
                 (useful is a single signal contains multiple channel values, e.g., multiple daq channels)
                 The function is called in the signal source thread, so it should be quick and non-blocking
         """
-        with self._channel_lock:
-            _max_queued_before=0
-            _max_queued_after=0
-            if parse is not None:
-                row=parse(src,tag,value)
-            else:
-                row={name:value}
-            for name,value in viewitems(row):
-                ch=self.channels[name]
-                _max_queued_before=max(_max_queued_before,ch.queued_len())
-                self.channels[name].add(value)
-                _max_queued_after=max(_max_queued_after,ch.queued_len())
-            row_ready=True
-            for _,ch in viewitems(self.channels):
-                if not ch.ready():
-                    row_ready=False
-                    break
-            if row_ready:
-                part_row={}
-                for n,ch in viewitems(self.channels):
-                    if not ch.need_completion():
-                        part_row[n]=ch.get()
-                self._partial_rows.append(part_row)
-                self._new_row_done.emit()
-            elif _max_queued_after>_max_queued_before:
-                self._new_row_started.emit()
-    _new_row_started=QtCore.pyqtSignal()
-    @controller.exsafeSlot()
-    def _start_new_row(self):
-        _max_queued=0
-        with self._channel_lock:
-            for _,ch in viewitems(self.channels):
-                _max_queued=max(_max_queued,ch.queued_len())
+        _max_queued_before=0
+        _max_queued_after=0
+        if parse is not None:
+            row=parse(src,tag,value)
+        else:
+            row={name:value}
+        for name,value in viewitems(row):
+            ch=self.channels[name]
+            _max_queued_before=max(_max_queued_before,ch.queued_len())
+            self.channels[name].add(value)
+            _max_queued_after=max(_max_queued_after,ch.queued_len())
+        row_ready=True
         for _,ch in viewitems(self.channels):
-            while ch.queued_len()<_max_queued:
-                if not ch.add_from_func():
-                    break
-    _new_row_done=QtCore.pyqtSignal()
-    @controller.exsafeSlot()
-    def _add_new_row(self):
-        with self._channel_lock:
-            if not self._partial_rows: # in case reset was call in the meantime
-                return
-            row=self._partial_rows.pop(0)
-        for n,ch in viewitems(self.channels):
-            if n not in row:
-                row[n]=ch.get()
-        row=self.prepare_row(row)
-        with self._row_lock:
+            if not ch.ready():
+                row_ready=False
+                break
+        if row_ready:
+            new_row={}
+            for n,ch in viewitems(self.channels):
+                new_row[n]=ch.get()
+            new_row=self.prepare_row(new_row)
             for n,t in viewitems(self.table):
-                t.append(row[n])
+                t.append(new_row[n])
             self._row_cnt+=1
             if self._row_cnt>=self.block_period:
                 self._row_cnt=0
-                self._new_block_done.emit()
+                self.on_new_block()
+        elif _max_queued_after>_max_queued_before:
+            for _,ch in viewitems(self.channels):
+                while ch.queued_len()<_max_queued_after:
+                    if not ch.add_from_func():
+                        break
 
 
 
@@ -311,13 +274,12 @@ class StreamFormerThread(controller.QThreadController):
         """
         if columns is None and nrows is None:
             return self.table.copy() if copy else self.table
-        with self._row_lock:
-            if nrows is None:
-                nrows=len(general.any_item(self.table)[1])
-            if columns is None:
-                return dict((n,v[:nrows]) for n,v in viewitems(self.table))
-            else:
-                return np.column_stack([self.table[c][:nrows] for c in columns])
+        if nrows is None:
+            nrows=len(general.any_item(self.table)[1])
+        if columns is None:
+            return dict((n,v[:nrows]) for n,v in viewitems(self.table))
+        else:
+            return np.column_stack([self.table[c][:nrows] for c in columns])
     def pop_data(self, nrows=None, columns=None):
         """
         Pop accumulated data.
@@ -325,14 +287,13 @@ class StreamFormerThread(controller.QThreadController):
         Same as :meth:`get_data`, but removes the returned data from the internal storage.
         """
         if nrows is None:
-            with self._row_lock:
-                table=self.table
-                self.table=dict([(n,[]) for n in table])
+            table=self.table
+            self.table=dict([(n,[]) for n in table])
             if columns is None:
                 return dict((n,v) for n,v in viewitems(table))
             else:
                 return np.column_stack([table[c] for c in columns])
-        with self._row_lock:
+        else:
             res=self.get_data(nrows=nrows,columns=columns)
             for _,c in viewitems(self.table):
                 del c[:nrows]
@@ -340,26 +301,48 @@ class StreamFormerThread(controller.QThreadController):
 
     def clear_table(self):
         """Clear table containing all complete rows"""
-        with self._row_lock:
-            self.table=dict([(n,[]) for n in self.table])
+        self.table=dict([(n,[]) for n in self.table])
     def clear_all(self):
         """Clear everything: table of complete rows and all channel queues"""
-        with self._row_lock, self._channel_lock:
-            self.table=dict([(n,[]) for n in self.table])
-            for _,ch in viewitems(self.channels):
-                ch.clear()
-            self._partial_rows=[]
+        self.table=dict([(n,[]) for n in self.table])
+        for _,ch in viewitems(self.channels):
+            ch.clear()
+        self._partial_rows=[]
 
+    def configure_channel(self, name, enable=True, required="auto", clear=True):
+        """
+        Reconfigure existing channel.
+
+        Args:
+            name (str): channel name
+            enabled (bool): determines if the channel is enabled by default (disabled channel always returns ``None``)
+            required: determines if the channel is required to receive the value to complete the row;
+                by default, ``False`` if `func` is specified and ``True`` otherwise
+            clear (bool): if ``True``, clear all channels after reconfiguring
+        """
+        self.channels[name].enable(enable)
+        self.channels[name].set_requried(required)
+        if clear:
+            self.clear_all()
     def get_channel_status(self):
         """
         Get channel status.
 
-        Return dictionary ``{name: status}``, where ``status`` is a tuple ``(queued_length, enabled)``.
+        Return dictionary ``{name: status}``, where ``status`` is a tuple ``(queue_len, enabled, max_queue_len)``.
         """
         status={}
-        with self._channel_lock:
-            for n,ch in viewitems(self.channels):
-                status[n]=ch.get_status()
+        for n,ch in viewitems(self.channels):
+            status[n]=ch.get_status()
+        return status
+    def get_source_status(self):
+        """
+        Get source incoming queues status.
+
+        Return dictionary ``{name: queue_le}``.
+        """
+        status={}
+        for n,sch in viewitems(self.source_schedulers):
+            status[n]=sch.get_current_len()
         return status
 
 
@@ -485,8 +468,8 @@ class TableAccumulatorThread(controller.QTaskThread):
         self.channels=channels
         self.fmt=[None]*len(channels)
         self.table_accum=TableAccumulator(channels=channels,memsize=memsize)
-        self.subscribe(self._accum_data,srcs=data_source,dsts="any",tags="points",limit_queue=100)
-        self.subscribe(self._on_source_reset,srcs=data_source,dsts="any",tags="reset")
+        self.subscribe_commsync(self._accum_data,srcs=data_source,dsts="any",tags="points",limit_queue=100)
+        self.subscribe_commsync(self._on_source_reset,srcs=data_source,dsts="any",tags="reset")
         self.logger=None
         self.streaming=False
         self.add_command("start_streaming",self.start_streaming)
