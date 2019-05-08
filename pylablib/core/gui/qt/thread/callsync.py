@@ -236,7 +236,7 @@ class QQueueScheduler(QScheduler):
         funcargparse.check_parameter_range(on_full_queue,"on_full_queue",{"skip_current","skip_newest","skip_oldest","call","wait"})
         self.on_full_queue=on_full_queue
         self.lock=threading.Lock()
-        self.call_popped_notifier=QMultiThreadNotifier()
+        self.call_popped_notifier=QMultiThreadNotifier() if on_full_queue=="wait" else None
         self.working=True
     def can_schedule(self, call):
         """Check if the call can be scheduled"""
@@ -257,8 +257,9 @@ class QQueueScheduler(QScheduler):
     def _pop_call(self, head=False):
         try:
             call=self.call_queue.popleft() if head else self.call_queue.pop()
-            self.call_popped_notifier.notify()
-            self.call_popped(0 if head else -1,call)
+            if self.call_popped_notifier is not None:
+                self.call_popped_notifier.notify()
+            self.call_popped(call,head)
             return call
         except IndexError:
             return None
@@ -274,7 +275,7 @@ class QQueueScheduler(QScheduler):
                         self._add_call(call)
                         return True
                     wait_n=self.call_popped_notifier.wait(-1)
-            self.call_popped_notifier.wait(wait_n)
+                self.call_popped_notifier.wait(wait_n)
         scheduled=True
         skipped_call=None
         with self.lock:
@@ -391,9 +392,9 @@ class QQueueSizeLimitScheduler(QQueueScheduler):
         size=funcargparse.as_sequence(self._get_size(call))
         for s,q in zip(size,self.size_queues):
             q.append(s)
-    def call_popped(self, index, call):
+    def call_popped(self, call, head):
         for q in self.size_queues:
-            q.pop(index)
+            q.pop(0 if head else -1)
     def can_schedule(self, call):
         for ms,q in zip(self.max_size,self.size_queues):
             if ms>0 and sum(q)>=ms:

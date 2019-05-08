@@ -7,6 +7,7 @@ import json
 import time
 import logging
 import threading
+import sys
 
 
 c=299792458.
@@ -35,6 +36,7 @@ class M2ICE(IDevice):
         self.conn=(addr,port)
         self.timeout=timeout
         self.socket=None
+        self._operation_cooldown=0.02
         if not only_websocket:
             self.open()
             if start_link:
@@ -133,8 +135,17 @@ class M2ICE(IDevice):
             params["report"]="finished"
             self._last_status[op]=None
         msg=self._build_message(op,params)
-        self.socket.send(msg)
-        preply=self._recv_reply()
+        for t in range(5):
+            try:
+                time.sleep(self._operation_cooldown)
+                self.socket.send(msg)
+                preply=self._recv_reply()
+                break
+            except net.socket.error:
+                if t==4:
+                    raise
+                time.sleep(1.)
+                print("M2 query timeout",file=sys.stderr)
         if reply_op=="auto":
             reply_op=op+"_reply"
         if reply_op and preply[0]!=reply_op:
@@ -158,7 +169,8 @@ class M2ICE(IDevice):
     def check_report(self, op):
         """Check and return the latest report for the given operation"""
         self.update_reports()
-        return self.get_last_report(op)
+        report=self.get_last_report(op)
+        return report
     def wait_for_report(self, op, error_msg=None, timeout=None):
         """
         Wait for a report for the given operation
@@ -184,15 +196,23 @@ class M2ICE(IDevice):
 
     def _send_websocket_request(self, msg):
         if self.use_websocket:
-            with self._websocket_lock:
-                ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+            for t in range(5):
                 try:
-                    self._wait_for_websocket_status(ws,present_key="wlm_fitted")
-                    self._wait_for_websocket_status(ws,present_key="wlm_fitted")
-                    ws.send(msg)
-                finally:
-                    logging.getLogger("websocket").setLevel(logging.CRITICAL)
-                    ws.close()
+                    with self._websocket_lock:
+                        ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=10.)
+                        try:
+                            self._wait_for_websocket_status(ws,present_key="wlm_fitted")
+                            self._wait_for_websocket_status(ws,present_key="wlm_fitted")
+                            ws.send(msg)
+                            return
+                        finally:
+                            logging.getLogger("websocket").setLevel(logging.CRITICAL)
+                            ws.close()
+                except websocket.WebSocketTimeoutException:
+                    if t==4:
+                        raise
+                    time.sleep(5.)
+                    print("M2 websocket timeout",file=sys.stderr)
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def _wait_for_websocket_status(self, ws, present_key=None, nmax=20):
@@ -204,14 +224,21 @@ class M2ICE(IDevice):
                 return full_data
     def _read_websocket_status(self, present_key=None, nmax=20):
         if self.use_websocket:
-            with self._websocket_lock:
-                ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+            for t in range(5):
                 try:
-                    return self._wait_for_websocket_status(ws,present_key=present_key,nmax=nmax)
-                finally:
-                    ws.recv()
-                    logging.getLogger("websocket").setLevel(logging.CRITICAL)
-                    ws.close()
+                    with self._websocket_lock:
+                        ws=websocket.create_connection("ws://{}:8088/control.htm".format(self.conn[0]),timeout=5.)
+                        try:
+                            return self._wait_for_websocket_status(ws,present_key=present_key,nmax=nmax)
+                        finally:
+                            ws.recv()
+                            logging.getLogger("websocket").setLevel(logging.CRITICAL)
+                            ws.close()
+                except websocket.WebSocketTimeoutException:
+                    if t==4:
+                        raise
+                    time.sleep(5.)
+                    print("M2 websocket timeout",file=sys.stderr)
         else:
             raise RuntimeError("'websocket' library is requried to communicate this request")
     def _try_connect_wavemeter(self, sync=True):
@@ -279,11 +306,14 @@ class M2ICE(IDevice):
     def get_full_tuning_status(self):
         """Get full fine-tuning status (see M2 ICE manual for ``"poll_wave_m"`` command)"""
         return self.query("poll_wave_m",{})[1]
-    def lock_wavemeter(self, lock=True, sync=True):
+    def lock_wavemeter(self, lock=True, sync=True, error_on_fail=True):
         """Lock or unlock the laser to the wavemeter (if ``sync==True``, wait until the operation is complete)"""
         _,reply=self.query("lock_wave_m",{"operation":"on" if lock else "off"})
         if reply["status"][0]==1:
-            raise M2Error("can't lock wavemeter: no wavemeter link")
+            if error_on_fail:
+                raise M2Error("can't lock wavemeter: no wavemeter link")
+            else:
+                return
         if sync:
             while self.is_wavelemeter_lock_on()!=lock:
                 time.sleep(0.05)
@@ -546,6 +576,7 @@ class M2ICE(IDevice):
         self._check_terascan_type(scan_type)
         if sync:
             self.enable_terascan_updates()
+        self.lock_wavemeter(False,error_on_fail=False)
         _,reply=self.query("scan_stitch_op",{"scan":scan_type,"operation":"start"},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't start TeraScan: operation failed")
@@ -633,9 +664,11 @@ class M2ICE(IDevice):
             status["current"]=c/(reply["current"][0]/1E9) if reply["current"][0] else 0
         elif reply["status"][0]==2:
             raise M2Error("can't stop TeraScan: TeraScan not available")
-        web_status=self._as_web_status(web_status)
+        if web_status=="auto":
+            web_status=self.use_websocket
         if web_status:
-            status["web"]=self._web_scan_status_str[web_status["scan_status"]]
+            scan_web_status=self._read_websocket_status(present_key="scan_status")
+            status["web"]=self._web_scan_status_str[scan_web_status["scan_status"]]
         else:
             status["web"]=None
         return status
@@ -668,6 +701,7 @@ class M2ICE(IDevice):
             elif scan_type.startswith("resonator"):
                 self.lock_etalon()
                 self.unlock_reference_cavity()
+            self.lock_wavemeter(False,error_on_fail=False)
         _,reply=self.query("fast_scan_start",{"scan":scan_type,"width":[width/1E9],"time":[time]},report=True)
         if reply["status"][0]==1:
             raise M2Error("can't start fast scan: width too great for the current tuning position")
@@ -746,10 +780,14 @@ class M2ICE(IDevice):
             self._check_terascan_type(scan_type)
             scan_type=scan_type.replace("line","narrow")
             scan_type=scan_type+"_scan"
+            terascan=True
         except M2Error:
             self._check_fast_scan_type(scan_type)
             scan_type=scan_type.replace("continuous","cont")
+            terascan=False
         scan_task=scan_type+"_stop"
+        if terascan:
+            self._send_websocket_request('{"message_type":"page_update", "stop_scan_stitching":1}')
         self._send_websocket_request('{{"message_type":"task_request","task":["{}"]}}'.format(scan_task))
     _default_terascan_rates={"line":10E6,"fine":100E6,"medium":5E9}
     def stop_all_operation(self, repeated=True):
@@ -774,6 +812,10 @@ class M2ICE(IDevice):
                         if attempts>2:
                             self.stop_scan_web(scan_type)
                         if attempts>4 and attempts%2==1:
+                            self.start_fast_scan("resonator_single",1E9,2,sync=True)
+                            time.sleep(6.)
+                            self.start_fast_scan("cavity_single",1E9,2,sync=True)
+                            time.sleep(6.)
                             rate=self._default_terascan_rates[scan_type]
                             scan_center=(stat["current"] or 400E12)-(attempts-5)*100E9
                             self.setup_terascan(scan_type,(scan_center,scan_center+100E9),rate)
@@ -782,7 +824,7 @@ class M2ICE(IDevice):
                             self.stop_terascan(scan_type)
                             self.stop_scan_web(scan_type)
                             time.sleep(3.*attempts)
-                        if attempts>4 and attempts%2==0:
+                        if attempts>6 and attempts%2==0:
                             self._try_disconnect_wavemeter()
                             time.sleep(4.)
                             self._try_connect_wavemeter()
@@ -795,7 +837,7 @@ class M2ICE(IDevice):
                             time.sleep(0.5)
                             if attempts>2:
                                 self.stop_scan_web(scan_type)
-                            if attempts>4 and attempts%2==0:
+                            if attempts>6 and attempts%2==0:
                                 self._try_disconnect_wavemeter()
                                 time.sleep(4.)
                                 self._try_connect_wavemeter()

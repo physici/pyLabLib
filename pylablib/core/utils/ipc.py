@@ -87,13 +87,23 @@ class SharedMemIPCChannel(PipeIPCChannel):
         """Get arguments required to create a peer connection"""
         return ((self.peer_conn,self.conn),self.arr,self.arr_size)
     
+    def _check_strides(self, array):
+        """Check if array is stored in memory continuously"""
+        esize=array.dtype.itemsize
+        for s,st in zip(array.shape[::-1],array.strides[::-1]):
+            if st!=esize:
+                return False
+            esize*=s
+        return True
     def send_numpy(self, data, method="auto"):
         """Send numpy array"""
         if method=="auto":
             method="pipe" if data.nbytes<2**16 else "shm"
         if method=="pipe":
             return PipeIPCChannel.send_numpy(self,data)
-        buff_ptr,count=data.ctypes.data,data.nbytes
+        if not self._check_strides(data): # need continuous array to send
+            data=data.copy()
+        buff_ptr,count=data.ctypes.get_data(),data.nbytes
         self.conn.send(TPipeMsg(_sharedmem_start,(count,data.dtype.str,data.shape)))
         while count>0:
             chunk_size=min(count,self.arr_size)
@@ -111,15 +121,15 @@ class SharedMemIPCChannel(PipeIPCChannel):
             return msg.data
         else:
             count,dtype,shape=msg.data
-            buffer=ctypes.create_string_buffer(count)
-            buff_ptr=ctypes.addressof(buffer)
+            data=np.empty(shape,dtype=dtype)
+            buff_ptr=data.ctypes.get_data()
             while count>0:
                 chunk_size=self._recv_with_timeout(timeout)
                 ctypes.memmove(buff_ptr,ctypes.addressof(self.arr.get_obj()),chunk_size)
                 buff_ptr+=chunk_size
                 count-=chunk_size
                 self.conn.send(TPipeMsg(_sharedmem_recvd,None))
-            return np.frombuffer(buffer,dtype).reshape(shape)
+            return data
 
 
 

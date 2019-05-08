@@ -931,6 +931,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         self.setupkwargs=setupkwargs or {}
         self._directed_signal.connect(self._on_directed_signal)
         self._commands={}
+        self._sched_order=[]
         self._signal_schedulers={}
         self._command_warned=set()
         self.c=self.CommandAccess(self,sync=False)
@@ -1009,19 +1010,32 @@ class QTaskThread(QMultiRepeatingThreadController):
     def _recv_directed_signal(self, tag, src, value):
         self._directed_signal.emit((tag,src,value))
 
-    ### Command control ###    
-    def add_command(self, name, command=None, scheduler=None, limit_queue=None, on_full_queue="skip_current"):
+    ### Command control ###
+    def _add_scheduler(self, scheduler, priority):
+        for i,(p,_) in enumerate(self._sched_order):
+            if p<priority:
+                self._sched_order.insert(i,(priority,scheduler))
+                return
+        self._sched_order.append((priority,scheduler))
+    def _remover_scheduler(self, scheduler):
+        for i,(_,s) in enumerate(self._sched_order):
+            if s is scheduler:
+                del scheduler[i]
+                return
+    def add_command(self, name, command=None, scheduler=None, limit_queue=None, on_full_queue="skip_current", priority=0):
         """
         Add a new command to the command set (by default same set applies both to commands and queries).
 
-        If `command' is ``None``, look for the method with the given `name`; otherwise, it is a command function to be called.
-        `scheduler` specifies a command scheduler. By default, it is a :class:`QQueueLengthLimitScheduler`,
-        which maintains a call queue with the given length limit `limit_queue` (``None`` means no limit).
-
-        `on_full_queue` defines the call queue overflow behavior, and can be ``"skip_current"`` (skip the call which is being scheduled),
-        ``"skip_newest"`` (skip the most recent call, place the current), ``"skip_oldest"`` (skip the oldest call in the queue, place the current),
-        ``"wait"`` (wait until queue has at least one free spot, place the call),
-        or ``"call"`` (execute the call directly in the calling thread; should be used with caution).
+        Args:
+            command: command function; is ``None``, look for the method with the given `name`.
+            scheduler: a command scheduler; by default, it is a :class:`QQueueLengthLimitScheduler`,
+                which maintains a call queue with the given length limit and full queue behavior
+            limit_queue: command call queue limit; ``None`` means no limit
+            on_full_queue: call queue overflow behavior; can be ``"skip_current"`` (skip the call which is being scheduled),
+                ``"skip_newest"`` (skip the most recent call, place the current), ``"skip_oldest"`` (skip the oldest call in the queue, place the current),
+                ``"wait"`` (wait until queue has at least one free spot, place the call),
+                or ``"call"`` (execute the call directly in the calling thread; should be used with caution).
+            priority: command priority; higher-prioirity signals and commands are always executed before the lower-priority ones.
         """
         if name in self._commands:
             raise ValueError("command {} already exists".format(name))
@@ -1030,44 +1044,59 @@ class QTaskThread(QMultiRepeatingThreadController):
         if scheduler is None:
             scheduler=callsync.QQueueLengthLimitScheduler(max_len=limit_queue or 0,on_full_queue=on_full_queue)
         self._commands[name]=(command,scheduler)
+        self._add_scheduler(scheduler,priority)
         self._override_command_method(name)
-    def _exhaust_scheduler(self, scheduler, fail=False):
-        while True:
-            call=scheduler.pop_call()
-            if call is None:
-                return
-            if fail:
-                call.fail()
-            else:
-                call()
-                self.check_messages()
     def check_commands(self):
-        for name in self._commands:
-            self._exhaust_scheduler(self._commands[name][1])
-        for name in self._signal_schedulers:
-            self._exhaust_scheduler(self._signal_schedulers[name])
+        while True:
+            called=False
+            for _,scheduler in self._sched_order:
+                call=scheduler.pop_call()
+                if call is not None:
+                    call()
+                    called=True
+                    break
+            if not called:
+                return
+            self.check_messages()
 
-    def subscribe_commsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, limit_queue=1, on_full_queue="skip_current", add_call_info=False, id=None):
+    def subscribe_commsync(self, callback, srcs="any", dsts=None, tags=None, filt=None, priority=0, scheduler=None, limit_queue=1, on_full_queue="skip_current", add_call_info=False, id=None):
         """
         Subscribe callback to a signal which is synchronized with commands and jobs execution.
 
         Unlike the standard :meth:`.QThreadController.subscribe` method, the subscribed callback will only be executed between jobs or commands, not during one of these.
-
-        See :meth:`.SignalPool.subscribe` for details. By default, the subscribed destination is the thread's name.
-        The only additional parameter is `on_full_queue`, which defines the call queue overflow behavior.
-        It can be ``"skip_current"`` (skip the call which is being scheduled), ``"skip_newest"`` (skip the most recent call, place the current),
-        ``"skip_oldest"`` (skip the oldest call in the queue, place the current), ``"wait"`` (wait until queue has at least one free spot, place the call),
-        or ``"call"`` (execute the call directly in the calling thread; should be used with caution).
-        """
+        
+        Args:
+            callback: callback function, which takes 3 arguments: signal source, signal tag, signal value.
+            srcs(str or [str]): signal source name or list of source names to filter the subscription;
+                can be ``"any"`` (any source) or ``"all"`` (only signals specifically having ``"all"`` as a source).
+            dsts(str or [str]): signal destination name or list of destination names to filter the subscription;
+                can be ``"any"`` (any destination) or ``"all"`` (only source specifically having ``"all"`` as a destination).
+            tags: signal tag or list of tags to filter the subscription (any tag by default).
+            filt(callable): additional filter function which takes 4 arguments: signal source, signal destination, signal tag, signal value,
+                and checks whether signal passes the requirements.
+            priority(int): subscribed signal priority; higher-prioirity signals and commands are always executed before the lower-priority ones.
+            limit_queue(int): limits the maximal number of scheduled calls
+                0 or negative value means no limit (not recommended, as it can unrestrictedly bloat the queue)
+            on_full_queue: action to be taken if the call can't be scheduled (i.e., :meth:`can_schedule` returns ``False``);
+                can be ``"skip_current"`` (skip the call which is being scheduled), ``"skip_newest"`` (skip the most recent call; place the current)
+                ``"skip_oldest"`` (skip the oldest call in the queue; place the current),
+                ``"wait"`` (wait until the call can be scheduled, which is checked after every call removal from the queue; place the call),
+                or ``"call"`` (execute the call directly in the calling thread; should be used with caution).
+            add_call_info(bool): if ``True``, add a fourth argument containing a call information (tuple with a single element, a timestamps of the call).
+            id(int): subscription ID (by default, generate a new unique name).
+            """
         if self._signal_pool:
-            scheduler=callsync.QQueueLengthLimitScheduler(max_len=limit_queue or 0,on_full_queue=on_full_queue,call_info_argname="call_info" if add_call_info else None)
+            if scheduler is None:
+                scheduler=callsync.QQueueLengthLimitScheduler(max_len=limit_queue or 0,on_full_queue=on_full_queue,call_info_argname="call_info" if add_call_info else None)
             uid=self.subscribe_nonsync(callback,srcs=srcs,dsts=dsts or self.name,tags=tags,filt=filt,priority=priority,scheduler=scheduler,id=id)
             self._signal_schedulers[uid]=scheduler
+            self._add_scheduler(scheduler,priority)
             return uid
 
     def unsubscribe(self, id):
         QMultiRepeatingThreadController.unsubscribe(self,id)
         if id in self._signal_schedulers:
+            self._remover_scheduler(self._signal_schedulers[id])
             del self._signal_schedulers[id]
 
     ##########  EXTERNAL CALLS  ##########

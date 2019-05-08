@@ -189,6 +189,7 @@ def _sliding_filter(wf, n=1, dec_mode="bin", mode="reflect", cval=0.):
         dec_mode (str):
             Decimation mode. Can be
                 - ``'bin'`` or ``'mean'`` - do a binning average;
+                - ``'sum'`` - sum points;
                 - ``'min'`` - leave min point;
                 - ``'max'`` - leave max point;
                 - ``'median'`` - leave median point (works as a median filter).
@@ -199,6 +200,8 @@ def _sliding_filter(wf, n=1, dec_mode="bin", mode="reflect", cval=0.):
     wf=np.asarray(wf)
     if dec_mode=="bin" or dec_mode=="mean":
         res=_sliding_func(wf,np.mean,n,mode=mode,cval=cval)
+    elif dec_mode=="sum":
+        res=_sliding_func(wf,np.sum,n,mode=mode,cval=cval)
     elif dec_mode=="min":
         res=_sliding_func(wf,np.min,n,mode=mode,cval=cval)
     elif dec_mode=="max":
@@ -254,6 +257,7 @@ def _decimate(wf, n=1, dec_mode="skip", axis=0, mode="drop"):
         dec_mode (str): Decimation mode. Can be
                 - ``'skip'`` - just leave every n'th point while completely omitting everything else;
                 - ``'bin'`` or ``'mean'`` - do a binning average;
+                - ``'sum'`` - sum points;
                 - ``'min'`` - leave min point;
                 - ``'max'`` - leave max point;
                 - ``'median'`` - leave median point (works as a median filter).
@@ -263,6 +267,8 @@ def _decimate(wf, n=1, dec_mode="skip", axis=0, mode="drop"):
     wf=np.asarray(wf)
     if dec_mode=="bin" or dec_mode=="mean":
         res=_decimation_filter(wf,np.mean,n,axis=axis,mode=mode)
+    elif dec_mode=="sum":
+        res=_decimation_filter(wf,np.sum,n,axis=axis,mode=mode)
     elif dec_mode=="min":
         res=_decimation_filter(wf,np.min,n,axis=axis,mode=mode)
     elif dec_mode=="max":
@@ -289,7 +295,7 @@ def _decimate_linear(wf, n=1, dec_mode="skip", axis=0, mode="drop"):
     """
     if n is None or n<=1:
         return wf
-    if mode=="leave":
+    if mode=="leave" or dec_mode=="sum":
         return _decimate(wf,n,dec_mode=dec_mode,axis=axis,mode=mode)
     n=int(n)
     length,start,step=wf.length,wf.start,wf.step
@@ -329,6 +335,7 @@ def decimate_full(wf, dec_mode="skip", axis=0):
             Decimation mode. Can be
                 - ``'skip'`` - just leave every n'th point while completely omitting everything else;
                 - ``'bin'`` or ``'mean'`` - do a binning average;
+                - ``'sum'`` - sum points;
                 - ``'min'`` - leave min point;
                 - ``'max'`` - leave max point;
                 - ``'median'`` - leave median point (works as a median filter).
@@ -337,6 +344,8 @@ def decimate_full(wf, dec_mode="skip", axis=0):
     wf=np.asarray(wf)
     if dec_mode=="bin" or dec_mode=="mean":
         return np.mean(wf,axis=axis)
+    elif dec_mode=="sum":
+        return np.sum(wf,axis=axis)
     elif dec_mode=="min":
         return np.min(wf,axis=axis)
     elif dec_mode=="max":
