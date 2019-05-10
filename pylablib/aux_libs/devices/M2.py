@@ -790,7 +790,7 @@ class M2ICE(IDevice):
             self._send_websocket_request('{"message_type":"page_update", "stop_scan_stitching":1}')
         self._send_websocket_request('{{"message_type":"task_request","task":["{}"]}}'.format(scan_task))
     _default_terascan_rates={"line":10E6,"fine":100E6,"medium":5E9}
-    def stop_all_operation(self, repeated=True):
+    def stop_all_operation(self, repeated=True, attempt=0):
         """
         Stop all laser operations (tuning and scanning).
 
@@ -798,33 +798,38 @@ class M2ICE(IDevice):
         If ``repeated==True``, repeat trying to stop the operations until succeeded (more reliable, but takes more time).
         Return ``True`` if the operation is success otherwise ``False``.
         """
-        attempts=0
         ctd=general.Countdown(self.timeout or None)
         while True:
             operating=False
             if not (self.use_websocket and self.get_full_web_status()["scan_status"]==0):
                 for scan_type in ["medium","fine","line"]:
-                    stat=self.get_terascan_status(scan_type)
+                    stat=self.get_terascan_status(scan_type,web_status=False)
                     if stat["status"]!="stopped":
                         operating=True
                         self.stop_terascan(scan_type)
-                        time.sleep(0.5)
-                        if attempts>2:
+                        time.sleep(1)
+                        if attempt>2:
                             self.stop_scan_web(scan_type)
-                        if attempts>4 and attempts%2==1:
-                            self.start_fast_scan("resonator_single",1E9,2,sync=True)
-                            time.sleep(6.)
-                            self.start_fast_scan("cavity_single",1E9,2,sync=True)
-                            time.sleep(6.)
+                        if attempt>4 and attempt%2==1:
+                            try:
+                                self.start_fast_scan("resonator_single",1E9,2,sync=True)
+                                time.sleep(6.)
+                            except M2Error:
+                                pass
+                            try:
+                                self.start_fast_scan("cavity_single",1E9,2,sync=True)
+                                time.sleep(6.)
+                            except M2Error:
+                                pass
                             rate=self._default_terascan_rates[scan_type]
-                            scan_center=(stat["current"] or 400E12)-(attempts-5)*100E9
+                            scan_center=(stat["current"] or 400E12)-(attempt-5)*100E9
                             self.setup_terascan(scan_type,(scan_center,scan_center+100E9),rate)
                             self.start_terascan(scan_type)
-                            time.sleep(3.*attempts)
+                            time.sleep(2.)
                             self.stop_terascan(scan_type)
                             self.stop_scan_web(scan_type)
-                            time.sleep(3.*attempts)
-                        if attempts>6 and attempts%2==0:
+                            time.sleep(2.)
+                        if attempt>6 and attempt%2==0:
                             self._try_disconnect_wavemeter()
                             time.sleep(4.)
                             self._try_connect_wavemeter()
@@ -835,9 +840,9 @@ class M2ICE(IDevice):
                             operating=True
                             self.stop_fast_scan(scan_type)
                             time.sleep(0.5)
-                            if attempts>2:
+                            if attempt>2:
                                 self.stop_scan_web(scan_type)
-                            if attempts>6 and attempts%2==0:
+                            if attempt>6 and attempt%2==0:
                                 self._try_disconnect_wavemeter()
                                 time.sleep(4.)
                                 self._try_connect_wavemeter()
@@ -853,7 +858,7 @@ class M2ICE(IDevice):
             if (not repeated) or (not operating):
                 break
             time.sleep(0.1)
-            attempts+=1
-            if (attempts>12 and ctd.passed()):
+            attempt+=1
+            if (attempt>12 and ctd.passed()):
                 raise M2Error("coudn't stop all operations: timed out")
         return not operating

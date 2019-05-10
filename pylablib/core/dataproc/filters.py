@@ -355,7 +355,7 @@ def decimate_full(wf, dec_mode="skip", axis=0):
     elif dec_mode=="skip":
         slices=[slice(s) for s in np.shape(wf)]
         slices[axis]=0
-        return wf[slices]
+        return wf[tuple(slices)]
     else:
         raise ValueError("unrecognized decimation type: {0}".format(dec_mode))
 

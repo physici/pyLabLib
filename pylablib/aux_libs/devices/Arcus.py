@@ -104,7 +104,7 @@ class GenericPerformaxStage(IDevice):
         """Send a query to the stage and return the reply"""
         self._check_handle()
         time.sleep(self._operation_cooldown)
-        comm=py3.as_builtin_bytes(comm)
+        comm=py3.as_builtin_bytes(comm)+b"\x00"
         if self.dll.fnPerformaxComSendRecv(self.handle,comm,len(comm),64,self.rbuff):
             return py3.as_str(self.rbuff.value)
         else:
@@ -166,6 +166,8 @@ class Performax4EXStage(GenericPerformaxStage):
     def enable_all_outputs(self, enable=True):
         """Enable output on all axes"""
         self.query("EO={}".format("15" if enable else "0"))
+        for axis in "xyzu":
+            self.enable_output(axis,enable=enable)
 
     def get_position(self, axis):
         """Get the current axis position"""

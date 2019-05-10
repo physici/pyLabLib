@@ -228,6 +228,8 @@ class StreamFormerThread(controller.QTaskThread):
         _max_queued_after=0
         if parse is not None:
             row=parse(src,tag,value)
+            if not isinstance(row,dict):
+                row={name:row}
         else:
             row={name:value}
         for name,value in viewitems(row):

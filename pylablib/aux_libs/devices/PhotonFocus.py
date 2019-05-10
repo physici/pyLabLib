@@ -536,14 +536,15 @@ def remove_status_line(frame, sl_pos="calculate", policy="duplicate", copy=True)
     return frame
 
 
-def find_skipped_frames(lines):
+def find_skipped_frames(lines, step=1):
     """
     Check if there are skipped frames based on status line reading.
 
-    If there are, return list ``[(idx, skipped)]``, where `idx` is the index after which `skipped` frames were skipped.
-    Otherwise, return ``None``.
+    `step` specifies expected index step between neighboring frames.
+
+    Return list ``[(idx, skipped)]``, where `idx` is the index after which `skipped` frames were skipped.
     """
     dfs=(lines[1:,1]-lines[:-1,1])%(2**24) # the internal counter is only 24-bit
-    skipped_idx=(dfs!=1)
+    skipped_idx=(dfs!=step)
     skipped_idx=skipped_idx.nonzero()[0]
     return list(zip(skipped_idx,dfs[skipped_idx])) if len(skipped_idx) else []
