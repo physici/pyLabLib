@@ -229,6 +229,13 @@ class DCAMCamera(IDevice):
     def get_readout_time(self):
         """Set current readout time"""
         return self.get_value("TIMING READOUT TIME")
+    def get_defect_correct_mode(self):
+        """Check if the defect pixel correction mode is on"""
+        return self.get_value("DEFECT CORRECT MODE",error_on_missing=False,default=1)==2
+    def set_defect_correct_mode(self, enabled=True):
+        """Enable or disable the defect pixel correction mode"""
+        self.set_value("DEFECT CORRECT MODE",2 if enabled else 1,error_on_missing=False)
+        return self.get_defect_correct_mode()
 
     def _allocate_buffer(self, nframes):
         self._deallocate_buffer()

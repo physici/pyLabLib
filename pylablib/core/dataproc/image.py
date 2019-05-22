@@ -133,6 +133,6 @@ def get_region_sum(image, center, size):
     The region is automatically reduced if a part of it is outside of the image.
     Return tuple ``(sum, area)``, where area is the acual summer region are (in pixels).
     """
-    roi=ROI.from_centersize(center,size,shape=image.shape)
+    roi=ROI.from_centersize(center,size,shape=image.shape[-2:])
     ispan,jspan=roi.ispan(),roi.jspan()
-    return np.sum(image[ispan[0]:ispan[1],jspan[0]:jspan[1]]), roi.area()
+    return np.sum(image[...,ispan[0]:ispan[1],jspan[0]:jspan[1]],axis=(-2,-1)), roi.area()

@@ -9,6 +9,7 @@ When both are used, :class:`ImageView` is created and set up first, and then sup
 
 from .param_table import ParamTable, FixedParamTable
 from ....core.gui.qt.thread import controller
+from ....core.utils import funcargparse
 
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph
@@ -258,10 +259,19 @@ class ImageView(QtWidgets.QWidget):
         if name in self.rectangles:
             rect=self.rectangles.pop(name)
             self.imageWindow.getView().removeItem(rect)
-    def show_rectangles(self, show=True):
-        """Toggle showing rectangles on or off"""
+    def show_rectangles(self, show=True, names=None):
+        """
+        Toggle showing rectangles on or off
+        
+        If `names` is given, it specifies names of rectangles to show or hide (by default, all rectangles).
+        """
         imgview=self.imageWindow.getView()
-        for rect in self.rectangles.values():
+        if names is None:
+            names=self.rectangles
+        else:
+            names=funcargparse.as_sequence(names)
+        for n in names:
+            rect=self.rectangles[n]
             if show and rect.rect not in imgview.addedItems:
                 imgview.addItem(rect.rect)
             if (not show) and rect.rect in imgview.addedItems:

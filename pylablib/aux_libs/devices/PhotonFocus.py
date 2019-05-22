@@ -184,10 +184,10 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         self._add_full_info_node("pfcam_port",lambda: self.pfcam_port)
         self._add_status_node("properties",self.get_all_properties)
         self._add_settings_node("trigger_interleave",self.get_trigger_interleave,self.set_trigger_interleave)
+        self._add_settings_node("cfr",self.is_CFR_enabled,self.enable_CFR)
         self._add_settings_node("status_line",self.is_status_line_enabled,self.enable_status_line)
         self._add_settings_node("bl_offset",self.get_black_level_offset,self.set_black_level_offset)
         self._add_settings_node("exposure",self.get_exposure,self.set_exposure)
-        self._add_settings_node("cfr",self.is_CFR_enabled,self.enable_CFR)
         self._add_settings_node("frame_time",self.get_frame_time,self.set_frame_time)
     
     def setup_max_baudrate(self):
@@ -400,7 +400,15 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         return self.get_value("Trigger/Interleave",False)
     def set_trigger_interleave(self, enabled):
         """Set the trigger interleave option on or off"""
-        self.set_value("Trigger/Interleave",enabled,ignore_missing=True)
+        if self.get_trigger_interleave()!=enabled:
+            if self.is_CFR_enabled():
+                ft=self.get_frame_time()
+                self.enable_CFR(False)
+                self.set_value("Trigger/Interleave",enabled,ignore_missing=True)
+                self.enable_CFR(True)
+                self.set_frame_time(ft)
+            else:
+                self.set_value("Trigger/Interleave",enabled,ignore_missing=True)
         return self.get_trigger_interleave()
 
     def is_status_line_enabled(self):

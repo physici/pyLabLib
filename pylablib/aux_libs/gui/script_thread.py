@@ -41,7 +41,7 @@ class ScriptThread(controller.QTaskThread):
         setup_script: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)
         finalize_script: executed on thread cleanup (attempts to execute in any case, including exceptions); by default, call :meth:`interrupt_script`
         run_script: execute the script (can be run several times per script lifetime)
-        interrupt_script: executed when the script is finished or forcibly  (including due to exception or application shutdown)
+        interrupt_script: executed when the script is finished or forcibly shut down (including due to exception or application shutdown)
     """
     def __init__(self, name=None, setupargs=None, setupkwargs=None, signal_pool=None):
         controller.QTaskThread.__init__(self,name=name,setupargs=setupargs,setupkwargs=setupkwargs,signal_pool=signal_pool)
@@ -74,7 +74,7 @@ class ScriptThread(controller.QTaskThread):
     def run_script(self):
         """Execute script (to be overloaded in subclasses)"""
         pass
-    def interrupt_script(self):
+    def interrupt_script(self, kind="default"):
         """Finalize script execution (the thread is still running, i.e., the script might be started again)"""
         pass
     def check_stop(self):
