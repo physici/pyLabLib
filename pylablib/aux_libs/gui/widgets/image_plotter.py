@@ -10,6 +10,7 @@ When both are used, :class:`ImageView` is created and set up first, and then sup
 from .param_table import ParamTable, FixedParamTable
 from ....core.gui.qt.thread import controller
 from ....core.utils import funcargparse
+from ....core.dataproc import filters
 
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph
@@ -58,11 +59,13 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.add_check_box("normalize","Normalize",value=False)
         self.settings_table.add_num_edit("minlim",value=self.img_lim[0],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Minimal intensity:")
         self.settings_table.add_num_edit("maxlim",value=self.img_lim[1],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Maximal intensity:")
-        self.settings_table.add_check_box("show_lines","Show lines",value=True)
+        self.settings_table.add_check_box("show_lines","Show lines",value=True).value_changed_signal().connect(self.setup_gui_state)
         self.settings_table.add_num_edit("vlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="X line:")
         self.settings_table.add_num_edit("hlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="Y line:")
+        self.settings_table.add_check_box("show_linecuts","Show line cuts",value=False).value_changed_signal().connect(self.setup_gui_state)
+        self.settings_table.add_num_edit("linecut_width",value=1,limiter=(1,None,"coerce","int"),formatter="int",label="Line cut width:")
         self.settings_table.add_button("center_lines","Center lines").value_changed_signal().connect(view.center_lines)
-        self.settings_table.value_changed.connect(lambda: self.view.update_image(update_controls=False))
+        self.settings_table.value_changed.connect(lambda: self.view.update_image(update_controls=False,do_redraw=True))
         self.settings_table.add_spacer(10)
         self.settings_table.add_button("update_image","Updating",checkable=True)
         self.settings_table.add_button("single","Single").value_changed_signal().connect(self.view.arm_single)
@@ -83,12 +86,21 @@ class ImageViewController(QtWidgets.QWidget):
         minl,maxl=self.img_lim
         self.settings_table.w["minlim"].set_number_limit(minl,maxl,"coerce","int")
         self.settings_table.w["maxlim"].set_number_limit(minl,maxl,"coerce","int")
+    @controller.exsafeSlot()
+    def setup_gui_state(self):
+        """Enable or disable controls based on which actions are enabled"""
+        show_lines=self.settings_table.v["show_lines"]
+        for n in ["vlinepos","hlinepos","show_linecuts"]:
+            self.settings_table.lock(n,not show_lines)
+        show_linecuts=self.settings_table.v["show_linecuts"]
+        self.settings_table.lock("linecut_width",not (show_lines and show_linecuts))
     def get_all_values(self):
         """Get all control values"""
         return self.settings_table.get_all_values()
     def set_all_values(self, params):
         """Set all control values"""
         self.settings_table.set_all_values(params)
+        self.setup_gui_state()
 
 
 builtin_cmaps={ "gray":([0,1.],[(0.,0.,0.),(1.,1.,1.)]),
@@ -132,15 +144,19 @@ class ImageView(QtWidgets.QWidget):
         self.name=name
         self.setObjectName(self.name)
         self.single=False
-        self.layout=QtWidgets.QHBoxLayout(self)
+        self.layout=QtWidgets.QVBoxLayout(self)
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setObjectName("layout")
         self.img=np.zeros(img_size)
-        self.imageWindow=pyqtgraph.ImageView(self)
+        self.xbin=1
+        self.ybin=1
+        self.dec_mode="mean"
         if min_size:
-            self.imageWindow.setMinimumSize(QtCore.QSize(*min_size))
+            self.setMinimumSize(QtCore.QSize(*min_size))
+        self.imageWindow=pyqtgraph.ImageView(self)
         self.imageWindow.setObjectName("imageWindow")
         self.layout.addWidget(self.imageWindow)
+        self.layout.setStretch(0,4)
         self.set_colormap("hot_sat")
         self.imageWindow.ui.roiBtn.hide()
         self.imageWindow.ui.menuBtn.hide()
@@ -148,6 +164,21 @@ class ImageView(QtWidgets.QWidget):
         self.imgHLine=pyqtgraph.InfiniteLine(angle=0,movable=True,bounds=[0,None])
         self.imageWindow.getView().addItem(self.imgVLine)
         self.imageWindow.getView().addItem(self.imgHLine)
+        self.linecut_boundary_pen=pyqtgraph.mkPen("#008000",style=pyqtgraph.QtCore.Qt.DashLine)
+        self.imgHBLines=[pyqtgraph.InfiniteLine(angle=0,movable=False,bounds=[0,None],pen=self.linecut_boundary_pen) for _ in range(2)]
+        self.imgVBLines=[pyqtgraph.InfiniteLine(angle=90,movable=False,bounds=[0,None],pen=self.linecut_boundary_pen) for _ in range(2)]
+        self.imageWindow.getView().addItem(self.imgHBLines[0])
+        self.imageWindow.getView().addItem(self.imgHBLines[1])
+        self.imageWindow.getView().addItem(self.imgVBLines[0])
+        self.imageWindow.getView().addItem(self.imgVBLines[1])
+        self.plotWindow=pyqtgraph.PlotWidget(self)
+        self.plotWindow.addLegend()
+        self.plotWindow.setLabel("left","Image cut")
+        self.plotWindow.showGrid(True,True,0.7)
+        self.cut_lines=[self.plotWindow.plot([],[],pen="#B0B000",name="Horizontal"), self.plotWindow.plot([],[],pen="#B000B0",name="Vertical")]
+        self.layout.addWidget(self.plotWindow)
+        self.layout.setStretch(1,1)
+        self.plotWindow.setVisible(False)
         self._signals_connected=False
         self._connect_signals()
         self.imgVLine.sigPositionChanged.connect(self.update_image_controls)
@@ -170,6 +201,7 @@ class ImageView(QtWidgets.QWidget):
                 "flip_y":False,
                 "normalize":True,
                 "show_lines":False,
+                "show_linecuts":False,
                 "vlinepos":0,
                 "hlinepos":0,
                 "update_image":True})
@@ -207,13 +239,24 @@ class ImageView(QtWidgets.QWidget):
             self._connect_signals()
 
 
+    def set_binning(self, xbin=1, ybin=1, mode="mean", update_image=True):
+        """
+        Set image binning (useful for showing large images).
+        """
+        bin_changes=(xbin!=self.xbin) or (ybin!=self.ybin) or (mode!=self.dec_mode)
+        self.xbin=xbin
+        self.ybin=ybin
+        self.dec_mode=mode
+        if bin_changes and update_image:
+            self.update_image(update_controls=True,do_redraw=True)
     def set_image(self, img):
         """
         Set the current image.
 
         The image display won't be updated until :meth:`update_image` is called
         """
-        self.img=img
+        if self._get_params().v["update_image"]:
+            self.img=img
     @controller.exsafe
     def center_lines(self):
         """Center coordinate lines"""
@@ -228,10 +271,10 @@ class ImageView(QtWidgets.QWidget):
         Add or change parameters of a rectangle with a given name.
 
         Rectangle coordinates are specified in the original image coordinate system
-        (i.e., rectangles are automatically flipped/transposed with the image).
+        (i.e., rectangles are automatically flipped/transposed/scaled with the image).
         """
         if name not in self.rectangles:
-            pqrect=pyqtgraph.ROI((0,0),(0,0),movable=False)
+            pqrect=pyqtgraph.ROI((0,0),(0,0),movable=False,pen="#FF00FF")
             self.imageWindow.getView().addItem(pqrect)
             self.rectangles[name]=self.Rectangle(pqrect)
         rect=self.rectangles[name]
@@ -240,6 +283,8 @@ class ImageView(QtWidgets.QWidget):
         rsize=rect.size
         imshape=self.img.shape
         params=self._get_params()
+        rcenter=rcenter[0]/self.xbin,rcenter[1]/self.ybin
+        rsize=rsize[0]/self.xbin,rsize[1]/self.ybin
         if params.v["transpose"]:
             rcenter=rcenter[::-1]
             rsize=rsize[::-1]
@@ -276,6 +321,18 @@ class ImageView(QtWidgets.QWidget):
                 imgview.addItem(rect.rect)
             if (not show) and rect.rect in imgview.addedItems:
                 imgview.removeItem(rect.rect)
+    def _update_linecut_boundaries(self, params):
+        vpos=self.imgVLine.getPos()[0]
+        hpos=self.imgHLine.getPos()[1]
+        cut_width=params.v["linecut_width"]
+        show_boundary_lines=params.v["show_lines"] and params.v["show_linecuts"] and cut_width>1
+        for ln in self.imgVBLines+self.imgHBLines:
+            ln.setPen(self.linecut_boundary_pen if show_boundary_lines else None)
+        if show_boundary_lines:
+            self.imgVBLines[0].setPos(vpos-cut_width/2)
+            self.imgVBLines[1].setPos(vpos+cut_width/2)
+            self.imgHBLines[0].setPos(hpos-cut_width/2)
+            self.imgHBLines[1].setPos(hpos+cut_width/2)
     # Update image controls based on PyQtGraph image window
     @controller.exsafeSlot()
     def update_image_controls(self):
@@ -285,6 +342,7 @@ class ImageView(QtWidgets.QWidget):
         params.v["minlim"],params.v["maxlim"]=levels
         params.v["vlinepos"]=self.imgVLine.getPos()[0]
         params.v["hlinepos"]=self.imgHLine.getPos()[1]
+        self._update_linecut_boundaries(params)
     def _sanitize_img(self, img, targetImageSize=20): # PyQtGraph histogram has unfortunate failure modes
         steps=(int(np.ceil(img.shape[0] / targetImageSize)), int(np.ceil(img.shape[1] / targetImageSize)))
         step_img=img[::steps[0],::steps[1]] # ImageView only uses stepped image for plotting
@@ -297,18 +355,24 @@ class ImageView(QtWidgets.QWidget):
         return img
     # Update image plot
     @controller.exsafe
-    def update_image(self, update_controls=False):
+    def update_image(self, update_controls=False, do_redraw=False):
         """
         Update displayed image.
 
         If ``update_controls==True``, update control values (such as image min/max values and line positions).
+        If ``do_redraw==True``, force update regardless of the ``"update_image"`` button state; otherwise, update only if it is enabled.
         """
         with self._no_events():
             params=self._get_params()
-            if not (params.v["update_image"] or self.single):
-                return params
-            self.single=False
+            if not do_redraw:
+                if not (params.v["update_image"] or self.single):
+                    return params
+                self.single=False
             draw_img=self.img
+            if self.xbin>1:
+                draw_img=filters.decimate(draw_img,self.xbin,dec_mode=self.dec_mode,axis=0)
+            if self.ybin>1:
+                draw_img=filters.decimate(draw_img,self.ybin,dec_mode=self.dec_mode,axis=1)
             if params.v["transpose"]:
                 draw_img=draw_img.transpose()
             if params.v["flip_x"]:
@@ -337,9 +401,27 @@ class ImageView(QtWidgets.QWidget):
                 ln.setPen("g" if show_lines else None)
                 ln.setHoverPen("y" if show_lines else None)
                 ln.setMovable(show_lines)
-            self.imgVLine.setBounds([0,draw_img.shape[0]])
-            self.imgHLine.setBounds([0,draw_img.shape[1]])
+            for ln in [self.imgVLine]+self.imgVBLines:
+                ln.setBounds([0,draw_img.shape[0]])
+            for ln in [self.imgHLine]+self.imgHBLines:
+                ln.setBounds([0,draw_img.shape[1]])
             self.imgVLine.setPos(params.v["vlinepos"])
             self.imgHLine.setPos(params.v["hlinepos"])
+            self._update_linecut_boundaries(params)
+            if params.v["show_lines"] and params.v["show_linecuts"]:
+                cut_width=params.v["linecut_width"]
+                vpos=params.v["vlinepos"]
+                vmin=int(min(max(0,vpos-cut_width/2),draw_img.shape[0]-1))
+                vmax=int(vpos+cut_width/2)
+                hpos=params.v["hlinepos"]
+                hmin=int(min(max(0,hpos-cut_width/2),draw_img.shape[1]-1))
+                hmax=int(hpos+cut_width/2)
+                x_cut=draw_img[:,hmin:hmax].mean(axis=1)
+                y_cut=draw_img[vmin:vmax,:].mean(axis=0)
+                self.cut_lines[0].setData(range(len(x_cut)),x_cut)
+                self.cut_lines[1].setData(range(len(y_cut)),y_cut)
+                self.plotWindow.setVisible(True)
+            else:
+                self.plotWindow.setVisible(False)
             self.update_rectangles()
             return params

@@ -364,7 +364,8 @@ class TableAccumulator(object):
     def __init__(self, channels, memsize=1000000):
         object.__init__(self)
         self.channels=channels
-        self.data=[self.ChannelData(memsize) for _ in channels]
+        self.memsize=memsize
+        self.data=[self.ChannelData(self.memsize) for _ in channels]
 
     class ChannelData(object):
         """
@@ -419,6 +420,14 @@ class TableAccumulator(object):
         for col,incol in zip(self.data,data):
             col.add_data(incol[:minlen])
         return minlen
+    def change_channels(self, channels):
+        """
+        Change channels in the table.
+        
+        All the accumulated data will be reset.
+        """
+        self.channels=channels
+        self.data=[self.ChannelData(self.memsize) for _ in channels]
     def reset_data(self, maxlen=0):
         """Clear all data in the table"""
         for col in self.data:
