@@ -74,7 +74,7 @@ class CTypesWrapper(object):
     def _prep_rval(argtypes, rvprep, args):
         if rvprep is None:
             rvprep=[None]*len(argtypes)
-        return [t() if p is None else p(*args) for (t,p) in zip(argtypes,rvprep)]
+        return [t() if p is None else (p(*args) if hasattr(p,"__call__") else t(p)) for (t,p) in zip(argtypes,rvprep)]
     @staticmethod
     def _prep_args(argtypes, args):
         return [_default_argprep(a,t) for (t,a) in zip(argtypes,args)]
@@ -304,6 +304,8 @@ class StructWrap(object):
                 params[f]=getattr(self,f)
             if f in self._tup:
                 params[f]=self._tup[f](params[f])
+            elif isinstance(params[f],ctypes.Array):
+                params[f]=params[f][:]
         vals=[params[f] for f in fnames]
         tcls=collections.namedtuple(self.__class__.__name__,fnames)
         return tcls(*vals)

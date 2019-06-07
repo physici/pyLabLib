@@ -54,7 +54,7 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.setupUi("img_settings",add_indicator=True,display_table=display_table,display_table_root=display_table_root)
         self.settings_table.add_text_label("size",label="Image size:")
         self.settings_table.add_check_box("flip_x","Flip X",value=False)
-        self.settings_table.add_check_box("flip_y","Flip Y",value=False)
+        self.settings_table.add_check_box("flip_y","Flip Y",value=False,location=(-1,1))
         self.settings_table.add_check_box("transpose","Transpose",value=False)
         self.settings_table.add_check_box("normalize","Normalize",value=False)
         self.settings_table.add_num_edit("minlim",value=self.img_lim[0],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Minimal intensity:")
@@ -204,6 +204,7 @@ class ImageView(QtWidgets.QWidget):
                 "show_linecuts":False,
                 "vlinepos":0,
                 "hlinepos":0,
+                "linecut_width":0,
                 "update_image":True})
 
     def set_colormap(self, cmap):

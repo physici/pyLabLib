@@ -84,6 +84,8 @@ class ROI(object):
 
     def copy(self):
         return ROI(self.imin,self.imax,self.jmin,self.jmax)
+    def __repr__(self):
+        return "{}{}".format(self.__class__.__name__,self.tup())
 
     def center(self, shape=None):
         imin,imax,jmin,jmax=self._get_limited(shape)
@@ -110,6 +112,16 @@ class ROI(object):
         if shape is not None:
             res.limit(shape)
         return res
+
+    @classmethod
+    def intersect(cls, *args):
+        imin=max(r.imin for r in args)
+        imax=min(r.imax for r in args)
+        jmin=max(r.jmin for r in args)
+        jmax=min(r.jmax for r in args)
+        if imin>=imax or jmin>=jmax:
+            return None
+        return cls(imin,imax,jmin,jmax)
 
     def limit(self, shape):
         self.imin,self.imax,self.jmin,self.jmax=self._get_limited(shape)

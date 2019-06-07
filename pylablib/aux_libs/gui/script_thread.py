@@ -77,14 +77,17 @@ class ScriptThread(controller.QTaskThread):
     def interrupt_script(self, kind="default"):
         """Finalize script execution (the thread is still running, i.e., the script might be started again)"""
         pass
-    def check_stop(self):
+    def check_stop(self, check_messages=True):
         """
         Check if the script stop is requested.
 
         If it is, raise :exc:`ScriptStopException` which effectively stops execution past this point
         (the exception is properly caught and processed elsewhere in the service code).
         To only check if the stop has been requested without exception raising, use ``stop_request`` attribute.
+        If ``check_messages==True``, check for new messages from other threads first.
         """
+        if check_messages:
+            self.check_messages()
         if self.stop_request:
             self.stop_request=False
             raise ScriptStopException()
