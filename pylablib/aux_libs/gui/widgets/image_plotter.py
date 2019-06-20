@@ -414,9 +414,19 @@ class ImageView(QtWidgets.QWidget):
                 vpos=params.v["vlinepos"]
                 vmin=int(min(max(0,vpos-cut_width/2),draw_img.shape[0]-1))
                 vmax=int(vpos+cut_width/2)
+                if vmax==vmin:
+                    if vmin==0:
+                        vmax+=1
+                    else:
+                        vmin-=1
                 hpos=params.v["hlinepos"]
                 hmin=int(min(max(0,hpos-cut_width/2),draw_img.shape[1]-1))
                 hmax=int(hpos+cut_width/2)
+                if hmax==hmin:
+                    if hmin==0:
+                        hmax+=1
+                    else:
+                        hmin-=1
                 x_cut=draw_img[:,hmin:hmax].mean(axis=1)
                 y_cut=draw_img[vmin:vmax,:].mean(axis=0)
                 self.cut_lines[0].setData(range(len(x_cut)),x_cut)
