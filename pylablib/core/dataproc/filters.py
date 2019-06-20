@@ -111,7 +111,7 @@ def low_pass_filter(wf, t=1., mode="reflect", cval=0.):
     wf=waveforms.expand_waveform(wf, size=expand_size, mode=mode, cval=cval, side="left")
     beta=np.exp(np.double(-1.)/np.double(t))
     alpha=np.double(1.)-beta
-    filtered_wf=iir_transform.iir_apply_complex(wf,[alpha],[beta])
+    filtered_wf=iir_transform.iir_apply_complex(wf,np.array([alpha]),np.array([beta]))
     return wrap(wf).array_replaced(filtered_wf).t[expand_size:]
     
 def high_pass_filter(wf, t=1., mode="reflect", cval=0.):
@@ -129,7 +129,7 @@ def integrate(wf):
     
     Works only for 1D arrays.
     """
-    return iir_transform.iir_apply_complex(wf,[1],[1])
+    return iir_transform.iir_apply_complex(wf,np.array([1]),np.array([1]))
 def differentiate(wf):
     """
     Calculate the differential of the waveform.

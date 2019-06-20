@@ -1028,7 +1028,7 @@ class QTaskThread(QMultiRepeatingThreadController):
 
         Args:
             command: command function; is ``None``, look for the method with the given `name`.
-            scheduler: a command scheduler; by default, it is a :class:`QQueueLengthLimitScheduler`,
+            scheduler: a command scheduler; by default, it is a :class:`.QQueueLengthLimitScheduler`,
                 which maintains a call queue with the given length limit and full queue behavior
             limit_queue: command call queue limit; ``None`` means no limit
             on_full_queue: call queue overflow behavior; can be ``"skip_current"`` (skip the call which is being scheduled),
@@ -1077,7 +1077,7 @@ class QTaskThread(QMultiRepeatingThreadController):
             priority(int): subscribed signal priority; higher-prioirity signals and commands are always executed before the lower-priority ones.
             limit_queue(int): limits the maximal number of scheduled calls
                 0 or negative value means no limit (not recommended, as it can unrestrictedly bloat the queue)
-            on_full_queue: action to be taken if the call can't be scheduled (i.e., :meth:`can_schedule` returns ``False``);
+            on_full_queue: action to be taken if the call can't be scheduled (i.e., :meth:`.QQueueScheduler.can_schedule` returns ``False``);
                 can be ``"skip_current"`` (skip the call which is being scheduled), ``"skip_newest"`` (skip the most recent call; place the current)
                 ``"skip_oldest"`` (skip the oldest call in the queue; place the current),
                 ``"wait"`` (wait until the call can be scheduled, which is checked after every call removal from the queue; place the call),

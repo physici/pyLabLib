@@ -236,6 +236,22 @@ pylablib.aux\_libs.devices.Ophir module
     :undoc-members:
     :show-inheritance:
 
+pylablib.aux\_libs.devices.PCO\_SC2 module
+------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.PCO_SC2
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pylablib.aux\_libs.devices.PCO\_SC2\_lib module
+-----------------------------------------------
+
+.. automodule:: pylablib.aux_libs.devices.PCO_SC2_lib
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.aux\_libs.devices.Pfeiffer module
 ------------------------------------------
 

@@ -4,6 +4,14 @@ pylablib.core.gui.qt.thread package
 Submodules
 ----------
 
+pylablib.core.gui.qt.thread.callsync module
+-------------------------------------------
+
+.. automodule:: pylablib.core.gui.qt.thread.callsync
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pylablib.core.gui.qt.thread.controller module
 ---------------------------------------------
 
