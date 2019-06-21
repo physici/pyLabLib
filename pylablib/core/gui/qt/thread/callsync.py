@@ -11,7 +11,7 @@ class QCallResultSynchronizer(QThreadNotifier):
         """
         Get the progress of the call execution.
 
-        Can be ``"watiing"`` (call is not done executing), ``"done"`` (call done successfully),
+        Can be ``"waiting"`` (call is not done executing), ``"done"`` (call done successfully),
         ``"fail"`` (call failed, probably due to thread being stopped), ``"skip"`` (call was skipped),
         or ``"exception"`` (call raised an exception).
         """
@@ -187,6 +187,9 @@ class QScheduler(object):
     def schedule(self, call):
         """Schedule the call"""
         return False
+    def clear(self):
+        """Clear the scheduler"""
+        pass
 
 
 
@@ -269,11 +272,13 @@ class QQueueScheduler(QScheduler):
             call.fail()
             return
         if self.on_full_queue=="wait":
-            while True:        
+            while True:
                 with self.lock:
                     if self.can_schedule(call):
                         self._add_call(call)
                         return True
+                    elif not self.working:
+                        return
                     wait_n=self.call_popped_notifier.wait(-1)
                 self.call_popped_notifier.wait(wait_n)
         scheduled=True
@@ -329,6 +334,8 @@ class QQueueScheduler(QScheduler):
                 c.fail()
             else:
                 c.skip()
+        if self.call_popped_notifier is not None:
+            self.call_popped_notifier.notify()
                 
 class QQueueLengthLimitScheduler(QQueueScheduler):
     """

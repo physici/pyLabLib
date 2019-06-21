@@ -12,6 +12,7 @@ import collections
 import contextlib
 import ctypes
 import time
+import threading
 
 class PCOSC2Error(RuntimeError):
     "Generic PCO SC2 camera error."
@@ -54,15 +55,19 @@ class PCOSC2Camera(IDevice):
         self._capabilities=[]
         self._model_data=None
         self._buffers=None
+        self._default_nframes=100
+        self._buffer_looping=False
+        self._buffer_loop_thread=None
+        self._next_wait_buffer=0
+        self._next_read_buffer=0
+        self._next_schedule_buffer=0
         self._next_buffer=0
-        self._frames_acquired=0
-        self._frames_read=0
         self._last_wait_frame=0
         self.image_indexing="rct"
         self.v=dictionary.ItemAccessor(lambda n:self._full_camera_data[n])
         self.open()
 
-        self._nodes_ignore_error={"get":(PCOSC2NotSupportedError,)}
+        self._nodes_ignore_error={"get":(PCOSC2NotSupportedError,),"set":()}
         self._add_full_info_node("model_data",self.get_model_data)
         self._add_full_info_node("capabilities",self.get_capabilities)
         self._add_status_node("temperature_monitor",self.get_temperature)
@@ -265,14 +270,16 @@ class PCOSC2Camera(IDevice):
             self.size=size
             self.status=PCO_SC2_lib.DWORD()
             self.metadata_size=metadata_size
+            self.lock=threading.Lock()
         def wait(self, timeout):
-            if timeout is None:
-                timeout=-1
-            else:
-                timeout=np.int(timeout*1000)
-            return lib.WaitForSingleObject(self.event,timeout)==0
+            if not self.lock.acquire(timeout=(-1 if timeout is None else timeout)):
+                return False
+            wait_res=lib.WaitForSingleObject(self.event,(-1 if timeout is None else np.int(timeout*1000)))==0
+            self.lock.release()
+            return wait_res
         def reset(self):
-            lib.ResetEvent(self.event)
+            with self.lock:
+                lib.ResetEvent(self.event)
         def is_set(self):
             return self.wait(0)
         def release(self):
@@ -283,20 +290,21 @@ class PCOSC2Camera(IDevice):
     def _allocate_buffers(self, n):
         self.stop_acquisition()
         frame_size,metadata_size=self._get_buffer_size()
-        n=min(n,33)
         self._buffers=[self.Buffer(frame_size+metadata_size,metadata_size=metadata_size) for _ in range(n)]
-        self._next_buffer=0
-        self._frames_acquired=0
-        self._frames_read=0
+        self._next_wait_buffer=0
+        self._next_read_buffer=0
+        self._next_schedule_buffer=0
         self._last_wait_frame=0
         return n
     def _schedule_buffer(self, buff):
         lib.PCO_AddBufferExtern(self.handle,buff.event,0,0,0,0,buff.buff,buff.size,ctypes.byref(buff.status))
-    def _schedule_all_buffers(self, start=0, n=None):
+    def _schedule_all_buffers(self, n=None):
         if self._buffers:
-            end=len(self._buffers)-1 if n is None else start+n
-            for b in self._buffers[start:end]:
+            if n is None:
+                n=min(len(self._buffers),32)
+            for b in self._buffers[:n]:
                 self._schedule_buffer(b)
+                self._next_schedule_buffer+=1
     def _unschedule_all_buffers(self):
         if self._buffers:
             lib.PCO_CancelImages(self.handle)
@@ -305,39 +313,53 @@ class PCOSC2Camera(IDevice):
             for b in self._buffers:
                 b.release()
             self._buffers=None
+        
+    def _loop_schedule_refresh_buffers(self):
+        nbuff=len(self._buffers)
+        nsched=min(nbuff,32)
+        while self._buffer_looping:
+            actioned=False
+            if self._next_wait_buffer<self._next_schedule_buffer: # scheduled buffers available
+                buff=self._buffers[self._next_wait_buffer%nbuff]
+                succ=buff.wait(timeout=0.001)
+                if succ:
+                    self._next_wait_buffer+=1
+                actioned=True
+            if self._next_schedule_buffer<self._next_wait_buffer+nsched and self._next_schedule_buffer<self._next_read_buffer+nbuff: # more scheduling space and buffer space
+                buff=self._buffers[self._next_schedule_buffer%nbuff]
+                buff.reset()
+                self._schedule_buffer(buff)
+                self._next_schedule_buffer+=1
+                actioned=True
+            if not actioned:
+                time.sleep(0.001)
+    def _stop_reading_loop(self):
+        if self._buffer_loop_thread is not None:
+            self._buffer_looping=False
+            self._buffer_loop_thread.join()
+            self._buffer_loop_thread=None
+    def _start_reading_loop(self):
+        self._stop_reading_loop()
+        self._buffer_loop_thread=threading.Thread(target=self._loop_schedule_refresh_buffers,daemon=True)
+        self._buffer_looping=True
+        self._buffer_loop_thread.start()
+
     def _read_next_buffer(self, npx=None):
-        if self._buffers is None:
+        if self._buffers is None or self._next_read_buffer>=self._next_wait_buffer:
             return None
-        buff=self._buffers[self._next_buffer]
-        if not buff.is_set():
-            return None
+        buff=self._buffers[self._next_read_buffer%len(self._buffers)]
         if npx is None:
             npx=len(buff.buff)//2
         frame=np.frombuffer(buff.buff,dtype="<u2",count=npx).copy()
         metadata=buff.buff[-buff.metadata_size:] if buff.metadata_size>0 else None
-        buff.reset()
-        self._schedule_buffer(self._buffers[self._next_buffer-1])
-        self._next_buffer=(self._next_buffer+1)%len(self._buffers)
-        self._frames_read+=1
+        self._next_read_buffer+=1
         return frame,metadata
-    def _update_acquired_frames(self):
-        if self._buffers is None:
-            return
-        nbuff=len(self._buffers)
-        next_acq=self._frames_acquired%nbuff
-        nacq=0
-        while nacq<nbuff:
-            if self._buffers[next_acq].is_set():
-                next_acq=(next_acq+1)%nbuff
-            else:
-                break
-            nacq+=1
-        self._frames_acquired+=nacq
-        return self._frames_acquired
     def _wait_for_next_buffer(self, timeout=None):
         if self._buffers is None:
             return False
-        buff=self._buffers[self._next_buffer]
+        if self._next_wait_buffer>self._next_read_buffer:
+            return True
+        buff=self._buffers[self._next_read_buffer%len(self._buffers)]
         return buff.wait(timeout)
     
 
@@ -421,27 +443,30 @@ class PCOSC2Camera(IDevice):
 
 
     ### Acquisition process controls ###
-    def start_acquisition(self, buffn=32):
+    def start_acquisition(self, buffn=None):
         """
         Start camera acquisition.
 
         `buffn` specifies number of frames in the ring buffer (automatically capped at 32, which is the SDK limit)
         """
         self.stop_acquisition()
-        self._allocate_buffers(n=buffn+1)
+        self._allocate_buffers(n=buffn or self._default_nframes)
         self._arm()
         if self.v["general/strCamType/wCamType"] in {0x1300,0x1302,0x1340}: # pco.edge w/ CamLink
             self._schedule_all_buffers()
+            self._start_reading_loop()
             lib.PCO_SetRecordingState(self.handle,1)
         else:
-            self._schedule_all_buffers()
             lib.PCO_SetRecordingState(self.handle,1)
+            self._schedule_all_buffers()
+            self._start_reading_loop()
     def stop_acquisition(self):
         """
         Stop acquisition.
 
         Clears buffers as well, so any readout after acquisition stop is impossible.
         """
+        self._stop_reading_loop()
         self._unschedule_all_buffers()
         lib.PCO_SetRecordingState(self.handle,0)
         self._deallocate_buffers()
@@ -459,8 +484,8 @@ class PCOSC2Camera(IDevice):
         """
         if not self.acquisition_in_progress():
             return
-        last_acq_frame=self._update_acquired_frames()-1
-        last_read_frame=self._frames_read-1
+        last_acq_frame=self._next_wait_buffer-1
+        last_read_frame=self._next_read_buffer-1
         if since=="lastread" and last_acq_frame>last_read_frame:
             self._last_wait_frame=last_acq_frame
             return
@@ -470,8 +495,7 @@ class PCOSC2Camera(IDevice):
         new_valid=self._wait_for_next_buffer(timeout=timeout)
         if not new_valid:
             raise PCOSC2TimeoutError()
-        self._update_acquired_frames()
-        self._last_wait_frame=self._update_acquired_frames()-1
+        self._last_wait_frame=self._next_wait_buffer-1
     @contextlib.contextmanager
     def pausing_acquisition(self):
         """
@@ -673,12 +697,16 @@ class PCOSC2Camera(IDevice):
     
     def get_buffer_size(self):
         """Get number of frames in the ring buffer"""
-        return len(self._buffers)-1 if self._buffers is not None else 0
-    TBufferStatus=collections.namedtuple("TBufferStatus",["unread","size"])
+        return len(self._buffers) if self._buffers is not None else 0
+    TBufferStatus=collections.namedtuple("TBufferStatus",["unread","size","scheduled","scheduled_max"])
     def get_buffer_status(self):
-        rng=self.get_new_images_range()
-        unread=0 if rng is None else rng[1]-rng[0]+1
-        return self.TBufferStatus(unread,len(self._buffers)-1 if self._buffers is not None else 0)
+        if self._buffers is None:
+            return self.TBufferStatus(0,0,0,0)
+        unread=self._next_wait_buffer-self._next_read_buffer
+        size=len(self._buffers)
+        scheduled=self._next_schedule_buffer-self._next_wait_buffer
+        scheduled_max=min(size,32)
+        return self.TBufferStatus(unread,size,scheduled,scheduled_max)
     def get_new_images_range(self):
         """
         Get the range of the new images.
@@ -686,10 +714,9 @@ class PCOSC2Camera(IDevice):
         Return tuple ``(first, last)`` with images range (inclusive).
         If no images are available, return ``None``.
         """
-        self._update_acquired_frames()
-        if self._frames_acquired==self._frames_read:
+        if self._next_read_buffer==self._next_wait_buffer:
             return None
-        return (self._frames_read,self._frames_acquired-1)
+        return (self._next_read_buffer,self._next_wait_buffer-1)
     def read_multiple_images(self, rng=None, return_info=False):
         """
         Read multiple images specified by `rng` (by default, all un-read images).

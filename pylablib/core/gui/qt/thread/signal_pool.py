@@ -23,6 +23,7 @@ class SignalPool(object):
     def __init__(self):
         object.__init__(self)
         self._pool=observer_pool.ObserverPool()
+        self._schedulers={}
 
     def subscribe_nonsync(self, callback, srcs="any", dsts="any", tags=None, filt=None, priority=0, scheduler=None, id=None):
         """
@@ -67,7 +68,10 @@ class SignalPool(object):
                 call=scheduler.build_call(_orig_callback,args,kwargs,sync_result=False)
                 scheduler.schedule(call)
             callback=schedule_call
-        return self._pool.add_observer(callback,name=id,filt=full_filt,priority=priority,cacheable=(filt is None))
+        id=self._pool.add_observer(callback,name=id,filt=full_filt,priority=priority,cacheable=(filt is None))
+        if scheduler is not None:
+            self._schedulers[id]=scheduler
+        return id
     def subscribe(self, callback, srcs="any", dsts="any", tags=None, filt=None, priority=0, limit_queue=1, dest_controller=None, call_tag=None, add_call_info=False, id=None):
         """
         Subscribe synchronous callback to a signal.
@@ -102,6 +106,9 @@ class SignalPool(object):
     def unsubscribe(self, id):
         """Unsubscribe from a subscription with a given ID."""
         self._pool.remove_observer(id)
+        if id in self._schedulers:
+            scheduler=self._schedulers.pop(id)
+            scheduler.clear()
 
     def signal(self, src, dst="any", tag=None, value=None):
         """
