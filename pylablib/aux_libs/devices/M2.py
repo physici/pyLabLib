@@ -674,8 +674,9 @@ class M2ICE(IDevice):
         return status
 
     _fast_scan_types={"cavity_continuous","cavity_single","cavity_triangular",
+                "etalon_continuous","etalon_single",
                 "resonator_continuous","resonator_single","resonator_ramp","resonator_triangular",
-                "ect_continuous","ecd_ramp",
+                "ecd_continuous","ecd_ramp",
                 "fringe_test"}
     def _check_fast_scan_type(self, scan_type):
         if scan_type not in self._fast_scan_types:
@@ -686,8 +687,9 @@ class M2ICE(IDevice):
 
         Args:
             scan_type(str): scan type. Can be ``"cavity_continuous"``, ``"cavity_single"``, ``"cavity_triangular"``,
+                ``"etalon_continuous"``, ``"etalon_single"``, 
                 ``"resonator_continuous"``, ``"resonator_single"``, ``"resonator_ramp"``, ``"resonator_triangular"``,
-                ``"ect_continuous"``, ``"ecd_ramp"``, or ``"fringe_test"`` (see ICE manual for details)
+                ``"ecd_continuous"``, ``"ecd_ramp"``, or ``"fringe_test"`` (see ICE manual for details)
             width(float): scan width (in Hz).
             time(float): scan time/period (in s).
             sync(bool): if ``True``, wait until the scan is set up (not until the whole scan is complete).
@@ -700,6 +702,9 @@ class M2ICE(IDevice):
                 self.lock_reference_cavity()
             elif scan_type.startswith("resonator"):
                 self.lock_etalon()
+                self.unlock_reference_cavity()
+            elif scan_type.startswith("etalon"):
+                self.unlock_etalon()
                 self.unlock_reference_cavity()
             self.lock_wavemeter(False,error_on_fail=False)
         _,reply=self.query("fast_scan_start",{"scan":scan_type,"width":[width/1E9],"time":[time]},report=True)

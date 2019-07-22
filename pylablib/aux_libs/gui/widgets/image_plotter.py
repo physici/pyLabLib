@@ -344,15 +344,10 @@ class ImageView(QtWidgets.QWidget):
         params.v["vlinepos"]=self.imgVLine.getPos()[0]
         params.v["hlinepos"]=self.imgHLine.getPos()[1]
         self._update_linecut_boundaries(params)
-    def _sanitize_img(self, img, targetImageSize=20): # PyQtGraph histogram has unfortunate failure modes
-        steps=(int(np.ceil(img.shape[0] / targetImageSize)), int(np.ceil(img.shape[1] / targetImageSize)))
-        step_img=img[::steps[0],::steps[1]] # ImageView only uses stepped image for plotting
-        if np.all(step_img==step_img[0,0]): # ImageView can't plot images of constant color
-            img=img.copy()
-            if img[0,0]==0:
-                img[0,0]+=1
-            else:
-                img[0,0]-=1
+    def _sanitize_img(self, img): # PyQtGraph histogram has an unfortunate failure mode (crashing) when the whole image has the same value
+        img=img.copy().astype(float)
+        img_span=img.max()-img.min()
+        img[0,0]+=img_span*1E-5 if img_span>0 else 1E-5
         return img
     # Update image plot
     @controller.exsafe

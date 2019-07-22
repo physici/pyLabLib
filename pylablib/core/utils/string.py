@@ -543,9 +543,10 @@ def from_string(value, case_sensitive=True, parenthesis_rules="text"):
     except ValueError:
         pass
     if value[0] in _parenthesis_pairs:
-        _,parsed_value=_parse_parenthesis_struct(value)
-        struct=(value[0],parsed_value,None)
-        return _convert_parenthesis_struct(struct,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules)
+        pos,parsed_value=_parse_parenthesis_struct(value)
+        if pos==len(value): # malformatted parentheses structures are treated as strings
+            struct=(value[0],parsed_value,None)
+            return _convert_parenthesis_struct(struct,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules)
     if value[0] in _quotation_characters or (value[0].lower()=="b" and len(value)>1 and value[1] in _quotation_characters):
         pos,unescaped=extract_escaped_string(value)
         if pos!=len(value):
