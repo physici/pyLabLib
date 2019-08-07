@@ -26,21 +26,22 @@ class Fitter(object):
             If `value` is ``None``, try and get the default value from the `func`.
         fixed_parameters (dict): Dictionary ``{name: value}`` of parameters to be fixed during the fitting procedure.
             If `value` is ``None``, try and get the default value from the `func`.
+        scale (dict): Defines typical scale of fit parameters (used to normalize fit parameters supplied of :func:`scipy.optimize.least_squares`).
+                Note: for complex parameters scale must also be a complex number, with re and im parts of the scale variable corresponding to the scale of the re and im part.
+        limits (dict): Boundaries for the fit parameters (missing entries are assumed to be unbound). Each boundary parameter is a tuple ``(lower, upper)``.
+            ``lower`` or ``upper`` can be ``None``, ``numpy.nan`` or ``numpy.inf`` (with the appropriate sign), which implies no bounds in the given direction.
+            Note: for compound data types (such as lists) the entries are still tuples of 2 elements,
+            each of which is either ``None`` (no bound for any sub-element) or has the same structure as the full parameter.
+            Note: for complex parameters limits must also be complex numbers (or ``None``), with re and im parts of the limits variable corresponding to the limits of the re and im part.
     """
-    def __init__(self, func, xarg_name=None, fit_parameters=None, fixed_parameters=None):
+    def __init__(self, func, xarg_name=None, fit_parameters=None, fixed_parameters=None, scale=None, limits=None):
         object.__init__(self)
         self.func=callable.to_callable(func)
         self.set_xarg_name(xarg_name or [])
         self.set_fixed_parameters(fixed_parameters)
         self.set_fit_parameters(fit_parameters)
-        self.max_xtol=1E-8
-        self.min_xtol=1E-14
-        self.diff_step_rel=1E-8
-        self.xtol_rel=1E-8
-    
-    def _limit_xtol(self, xtol):
-        xtol=abs(xtol)
-        return max(self.min_xtol,min(xtol,self.max_xtol))
+        self._default_scale=scale
+        self._default_limits=limits
 
     def _prepare_parameters(self, fit_parameters):
         """Normalize fit_parameters"""
@@ -141,7 +142,7 @@ class Fitter(object):
         unaccounted_names=set.difference(self.func.get_mandatory_args(),supplied_names)
         return unaccounted_names
     
-    def fit(self, x=None, y=0, fit_parameters=None, fixed_parameters=None, scale=None, limits=None, weight=1., parscore=None, return_stderr=False, return_residual=False, **kwargs):
+    def fit(self, x=None, y=0, fit_parameters=None, fixed_parameters=None, scale="default", limits="default", weight=1., parscore=None, return_stderr=False, return_residual=False, **kwargs):
         """
         Fit the data.
         
@@ -149,15 +150,17 @@ class Fitter(object):
             x: x arguments. If the function has single x argument, `x` is an array-like object;
                 otherwise, `x` is a list of array-like objects (can be ``None`` if there are no x parameters).
             y: Target function values.
-            fit_parameters (dict): Overrides the default `fit_parameters` of the fitter.
-            fixed_parameters (dict): Overrides the default `fixed_parameters` of the fitter.
-            scale (dict): Defines typical scale of fit parameters (used to set up `x_scale`, `xtol` and `diff_step` parameters of :func:`scipy.optimize.least_squares`).
+            fit_parameters (dict): Adds to the default `fit_parameters` of the fitter (has priority on duplicate entries).
+            fixed_parameters (dict): Adds to the default `fixed_parameters` of the fitter (has priority on duplicate entries).
+            scale (dict): Defines typical scale of fit parameters (used to normalize fit parameters supplied of :func:`scipy.optimize.least_squares`).
                 Note: for complex parameters scale must also be a complex number, with re and im parts of the scale variable corresponding to the scale of the re and im part.
+                If value is ``"default"``, use the value supplied on the fitter creation.
             limits (dict): Boundaries for the fit parameters (missing entries are assumed to be unbound). Each boundary parameter is a tuple ``(lower, upper)``.
                 ``lower`` or ``upper`` can be ``None``, ``numpy.nan`` or ``numpy.inf`` (with the appropriate sign), which implies no bounds in the given direction.
                 Note: for compound data types (such as lists) the entries are still tuples of 2 elements,
                 each of which is either ``None`` (no bound for any sub-element) or has the same structure as the full parameter.
                 Note: for complex parameters limits must also be complex numbers (or ``None``), with re and im parts of the limits variable corresponding to the limits of the re and im part.
+                If value is ``"default"``, use the value supplied on the fitter creation.
             weight (list or numpy.ndarray): Determines the weights of y-points.
                 Can be either an array broadcastable to `y` (e.g., a scalar or an array with the same shape as `y`),
                 in which case it's interpreted as list of individual point weights (which multiply residuals before they are squared).
@@ -184,6 +187,10 @@ class Fitter(object):
         filtered_fit_paremeters=general_utils.filter_dict(fixed_parameters,self.fit_parameters,exclude=True) # to ensure self.fit_parameters < fixed_parameters
         fit_parameters=general_utils.merge_dicts(filtered_fit_paremeters,fit_parameters)
         fixed_parameters=general_utils.merge_dicts(self.fixed_parameters,fixed_parameters)
+        if scale=="default":
+            scale=self._default_scale
+        if limits=="default":
+            limits=self._default_limits
         unaccounted_parameters=self._get_unaccounted_parameters(fixed_parameters,fit_parameters)
         if len(unaccounted_parameters)>0:
             raise ValueError("Some of the function parameters are not supplied: {0}".format(unaccounted_parameters))
@@ -218,13 +225,12 @@ class Fitter(object):
             p_scale=self._pack_parameters([scale_default[name] for name in p_names])
             if len(p_scale)!=len(init_p):
                 raise ValueError("inconsistent shapes of fit parameters and scale argument")
-            x_scale=[1. if np.isnan(sc) else abs(sc) for sc in p_scale]
-            rel_scale=[1. if np.isnan(sc) else float(sc)/max(sc,abs(par)) for (sc,par) in zip(p_scale,init_p)]
-            diff_step=[self._limit_xtol(rsc*self.diff_step_rel) for rsc in rel_scale]
-            xtol=min([self._limit_xtol(rsc*self.xtol_rel) for rsc in rel_scale])
-            kwargs.setdefault("x_scale",x_scale)
-            kwargs.setdefault("diff_step",diff_step)
-            kwargs.setdefault("xtol",xtol)
+            x_scale=np.array([1. if np.isnan(sc) else abs(float(sc)) for sc in p_scale])
+            offset_p=init_p-x_scale
+            init_p=np.ones(len(init_p))
+        else:
+            x_scale=1
+            offset_p=0
         if limits: # setup bounds
             p_bounds=[]
             for (idx,default) in [(0,-np.inf),(1,+np.inf)]:
@@ -235,6 +241,7 @@ class Fitter(object):
                 if len(p_ibounds)!=len(init_p):
                     raise ValueError("inconsistent shapes of fit parameters and {} bounds argument".format("lower" if idx==0 else "upper"))
                 p_ibounds=[default if (b is None or np.isnan(b)) else b for b in p_ibounds]
+                p_ibounds=(np.array(p_ibounds)-offset_p)/x_scale
                 p_bounds.append(p_ibounds)
             kwargs.setdefault("bounds",p_bounds)
         if parscore:
@@ -246,6 +253,7 @@ class Fitter(object):
                 y_diff_uw=np.asarray(raw_res).flatten()
                 return np.dot(wmat,y_diff_uw)
         def fit_func(fit_p):
+            fit_p=fit_p*x_scale+offset_p
             up=x+unpacker(fit_p)
             y_diff=calc_residuals(y-np.asarray(bound_func(*up)))
             if np.iscomplexobj(y_diff):
@@ -257,6 +265,7 @@ class Fitter(object):
             return y_diff
         lsqres=scipy.optimize.least_squares(fit_func,init_p,**kwargs)
         res,jac,tot_err=lsqres.x,lsqres.jac,lsqres.fun
+        res=res*x_scale+offset_p
         try:
             cov=np.linalg.inv(np.dot(jac.transpose(),jac))*(np.sum(tot_err**2)/(len(tot_err)-len(res)))
         except np.linalg.LinAlgError: # singular matrix
@@ -266,10 +275,10 @@ class Fitter(object):
         params_dict=fixed_parameters.copy()
         params_dict.update(fit_dict)
         bound_func=self.func.bind(self.xarg_name,**params_dict)
-        if cov is None: # TODO: figure out why leastsq can return cov=None
+        if cov is None: # singular or close to singular covariance matrix; usually means either degenerate fit parameters, or vastly (~1E8) different error scales
             stderr=dict(zip(p_names,unpacker([np.nan]*len(init_p))))
         else:
-            stderr=unpacker(np.diag(cov)**0.5)
+            stderr=unpacker(np.diag(cov)**0.5*x_scale)
             stderr=dict(zip(p_names,stderr))
         return_val=params_dict,bound_func
         if return_stderr:

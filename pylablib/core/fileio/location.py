@@ -8,6 +8,7 @@ from ..utils import files as file_utils
 from ..utils import dictionary
 
 import os.path
+import contextlib
 
 class LocationName(object):
     """
@@ -163,6 +164,21 @@ class LocationFile(object):
         self.loc.close_file(self.name)
         self.stream=None
         self.opened=False
+    @contextlib.contextmanager
+    def opening(self, mode="read", data_type="text"):
+        """
+        Context for working with opened file (file is closed automatically on exitting a ``with`` block),
+        
+        Args:
+            mode (str): Opening mode. Can be ``'read'``, ``'write'`` or ``'append'``.
+            data_type (str): Either ``'text'`` or ``'binary'``.
+        """
+        try:
+            self.open(mode=mode,data_type=data_type)
+            yield
+        finally:
+            if self.opened:
+                self.close()
 
 
 

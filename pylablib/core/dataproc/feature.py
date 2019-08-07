@@ -129,7 +129,22 @@ def peaks_sum_func(peaks, peak_func="lorentzian"):
 
 
 
-def get_peakdet_kernel(peak_width, background_width, kernel_width=None, kernel="lorentzian"):
+
+def get_kernel(width, kernel_width=None, kernel="lorentzian"):
+    """
+    Get a finite-sized kernel.
+
+    Return 1D array of length ``2*kernel_width+1`` containing the given kernel.
+    By default, ``kernel_width=int(width*3)``.
+    """
+    kernel=specfunc.get_kernel_func(kernel)
+    if kernel_width is None:
+        kernel_width=width*3
+    xs=np.arange(-int(kernel_width),int(kernel_width)+.5)
+    peakk=kernel(xs,width)
+    return peakk/np.sum(peakk)
+
+def get_peakdet_kernel(peak_width, background_width, norm_width=None, kernel_width=None, kernel="lorentzian"):
     """
     Get a peak detection kernel.
 
@@ -147,7 +162,7 @@ def get_peakdet_kernel(peak_width, background_width, kernel_width=None, kernel="
     backk=kernel(xs,background_width)
     return peakk/np.sum(peakk)-backk/np.sum(backk)
 
-def multi_scale_peakdet(trace, widths, background_ratio, kind="peak", kernel="lorentzian"):
+def multi_scale_peakdet(trace, widths, background_ratio, kind="peak", norm_ratio=None, kernel="lorentzian"):
     """
     Detect multiple peak widths using :func:`get_peakdet_kernel` kernel.
 
@@ -156,6 +171,8 @@ def multi_scale_peakdet(trace, widths, background_ratio, kind="peak", kernel="lo
         widths ([float]): Array of possible peak widths.
         background_ratio (float): ratio of the `background_width` to the `peak_width` in :func:`get_peakdet_kernel`.
         kind (str): Peak kind. Can be ``'peak'`` (positive direction) or ``'dip'`` (negative direction).
+        norm_ratio (float): if not ``None``, defines the width of the "normalization region" (in units of the kernel width, same as for the background kernel);
+            it is then used to calculate a local trace variance to normalize the peaks magnitude.
         kernel: Peak matching kernel.
 
     Returns:
@@ -166,7 +183,14 @@ def multi_scale_peakdet(trace, widths, background_ratio, kind="peak", kernel="lo
     kernel_width=max(widths)*background_ratio*3
     for w in widths:
         k=get_peakdet_kernel(w,background_ratio*w,kernel_width=kernel_width,kernel=kernel)
-        peakdet_traces.append(filters.convolve1d(trace,k))
+        peak_trace=filters.convolve1d(trace,k)
+        if norm_ratio:
+            nk=get_kernel(norm_ratio*w,kernel_width=kernel_width,kernel=kernel)
+            dev_trace=(trace-filters.convolve1d(trace,nk))**2
+            norm_trace=filters.convolve1d(dev_trace,nk)**.5
+            norm_trace[norm_trace<norm_trace.mean()*1E-3]=norm_trace.mean()*1E-3
+            peak_trace/=norm_trace
+        peakdet_traces.append(peak_trace)
     return np.max(peakdet_traces,axis=0) if kind=="peak" else -np.min(peakdet_traces,axis=0)
 
 

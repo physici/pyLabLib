@@ -204,9 +204,8 @@ class IInputFileFormat(object):
         if file_format in {"bin"}:
             return BinaryTableInputFileFormatter.read_file(location_file,file_format=file_format,**kwargs)
         if file_format in {"generic"}:
-            location_file.open(mode="read",data_type="binary")
-            is_binary=_detect_binary_file(location_file.stream)
-            location_file.close()
+            with location_file.opening(mode="read",data_type="binary"):
+                is_binary=_detect_binary_file(location_file.stream)
             if is_binary:
                 return BinaryTableInputFileFormatter.read_file(location_file,file_format="bin",**kwargs)
             else:
@@ -230,9 +229,8 @@ class ITextInputFileFormat(IInputFileFormat):
         if file_format in {"dict"}:
             return DictionaryInputFileFormat.read_file(location_file,file_format=file_format,**kwargs)
         if file_format in {"txt"}:
-            location_file.open(mode="read",data_type="text")
-            txt_type=_detect_textfile_type(location_file.stream)
-            location_file.close()
+            with location_file.opening(mode="read",data_type="text"):
+                txt_type=_detect_textfile_type(location_file.stream)
             if txt_type=="table":
                 return CSVTableInputFileFormat.read_file(location_file,file_format="csv",**kwargs)
             elif txt_type=="dict":
@@ -271,12 +269,11 @@ class CSVTableInputFileFormat(ITextInputFileFormat):
         """
         if delimiters is None:
             delimiters=parse_csv._table_delimiters
-        location_file.open(mode="read",data_type="text")
-        for _ in range(skip_lines):
-            location_file.stream.readline()
-        data,comments,corrupted=parse_csv.load_table(location_file.stream,dtype=dtype,columns=columns,
-                        delimiters=delimiters,empty_entry_substitute=empty_entry_substitute,ignore_corrupted_lines=ignore_corrupted_lines)
-        location_file.close()
+        with location_file.opening(mode="read",data_type="text"):
+            for _ in range(skip_lines):
+                location_file.stream.readline()
+            data,comments,corrupted=parse_csv.load_table(location_file.stream,dtype=dtype,columns=columns,
+                            delimiters=delimiters,empty_entry_substitute=empty_entry_substitute,ignore_corrupted_lines=ignore_corrupted_lines)
         if out_type=="table" and not funcargparse.is_sequence(columns,"builtin;nostring") and len(data)>0:
             columns,comment_idx=_find_columns_lines(corrupted,comments,data.shape[1])
             if comment_idx is not None:
@@ -311,11 +308,10 @@ class DictionaryInputFileFormat(ITextInputFileFormat):
         """
         if not entry_format in {"branch","dict_entry","value"}:
             raise ValueError("unrecognized entry format: {0}".format(entry_format))
-        location_file.open(mode="read",data_type="text")
-        for _ in range(skip_lines):
-            location_file.stream.readline()
-        data,comments=_load_dict_and_comments(location_file.stream,inline_dtype=inline_dtype,case_normalization=case_normalization)
-        location_file.close()
+        with location_file.opening(mode="read",data_type="text"):
+            for _ in range(skip_lines):
+                location_file.stream.readline()
+            data,comments=_load_dict_and_comments(location_file.stream,inline_dtype=inline_dtype,case_normalization=case_normalization)
         creation_time=_extract_savetime_comment(comments)
         def map_entries(ptr):
             if dict_entry.special_load_rules(ptr):
@@ -365,11 +361,10 @@ class BinaryTableInputFileFormatter(IInputFileFormat):
         packing=preamble.get("packing",packing)
         preamble_columns_num=preamble.get("ncols",None)
         preamble_rows_num=preamble.get("nrows",None)
-        location_file.open(mode="read",data_type="binary")
-        if skip_bytes:
-            location_file.stream.seek(skip_bytes,1)
-        data=np.fromfile(location_file.stream,dtype=dtype)
-        location_file.close()
+        with location_file.opening(mode="read",data_type="binary"):
+            if skip_bytes:
+                location_file.stream.seek(skip_bytes,1)
+            data=np.fromfile(location_file.stream,dtype=dtype)
         try:
             columns_num=len(columns)
         except TypeError:

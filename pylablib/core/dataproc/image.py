@@ -128,23 +128,29 @@ class ROI(object):
         return self
 
 
-def get_region(image, center, size):
+def get_region(image, center, size, axis=(0,1)):
     """
     Get part of the image with the given center and size (both are tuples ``(i, j)``).
 
     The region is automatically reduced if a part of it is outside of the image.
     """
-    roi=ROI.from_centersize(center,size,shape=image.shape)
+    roi=ROI.from_centersize(center,size,shape=(image.shape[axis[0]],image.shape[axis[1]]))
     ispan,jspan=roi.ispan(),roi.jspan()
-    return image[ispan[0]:ispan[1],jspan[0]:jspan[1]]
+    index=[slice(None)]*image.ndim
+    index[axis[0]]=slice(ispan[0],ispan[1])
+    index[axis[1]]=slice(jspan[0],jspan[1])
+    return image[tuple(index)]
 
-def get_region_sum(image, center, size):
+def get_region_sum(image, center, size, axis=(0,1)):
     """
     Sum part of the image with the given center and size (both are tuples ``(i, j)``).
     
     The region is automatically reduced if a part of it is outside of the image.
-    Return tuple ``(sum, area)``, where area is the acual summer region are (in pixels).
+    Return tuple ``(sum, area)``, where area is the actual summer region are (in pixels).
     """
-    roi=ROI.from_centersize(center,size,shape=image.shape[-2:])
+    roi=ROI.from_centersize(center,size,shape=(image.shape[axis[0]],image.shape[axis[1]]))
     ispan,jspan=roi.ispan(),roi.jspan()
-    return np.sum(image[...,ispan[0]:ispan[1],jspan[0]:jspan[1]],axis=(-2,-1)), roi.area()
+    index=[slice(None)]*image.ndim
+    index[axis[0]]=slice(ispan[0],ispan[1])
+    index[axis[1]]=slice(jspan[0],jspan[1])
+    return np.sum(image[tuple(index)],axis=axis), roi.area()

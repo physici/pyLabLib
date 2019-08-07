@@ -105,12 +105,11 @@ class ITextOutputFileFormat(IOutputFileFormat):
             self.write_line(stream,"")
             self.write_line(stream,self.get_time_line(time))
     def write_file(self, location_file, to_save, *args, **vargs):
-        location_file.open(mode="write",data_type="text")
-        self.write_data(location_file,to_save.data,*args,**vargs)
-        self.write_props(location_file.stream,to_save.props)
-        self.write_comments(location_file.stream,to_save.comments)
-        self.write_time(location_file.stream,datetime.datetime.now() if self.new_time else to_save.creation_time)
-        location_file.close()
+        with location_file.opening(mode="write",data_type="text"):
+            self.write_data(location_file,to_save.data,*args,**vargs)
+            self.write_props(location_file.stream,to_save.props)
+            self.write_comments(location_file.stream,to_save.comments)
+            self.write_time(location_file.stream,datetime.datetime.now() if self.new_time else to_save.creation_time)
     def write_data(self, location_file, data, **kwargs):
         raise NotImplementedError("ITextOutputFileFormat.write_data")
         
@@ -302,9 +301,8 @@ class TableBinaryOutputFileFormat(IBinaryOutputFileFormat):
     def write_file(self, location_file, to_save, **kwargs):
         data=to_save.data
         if _is_table(data):
-            location_file.open(mode="write",data_type="binary")
-            self.write_table(location_file,data)
-            location_file.close()
+            with location_file.opening(mode="write",data_type="binary"):
+                self.write_table(location_file,data)
         else:
             raise ValueError("Can't save data {}".format(data))
         
