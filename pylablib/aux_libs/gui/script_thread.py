@@ -33,9 +33,10 @@ class ScriptThread(controller.QTaskThread):
             Duplicates ``interrupt_reason`` attribute (``executing==False`` if and only if ``interrupt_reason=="shutdown"``)
         stop_request (bool): shows whether stop has been requested from another thread (by calling :meth:`stop_execution`).
         interrupt_reason (str): shows the reason for calling :meth:`interrupt_script`;
-            can be ``"done"`` (called in the end of regularly executed script), ``"stopped"`` (called if the script is forciply stopped),
-            ``"failed"`` (called if the program is terminated, e.g., due to error in the script or any other thread, or the GUI being closed),
-            or ``"shutdown"`` (called if the script is shut down while being inactive)
+            can be ``"done"`` (called in the end of regularly executed script), ``"stopped"`` (called if the script is forcibly stopped),
+            ``"failed"`` (called if the thread is shut down while the script is active,
+            e.g., due to error in the script or any other thread, or if the application is closing),
+            or ``"shutdown"`` (called when the script is shut down while being inactive)
 
     Methods to overload:
         setup_script: executed on the thread startup (between synchronization points ``"start"`` and ``"run"``)

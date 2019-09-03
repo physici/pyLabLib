@@ -698,7 +698,7 @@ class StreamFileLogger(object):
     """
     def __init__(self, path, stream=None, lock=None, autoflush=False):
         object.__init__(self)
-        self.path=path
+        self.paths=path if isinstance(path,list) else [path]
         self.stream=stream
         self.header_done=False
         self.lock=lock or DummyResource()
@@ -706,20 +706,34 @@ class StreamFileLogger(object):
     def write_header(self, f):
         """Write header to file stream `f`"""
         pass
+    def add_path(self, path):
+        """Add another logging path to the list"""
+        with self.lock:
+            if path not in self.paths:
+                self.paths.append(path)
+    def remove_path(self, path):
+        """Remove logging path to the list"""
+        with self.lock:
+            if path in self.paths:
+                del self.paths[self.paths.index(path)]
+                return True
+            else:
+                return False
     def write(self, s):
         with self.lock:
-            try:
-                for t in RetryOnException(5,exceptions=IOError):
-                    with t:
-                        with open(self.path,"a") as f:
-                            if not self.header_done:
-                                self.write_header(f)
-                                self.header_done=True
-                            f.write(s)
-                        break
-                    time.sleep(0.1)
-            except IOError:
-                pass
+            for p in self.paths:
+                try:
+                    for t in RetryOnException(5,exceptions=IOError):
+                        with t:
+                            with open(p,"a") as f:
+                                if not self.header_done:
+                                    self.write_header(f)
+                                    self.header_done=True
+                                f.write(s)
+                            break
+                        time.sleep(0.1)
+                except IOError:
+                    pass
             if self.stream is not None:
                 self.stream.write(s)
                 if self.autoflush:

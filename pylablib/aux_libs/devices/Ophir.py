@@ -90,7 +90,7 @@ class VegaPowerMeter(OphirDevice):
         """
         info=[i.strip() for i in self.query("$AR").split() if i.strip()]
         curr_idx=int(info[0])
-        ranges=[units.convert_power_units(float(r[:-2]),r[-2:],"W") for r in info[3:]]
+        ranges=[units.convert_power_units(*units.split_units(r),result_unit="W") for r in info[3:]]
         if curr_idx<0:
             curr_range=info[3+curr_idx]
         else:

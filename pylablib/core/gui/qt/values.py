@@ -6,6 +6,7 @@ from .widgets import edit
 from PyQt5 import QtCore, QtWidgets
 from ...utils import dictionary, py3, string
 from ...utils.functions import FunctionSignature
+from .thread import controller
 
 
 def build_children_tree(root, types_include, is_atomic=None, is_excluded=None, self_node="#"):
@@ -347,10 +348,15 @@ class ValuesTable(object):
     (i.e., ``self.get_value(name)`` is equivalent to ``self.v[name]``, and ``self.set_value(name, value)`` is equivalent to ``self.v[name]=value``)
     and ``.w`` for getting the underlying widget
     (i.e., ``self.get_widget(name)`` is equivalent to ``self.w[name]``)
+
+    Args:
+        gui_thread_safe (bool): if ``True``, all value-access calls (``get/set_value``, ``get/set_all_values``)
+            are automatically called in the GUI thread.
     """
-    def __init__(self):
+    def __init__(self, gui_thread_safe=False):
         object.__init__(self)
         self.handlers=dictionary.Dictionary()
+        self.gui_thread_safe=gui_thread_safe
         self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
         self.w=dictionary.ItemAccessor(self.get_widget)
 
@@ -408,6 +414,7 @@ class ValuesTable(object):
                 name="/".join([p for p in path if p])
                 self.add_widget(name,widget)
 
+    @controller.gui_thread_method
     def get_value(self, name):
         """
         Get value under a given name.
@@ -418,6 +425,7 @@ class ValuesTable(object):
         if path is None:
             raise KeyError("missing handler {}".format(name))
         return self.handlers[path].get_value(subpath)
+    @controller.gui_thread_method
     def get_all_values(self, root="", include=None):
         """
         Get all values in a subtree with the given root (all table values by default).
@@ -431,6 +439,7 @@ class ValuesTable(object):
                 if (include is None) or ("/".join(n) in include):
                     values[n]=self.handlers[(root,n)].get_all_values()
         return values
+    @controller.gui_thread_method
     def set_value(self, name, value):
         """
         Set value under a given name.
@@ -441,6 +450,7 @@ class ValuesTable(object):
         if path is None:
             raise KeyError("missing handler {}".format(name))
         return self.handlers[path].set_value(value,subpath)
+    @controller.gui_thread_method
     def set_all_values(self, values, root="", include=None):
         """
         Set all values in a subtree with the given root (all table values by default).
@@ -626,9 +636,14 @@ class IndicatorValuesTable(ValuesTable):
 
     Has an additional container-like accessor ``.i`` for settings/getting indicator values
     (i.e., ``self.get_indicator(name)`` is equivalent to ``self.i[name]``, and ``self.set_indicator(name, value)`` is equivalent to ``self.i[name]=value``)
+
+    Args:
+        gui_thread_safe (bool): if ``True``, all value-access and indicator-access calls
+            (``get/set_value``, ``get/set_all_values``, ``get/set_indicator``, ``get/set_all_indicators``, and ``update_indicators``)
+            are automatically called in the GUI thread.
     """
-    def __init__(self):
-        ValuesTable.__init__(self)
+    def __init__(self, gui_thread_safe=False):
+        ValuesTable.__init__(self,gui_thread_safe=gui_thread_safe)
         self.indicator_handlers=dictionary.Dictionary()
         self.i=dictionary.ItemAccessor(self.get_indicator,self.set_indicator)
     def add_indicator_handler(self, name, handler, ind_name="__default__"):
@@ -670,6 +685,7 @@ class IndicatorValuesTable(ValuesTable):
         """
         return self.add_indicator_handler(name,FuncLabelIndicatorHandler(label,repr_func=repr_func),ind_name=ind_name)
 
+    @controller.gui_thread_method
     def get_indicator(self, name, ind_name="__default__"):
         """
         Get indicator value with a given name.
@@ -682,6 +698,7 @@ class IndicatorValuesTable(ValuesTable):
             raise KeyError("missing handler {}".format(name))
         args=[subpath] if len(subpath) else []
         return self.indicator_handlers[epath].get_value(*args)
+    @controller.gui_thread_method
     def get_all_indicators(self, root="", ind_name="__default__", include=None):
         """
         Get all indicator values in a subtree with the given root (all table values by default).
@@ -699,6 +716,7 @@ class IndicatorValuesTable(ValuesTable):
                     except KeyError:
                         pass
         return values
+    @controller.gui_thread_method
     def set_indicator(self, name, value, ind_name=None):
         """
         Set indicator value with a given name.
@@ -716,6 +734,7 @@ class IndicatorValuesTable(ValuesTable):
                 i.set_value(*args)
         else:
             return self.indicator_handlers[epath].set_value(*args)
+    @controller.gui_thread_method
     def set_all_indicators(self, values, root="", include=None):
         """
         Set all indicator values in a subtree with the given root (all table values by default).
@@ -727,6 +746,7 @@ class IndicatorValuesTable(ValuesTable):
             if self.indicator_handlers.has_entry((root,n,"__default__"),kind="leaf"):
                 if (include is None) or ("/".join(n) in include):
                     self.set_indicator((root,n),v)
+    @controller.gui_thread_method
     def update_indicators(self, root="", include=None):
         """
         Update all indicators in a subtree with the given root (all table values by default) to represent current values.

@@ -1,5 +1,5 @@
 from ....core.gui.qt.widgets import edit, label as widget_label
-from ....core.gui.qt.thread import threadprop
+from ....core.gui.qt.thread import threadprop, controller
 from ....core.gui.qt import values as values_module, utils
 from ....core.utils import py3, dictionary
 
@@ -52,7 +52,7 @@ class ParamTable(QtWidgets.QWidget):
         self.i=dictionary.ItemAccessor(self.get_indicator,self.set_indicator)
         self.w=dictionary.ItemAccessor(self.get_widget)
 
-    def setupUi(self, name, add_indicator=False, display_table=None, display_table_root=None):
+    def setupUi(self, name, add_indicator=False, display_table=None, display_table_root=None, gui_thread_safe=False):
         """
         Setup the table.
 
@@ -61,6 +61,8 @@ class ParamTable(QtWidgets.QWidget):
             add_indicator (bool): if ``True``, add indicators for all added widgets by default.
             display_table (bool): as :class:`.IndicatorValuesTable` object used to access table values; by default, create one internally
             display_table_root (str): if not ``None``, specify root (i.e., path prefix) for values inside the table.
+            gui_thread_safe (bool): if ``True``, all value-access and indicator-access calls
+                (``get/set_value``, ``get/set_all_values``, ``get/set_indicator``, and ``update_indicators``) are automatically called in the GUI thread.
         """
         self.name=name
         self.setObjectName(_fromUtf8(self.name))
@@ -76,6 +78,7 @@ class ParamTable(QtWidgets.QWidget):
         else:
             self.display_table=display_table
             self.display_table_root=display_table_root if display_table_root is not None else self.name
+        self.gui_thread_safe=gui_thread_safe
 
     value_changed=QtCore.pyqtSignal("PyQt_PyObject","PyQt_PyObject")
 
@@ -321,17 +324,21 @@ class ParamTable(QtWidgets.QWidget):
         for name in names:
             self.params[name].widget.setEnabled(not locked)
 
+    @controller.gui_thread_method
     def get_value(self, name):
         """Get value of a widget with the given name"""
         return self.display_table.get_value((self.display_table_root,name))
+    @controller.gui_thread_method
     def set_value(self, name, value):
         """Set value of a widget with the given name"""
         par=self.params[name]
         if self.change_focused_control or not par.widget.hasFocus():
             return self.display_table.set_value((self.display_table_root,name),value)
+    @controller.gui_thread_method
     def get_all_values(self):
         """Get values of all widgets in the table"""
         return self.display_table.get_all_values(root=self.display_table_root,include=self.params)
+    @controller.gui_thread_method
     def set_all_values(self, values):
         """Set values of all widgets in the table"""
         return self.display_table.set_all_values(values,root=self.display_table_root,include=self.params)
@@ -346,12 +353,15 @@ class ParamTable(QtWidgets.QWidget):
         """Get a value-changed signal for a widget with the given name"""
         return self.params[name].value_handler.value_changed_signal()
 
+    @controller.gui_thread_method
     def get_indicator(self, name):
         """Get indicator value for a widget with the given name"""
         return self.display_table.get_indicator((self.display_table_root,name))
+    @controller.gui_thread_method
     def set_indicator(self, name, value):
         """Set indicator value for a widget with the given name"""
         return self.display_table.set_indicator((self.display_table_root,name),value)
+    @controller.gui_thread_method
     def update_indicators(self):
         """Update all indicators (set their value """
         return self.display_table.update_indicators(root=self.display_table_root,include=self.params)
@@ -385,9 +395,6 @@ class StatusTable(ParamTable):
     """
     Expansion of :class:`ParamTable` which adds status lines, which automatically subscribe to signals and update values.
     """
-    def __init__(self, parent=None):
-        ParamTable.__init__(self,parent=parent)
-
     def add_status_line(self, name, label=None, srcs=None, tags=None, filt=None, make_status=None):
         """
         Add a status line to the table:

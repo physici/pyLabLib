@@ -6,8 +6,19 @@ from __future__ import division
 
 import numpy as np
 from ..utils import string as string_utils  #@UnresolvedImport
+import re
     
-        
+
+def split_units(value):
+    """
+    Split string dimensionful value.
+
+    Return tuple ``(val, unit)``, where ``val`` is the float part of the value, and ``unit`` is the string representing units.
+    """
+    m=re.match(r"([+-.\d]+)\s*([a-zA-Z]*)$",value)
+    if not m:
+        raise ValueError("can't parse value {}".format(value))
+    return float(m[1]),m[2]
 def convert_length_units(value, value_unit="m", result_unit="m", case_sensitive=True):
     """
     Convert `value` from `value_unit` to `result_unit`.

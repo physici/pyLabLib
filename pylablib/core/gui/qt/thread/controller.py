@@ -109,6 +109,15 @@ def call_in_thread(thread_name):
     return wrapper
 call_in_gui_thread=call_in_thread("gui")
 """Decorator that turns any function into a remote call in a GUI thread (call from a different thread is passed synchronously)"""
+def gui_thread_method(func):
+    """Decorator for an object's method that checks if the object's ``gui_thread_safe`` attribute is true, in which case the call is routed to the GUI thread"""
+    sync_func=call_in_gui_thread(func)
+    @func_utils.getargsfrom(func)
+    def rem_func(self, *args, **kwargs):
+        if getattr(self,"gui_thread_safe",False):
+            return sync_func(self,*args,**kwargs)
+        return func(self,*args,**kwargs)
+    return rem_func
 
 
 
@@ -775,6 +784,30 @@ class QMultiRepeatingThreadController(QThreadController):
         if name in self.jobs or name in self.batch_jobs:
             raise ValueError("job {} already exists".format(name))
         self.batch_jobs[name]=(job,cleanup,min_runtime)
+    def change_batch_job_params(self, name, job=None, cleanup=None, min_runtime=None, stop=False, restart=False):
+        """
+        Change parameters (main body, cleanup function, and minimal runtime) of the batch job.
+
+        The parameters are the same as for :meth:`add_batch_job`. If any of them are ``None``, don't change them.
+        If ``stop==True``, stop the job before changing the parameters;
+        otherwise the job is continued with the previous parameters (including cleanup) until it is stopped and restarted.
+        If ``restart==True``, restart the job after changing the paramteres.
+        """
+        if name not in self.batch_jobs:
+            raise ValueError("job {} doesn't exists".format(name))
+        running=self.batch_job_running(name)
+        if (stop or restart) and running:
+            period,args,kwargs,_=self._batch_jobs_args[name]
+            self.stop_batch_job(name,error_on_stopped=False)
+        if job is None:
+            job=self.batch_jobs[name][0]
+        if cleanup is None:
+            cleanup=self.batch_jobs[name][1]
+        if min_runtime is None:
+            min_runtime=self.batch_jobs[name][2]
+        self.batch_jobs[name]=(job,cleanup,min_runtime)
+        if restart and running:
+            self.start_batch_job(name,period,*args,**kwargs)
     def start_batch_job(self, name, period, *args, **kwargs):
         """
         Start the batch job with the given name.
@@ -785,9 +818,8 @@ class QMultiRepeatingThreadController(QThreadController):
             raise ValueError("job {} doesn't exists".format(name))
         if name in self.jobs:
             self.stop_batch_job(name)
-        self._batch_jobs_args[name]=(args,kwargs)
-        job=self.batch_jobs[name][0]
-        min_runtime=self.batch_jobs[name][2]
+        job,cleanup,min_runtime=self.batch_jobs[name]
+        self._batch_jobs_args[name]=(period,args,kwargs,cleanup)
         gen=job(*args,**kwargs)
         def do_step():
             cnt=general.Countdown(min_runtime) if min_runtime else None
@@ -820,8 +852,7 @@ class QMultiRepeatingThreadController(QThreadController):
                 raise ValueError("job {} doesn't exists".format(name))
             return
         self.remove_job(name)
-        args,kwargs=self._batch_jobs_args.pop(name)
-        cleanup=self.batch_jobs[name][1]
+        _,args,kwargs,cleanup=self._batch_jobs_args.pop(name)
         if cleanup:
             cleanup(*args,**kwargs)
 
