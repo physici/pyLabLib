@@ -531,7 +531,7 @@ class M2ICE(IDevice):
     _terascan_rates=[50E3,100E3,200E3,500E3, 1E6,2E6,5E6,10E6,20E6,50E6,100E6,200E6,500E6, 1E9,2E9,5E9,10E9,15E9,20E9, 50E9, 100E9]
     def _trunc_terascan_rate(self, rate):
         for tr in self._terascan_rates[::-1]:
-            if rate>=tr:
+            if rate>=tr*(1-1E-5):
                 return tr
         return self._terascan_rates[0]
     def setup_terascan(self, scan_type, scan_range, rate, trunc_rate=True):
@@ -834,7 +834,7 @@ class M2ICE(IDevice):
                             self.stop_terascan(scan_type)
                             self.stop_scan_web(scan_type)
                             time.sleep(2.)
-                        if attempt>6 and attempt%2==0:
+                        if attempt>6 and attempt%2==0 and self.use_websocket:
                             self._try_disconnect_wavemeter()
                             time.sleep(4.)
                             self._try_connect_wavemeter()
@@ -847,7 +847,7 @@ class M2ICE(IDevice):
                             time.sleep(0.5)
                             if attempt>2:
                                 self.stop_scan_web(scan_type)
-                            if attempt>6 and attempt%2==0:
+                            if attempt>6 and attempt%2==0 and self.use_websocket:
                                 self._try_disconnect_wavemeter()
                                 time.sleep(4.)
                                 self._try_connect_wavemeter()

@@ -269,6 +269,8 @@ class ColumnDataTableStorage(IDataTableStorage):
     ## numpy-like return type ##
     def get_item(self, idx):
         """Return the data at the index `idx` (1D or 2D) as a numpy array."""
+        if not self._columns:
+            raise IndexError("no columns in the table")
         r_idx,c_idx=indexing.to_double_index(idx,self.get_column_names())
         c_ndim,c_idx=c_idx.tup()
         if c_ndim==0:
@@ -280,6 +282,8 @@ class ColumnDataTableStorage(IDataTableStorage):
                 return np.column_stack([self._columns[c][r_idx] for c in c_idx])
     def set_item(self, idx, val):
         """Return the data at the index `idx` (1D or 2D) to `val`."""
+        if not self._columns:
+            raise IndexError("no columns in the table")
         r_idx,c_idx=indexing.to_double_index(idx,self.get_column_names())
         c_ndim,c_idx=c_idx.tup()
         v_shape=get_shape(val)
@@ -433,6 +437,8 @@ class ColumnDataTableStorage(IDataTableStorage):
         
         Each row is represented as a tuple.
         """
+        if not self._columns:
+            raise IndexError("no columns in the table")
         r_idx=indexing.to_numpy_idx(idx)
         if r_idx.ndim==0:
             return tuple([c[r_idx] for c in self._columns])
@@ -445,6 +451,8 @@ class ColumnDataTableStorage(IDataTableStorage):
         
         Same as :meth:`get_rows`, but only accepts single column index.
         """
+        if not self._columns:
+            raise IndexError("no columns in the table")
         return tuple([c._get_single_item(idx) for c in self._columns])
     def get_single_row_item(self, idx): # same as get_item, but only accept single number as an (row) index
         """
@@ -452,22 +460,23 @@ class ColumnDataTableStorage(IDataTableStorage):
         
         Same as :meth:`get_item`, but only accepts single column index.
         """
+        if not self._columns:
+            raise IndexError("no columns in the table")
         return as_array([c._get_single_item(idx) for c in self._columns])
     def add_rows(self, idx, val): # accepts iterable (or 2D iterable)
         """
         Add new rows at index `idx` (1D).
         """
+        if not self._columns:
+            raise IndexError("no columns in the table")
         r_idx=indexing.to_numpy_idx(idx)
         if r_idx.ndim==1:
             raise ValueError("can only insert items in a single location")
         v_shape=get_shape(val)
         v_ndim=len(v_shape)
         if v_ndim==0:
-            if self._columns==[]:
-                raise ValueError("can't add number to an empty table")
-            else:
-                val=[[val]*len(self._columns)]
-                v_shape=(1,len(val))
+            val=[[val]*len(self._columns)]
+            v_shape=(1,len(val))
         elif v_ndim==1:
             val=[val]
             v_shape=(1,v_shape[0])
@@ -483,12 +492,16 @@ class ColumnDataTableStorage(IDataTableStorage):
                 self._add_item_column(c,r_idx,val[:,c])
     def del_rows(self, idx):
         """Delete a row or a list of rows at the index `idx` (1D)"""
+        if not self._columns:
+            raise IndexError("no columns in the table")
         r_idx=indexing.to_numpy_idx(idx)
         self._columns=[c._del_item(r_idx) for c in self._columns]
         
     # table-wise
     def get_subtable(self, idx, force_copy=False):
         """Return the data at the index `idx` (1D or 2D) as an `IDataTableStorage` object of the same type."""
+        if not self._columns:
+            raise IndexError("no columns in the table")
         r_idx,c_idx=indexing.to_double_index(idx,self.get_column_names())
         c_ndim,c_idx=c_idx.tup()
         if c_ndim==0:

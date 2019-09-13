@@ -159,7 +159,7 @@ class WS(IDevice):
                 if err==-4:
                     return "over"
             self._check_getfunc_error("GetWavelengthNum",err)
-        return res*1E9
+        return res*1E-9
 
     def start_measurement(self):
         self.dll.Operation(2)

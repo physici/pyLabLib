@@ -175,7 +175,9 @@ class ImageView(QtWidgets.QWidget):
         self.plotWindow.addLegend()
         self.plotWindow.setLabel("left","Image cut")
         self.plotWindow.showGrid(True,True,0.7)
-        self.cut_lines=[self.plotWindow.plot([],[],pen="#B0B000",name="Horizontal"), self.plotWindow.plot([],[],pen="#B000B0",name="Vertical")]
+        self.cut_lines=[pyqtgraph.PlotCurveItem(pen="#B0B000",name="Horizontal"), pyqtgraph.PlotCurveItem(pen="#B000B0",name="Vertical")]
+        for c in self.cut_lines:
+            self.plotWindow.addItem(c)
         self.layout.addWidget(self.plotWindow)
         self.layout.setStretch(1,1)
         self.plotWindow.setVisible(False)
@@ -424,8 +426,12 @@ class ImageView(QtWidgets.QWidget):
                         hmin-=1
                 x_cut=draw_img[:,hmin:hmax].mean(axis=1)
                 y_cut=draw_img[vmin:vmax,:].mean(axis=0)
-                self.cut_lines[0].setData(range(len(x_cut)),x_cut)
-                self.cut_lines[1].setData(range(len(y_cut)),y_cut)
+                autorange=self.plotWindow.getViewBox().autoRangeEnabled()
+                self.plotWindow.disableAutoRange()
+                self.cut_lines[0].setData(np.arange(len(x_cut)),x_cut)
+                self.cut_lines[1].setData(np.arange(len(y_cut)),y_cut)
+                if any(autorange):
+                    self.plotWindow.enableAutoRange(x=autorange[0],y=autorange[1])
                 self.plotWindow.setVisible(True)
             else:
                 self.plotWindow.setVisible(False)

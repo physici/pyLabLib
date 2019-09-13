@@ -82,7 +82,7 @@ class SocketTunnelService(rpyc.SlaveService):
         remote_call=rpyc.async_(self._conn.root._send_socket)
         def port_func(port):
             remote_call(net.get_local_addr(),port)
-        net.listen(None,0,listen,port_func=port_func,timeout=self._default_tunnel_timeout,connections_number=1,nodelay=True)
+        net.listen(None,0,listen,port_func=port_func,timeout=self._default_tunnel_timeout,connections_number=1,socket_args={"nodelay":True})
     def _send_socket(self, dst_addr, dst_port):
         """Set up a client socket to connect to the other service."""
         self.tunnel_socket=net.ClientSocket(timeout=self._default_tunnel_timeout,nodelay=True)

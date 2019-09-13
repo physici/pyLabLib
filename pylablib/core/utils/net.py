@@ -157,6 +157,8 @@ class ClientSocket(object):
             recvd=_wait_sock_func(sock_func,self.timeout,self.wait_callback)
         except socket.timeout:
             raise SocketTimeout("timeout while receiving") from None
+        except ConnectionResetError:
+            raise SocketError("connection closed while receiving") from None
         if len(recvd)==0:
             raise SocketError("connection closed while receiving")
         return recvd
@@ -304,7 +306,7 @@ def recv_JSON(socket, chunk_l=1024, strict=True):
         
         
 _listen_wait_callback_timeout=0.1
-def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=None, backlog=10, wrap_socket=True, connections_number=None, nodelay=False):
+def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=None, backlog=10, wrap_socket=True, connections_number=None, socket_args=None):
     """
     Run a server socket at the given host and port.
     
@@ -319,7 +321,7 @@ def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=No
         wrap_socket (bool): If ``True``, wrap the client socket of the connection into :class:`ClientSocket` class;
             otherwise, return :class:`socket.socket` object.
         connections_number (int): Specifies maximal number of connections before the listening function returns (by default, the number is unlimited).
-        nodelay (bool): Whether to enable ``TCP_NODELAY`` in the client socket (applies only if ``wrap_socket==True``).
+        socket_args (dict): parameters passed to :class:`ClientSocket` constructor.
         
     Checking for connections is paused until `conn_func` returns.
     If multiple connections are expected, `conn_func` should spawn a separate processing thread and return.
@@ -338,7 +340,7 @@ def listen(host, port, conn_func, port_func=None, wait_callback=None, timeout=No
     def sock_func():
         client_sock,_=serv_sock.accept()
         if wrap_socket:
-            client_sock=ClientSocket(client_sock,nodelay=nodelay)
+            client_sock=ClientSocket(client_sock,**(socket_args or {}))
         conn_func(client_sock)
     try:
         cnt=0
