@@ -38,19 +38,30 @@ def get_cameras_number():
             pass
     return ncams
 
+def reset_api():
+    """
+    Reset API.
+    
+    All cameras must be closed; otherwise, the prompt to reboot will appear.
+    """
+    lib.initlib()
+    lib.PCO_ResetLib()
+
 class PCOSC2Camera(IDevice):
     """
     PCO SC2 camera.
 
     Args:
         idx(int): camera index (use :func:`get_cameras_number` to get the total number of connected cameras)
-        ini_path(str): path to .ini file, if required by the camera
+        reboot_on_fail(bool): if ``True`` and the camera raised an error during initialization (but after opening), reboot the camera and try to connect again
+            useful when the camera is in a broken state (e.g., wrong ROI or pixel clock settings)
     """
-    def __init__(self, idx=0):
+    def __init__(self, idx=0, reboot_on_fail=True):
         IDevice.__init__(self)
         lib.initlib()
         self.idx=idx
         self.handle=None
+        self.reboot_on_fail=reboot_on_fail
         self._full_camera_data=dictionary.Dictionary()
         self._capabilities=[]
         self._model_data=None
@@ -96,12 +107,17 @@ class PCOSC2Camera(IDevice):
 
     def open(self):
         """Open connection to the camera"""
-        self.handle=lib.PCO_OpenCamera(self.idx)
-        try:
-            self.update_full_data()
-        except:
-            self.close()
-            raise
+        for t in range(2):
+            self.handle=lib.PCO_OpenCamera(self.idx)
+            try:
+                self.update_full_data()
+                return
+            except:
+                if self.reboot_on_fail and t==0:
+                    self.reboot()
+                else:
+                    self.close()
+                    raise
     def close(self):
         """Close connection to the camera"""
         if self.handle is not None:
@@ -114,6 +130,18 @@ class PCOSC2Camera(IDevice):
     def is_opened(self):
         """Check if the device is connected"""
         return self.handle is not None
+    def reboot(self, wait=True):
+        """
+        Reboot the camera.
+
+        If ``wait==True``, wait for the recommended time (10 seconds) after reboot for the camera to fully restart;
+        attempt to open the camera before that can lead to an error.
+        """
+        if self.handle is not None:
+            lib.PCO_RebootCamera(self.handle)
+            lib.PCO_CloseCamera(self.handle)
+            if wait:
+                time.sleep(10.)
 
     def get_full_camera_data(self):
         """Get a dictionary the all camera data available through the SDK."""
@@ -192,6 +220,10 @@ class PCOSC2Camera(IDevice):
         if has_option!=value:
             raise PCOSC2NotSupportedError("option {} is not supported by {}".format(option,self.get_model_data().model))
         return has_option
+    def _is_pco_edge(self):
+        return (self.v["general/strCamType/wCamType"]&0xFF00)==0x1300
+    def _is_camlink(self):
+        return self.v["general/strCamType/wInterfaceType"] in [2,7] # CL and CLHS
         
 
     ### Generic controls ###
@@ -280,8 +312,6 @@ class PCOSC2Camera(IDevice):
         def reset(self):
             with self.lock:
                 lib.ResetEvent(self.event)
-        def is_set(self):
-            return self.wait(0)
         def release(self):
             if self.buff is not None:
                 lib.CloseHandle(self.event)
@@ -438,6 +468,8 @@ class PCOSC2Camera(IDevice):
         else:
             rate=sorted(rates,key=lambda r: abs(r-rate))[0]
         lib.PCO_SetPixelRate(self.handle,rate)
+        if self.v["general/strCamType/wCamType"]==0x1300: # pco.edge 5.5 CL
+            lib.PCO_SetTransferParametersAuto(self.handle)
         self._arm()
         return self.get_pixel_rate()
 
@@ -452,7 +484,7 @@ class PCOSC2Camera(IDevice):
         self.stop_acquisition()
         self._allocate_buffers(n=buffn or self._default_nframes)
         self._arm()
-        if self.v["general/strCamType/wCamType"] in {0x1300,0x1302,0x1340}: # pco.edge w/ CamLink
+        if self._is_pco_edge() and self._is_camlink():
             self._schedule_all_buffers()
             self._start_reading_loop()
             lib.PCO_SetRecordingState(self.handle,1)
@@ -473,7 +505,7 @@ class PCOSC2Camera(IDevice):
     def acquisition_in_progress(self):
         """Check if the acquisition is in progress"""
         return bool(lib.PCO_GetRecordingState(self.handle))
-    def wait_for_frame(self, since="lastread", timeout=20.):
+    def wait_for_frame(self, since="lastread", timeout=20., period=1E-3):
         """
         Wait for a new camera frame.
 
@@ -481,6 +513,7 @@ class PCOSC2Camera(IDevice):
         Can be ``"lastread"`` (wait for a new frame after the last read frame), ``"lastwait"`` (wait for a new frame after last :meth:`wait_for_frame` call),
         or ``"now"`` (wait for a new frame acquired after this function call).
         If `timeout` is exceeded, raise :exc:`.PCOSC2TimeoutError`.
+        `period` specifies camera polling period.
         """
         if not self.acquisition_in_progress():
             return
@@ -492,7 +525,12 @@ class PCOSC2Camera(IDevice):
         if since=="lastwait" and last_acq_frame>self._last_wait_frame:
             self._last_wait_frame=last_acq_frame
             return
-        new_valid=self._wait_for_next_buffer(timeout=timeout)
+        ctd=general.Countdown(timeout)
+        while not ctd.passed():
+            new_valid=self._next_wait_buffer>self._next_read_buffer
+            if new_valid:
+                break
+            time.sleep(0.001)
         if not new_valid:
             raise PCOSC2TimeoutError()
         self._last_wait_frame=self._next_wait_buffer-1
@@ -515,16 +553,21 @@ class PCOSC2Camera(IDevice):
     def get_detector_size(self):
         """Get camera detector size (in pixels) as a tuple ``(width, height)``"""
         return self.v["sensor/strDescription/wMaxHorzResStdDESC"],self.v["sensor/strDescription/wMaxVertResStdDESC"]
-    def _adj_roi_axis(self, start, end, minsize, maxsize, step):
-        end=min(end,maxsize)
-        start=min(start,maxsize)
+    def _adj_roi_axis(self, start, end, minsize, detsize, step, symm):
+        end=min(end,detsize)
+        start=min(start,detsize)
         start-=start%step
         end-=end%step
         if end-start<minsize:
             end=start+minsize
-        if end>maxsize:
-            end=maxsize
-            start=maxsize-minsize
+        if end>detsize:
+            end=detsize
+            start=detsize-minsize
+        if symm:
+            cdist=max(abs(start-detsize//2),abs(end-detsize//2))
+            start=min(start,detsize//2-cdist)
+            start-=start%step
+            end=detsize-start
         return start,end
     def _adj_bin(self, bin, maxbin, binmode):
         bin=max(bin,1)
@@ -546,15 +589,17 @@ class PCOSC2Camera(IDevice):
         vbin=self._adj_bin(vbin,vbinmax,vbinmode)
         hstep=self.v["sensor/strDescription/wRoiHorStepsDESC"]
         vstep=self.v["sensor/strDescription/wRoiVertStepsDESC"]
-        if hstep==0 or vstep==0:
+        if hstep==0 or vstep==0: # no ROI
             hstart,hend,vstart,vend=0,xdet,0,ydet
         else:
-            if self.v["general/strCamType/wCamType"] in {0x1340}: # pco.edge w/ CLHS
+            if self.v["general/strCamType/wCamType"]==0x1340: # pco.edge CLHS
                 hstep=16 # seems to be the case (property says 4, but the documentation says 16)
             hminsize=self.v["sensor/strDescription/wMinSizeHorzDESC"]*hbin
-            hstart,hend=self._adj_roi_axis(hstart,hend,hminsize,xdet,hstep)
+            vsymm="symm_vert_roi" in self._capabilities # or self._is_pco_edge() # pco.edge must be symmetric, can with soft ROI activated it can be asymmetric for output
+            hsymm="symm_hor_roi" in self._capabilities
+            hstart,hend=self._adj_roi_axis(hstart,hend,hminsize,xdet,hstep,hsymm)
             vminsize=self.v["sensor/strDescription/wMinSizeVertDESC"]*vbin
-            vstart,vend=self._adj_roi_axis(vstart,vend,vminsize,ydet,vstep)
+            vstart,vend=self._adj_roi_axis(vstart,vend,vminsize,ydet,vstep,vsymm)
         return hstart,hend,vstart,vend,hbin,vbin
     def get_roi(self):
         """
@@ -574,13 +619,18 @@ class PCOSC2Camera(IDevice):
         By default, all non-supplied parameters take extreme values.
         """
         hstart,hend,vstart,vend,hbin,vbin=self._trunc_roi(hstart,hend,vstart,vend,hbin,vbin)
-        lib.PCO_EnableSoftROI(self.handle,0)
+        try:
+            lib.PCO_EnableSoftROI(self.handle,1)
+        except PCOSC2LibError:
+            pass
         self._arm()
         lib.PCO_SetROI(self.handle,hstart//hbin+1,vstart//vbin+1,hend//hbin,vend//vbin)
         lib.PCO_SetBinning(self.handle,hbin,vbin)
         self._arm()
         dim=self._get_data_dimensions_rc()
         lib.PCO_SetImageParameters(self.handle,dim[1],dim[0],1)
+        if self.v["general/strCamType/wCamType"]==0x1300: # pco.edge 5.5 CL
+            lib.PCO_SetTransferParametersAuto(self.handle)
         return self.get_roi()
     def get_roi_limits(self):
         """
@@ -680,6 +730,12 @@ class PCOSC2Camera(IDevice):
         """
         self._check_option("metadata")
         return lib.PCO_GetMetaDataMode(self.handle)
+    def _get_metadata_size(self):
+        if self._has_option("metadata"):
+            mm=self.get_metadata_mode()
+            return (mm.size*2 if mm.mode else 0)
+        else:
+            return 0
 
     def _get_data_dimensions_rc(self):
         sizes=lib.PCO_GetSizes(self.handle)
@@ -689,8 +745,7 @@ class PCOSC2Camera(IDevice):
         return image_utils.convert_shape_indexing(self._get_data_dimensions_rc(),"rc",self.image_indexing)
     def _get_buffer_size(self):
         dim=self._get_data_dimensions_rc()
-        mm=self.get_metadata_mode()
-        mm_size=(mm.size*2 if mm.mode else 0)
+        mm_size=self._get_metadata_size()
         if mm_size>0:
             mm_size=((mm_size-1)//(dim[1]*2)+1)*(dim[1]*2)
         return dim[0]*dim[1]*2,mm_size
@@ -742,8 +797,6 @@ class PCOSC2Camera(IDevice):
         if rng[1]>new_images_rng[1]:
             rng[1]=new_images_rng[1]
         if rng[0]>rng[1]:
-            return np.zeros((0,dim[0],dim[1]))
-        if rng is None:
             return np.zeros((0,dim[0],dim[1]))
         if rng[0]>new_images_rng[0]:
             for _ in range(rng[0]-new_images_rng[0]):

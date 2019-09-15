@@ -920,10 +920,10 @@ class AndorSDK3Camera(IDevice):
         self.handle=None
         self._default_nframes=100
         self._buffer_overflow=10
-        self._ring_buffer=None
-        self._frame_counter=self.FrameCounter(self)
+        self._buffer_mgr=self.BufferManager(self)
         self._last_wait_frame=-1
         self._reg_cb=None
+        self._acq_mode=None
         self.open()
         self.image_indexing="rct"
         self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
@@ -959,11 +959,12 @@ class AndorSDK3Camera(IDevice):
         lib3.AT_InitialiseLibrary()
         self.handle=lib3.AT_Open(self.idx)
         self._open_cams+=1
-        self._register_frame_counter()
+        self._register_events()
     def close(self):
         """Close connection to the camera"""
         if self.handle is not None:
-            self._unregister_frame_counter()
+            self.stop_acquisition()
+            self._unregister_events()
             lib3.AT_Close(self.handle)
             self._open_cams-=1
             if self._open_cams<=0:
@@ -1232,70 +1233,126 @@ class AndorSDK3Camera(IDevice):
 
     
     ### Frame counting ###
-    class FrameCounter(object):
-        """Frame counter: keeps track of acquired and read frames, and of buffer overflow events"""
+    class BufferManager(object):
+        """Buffer manager: stores, constantly reads and re-schedules buffers, keeps track of acquired and read frames, and of buffer overflow events"""
         def __init__(self, cam):
             object.__init__(self)
-            self.acq_frames=0
-            self.read_frames=0
-            self.missed_frames=0
-            self.stop=False
-            self.overflows_number=0
-            self.cam=cam
-            self._cnt_lock=threading.RLock()
-        def reset(self):
-            """Reset counter (on frame acquisition)"""
+            self.buffers=None
+            self.queued_buffers=0
+            self.size=0
             self.acq_frames=0
             self.read_frames=0
             self.missed_frames=0
             self.buffer_overflows=0
-            self.stop=False
-        def acq(self):
-            """Process frame acquisition event"""
+            self.stop_requested=False
+            self.overflow_detected=False
+            self.cam=cam
+            self._cnt_lock=threading.RLock()
+            self._buffer_loop_thread=None
+        def allocate_buffers(self, nbuff, size, queued_buffers=None):
+            """
+            Allocate and queue buffers.
+
+            `queued_buffers`` specifies number of allocated buffers to keep queued at aagiven time (by default, all of them)
+            """
             with self._cnt_lock:
-                self.acq_frames+=1
-                if self.acq_frames-self.read_frames>len(self.cam._ring_buffer)-self.cam._buffer_overflow:
-                    self.missed_frames+=1
+                self.deallocate_buffers()
+                self.buffers=[ctypes.create_string_buffer(size) for _ in range(nbuff)]
+                self.queued_buffers=queued_buffers or len(self.buffers)
+                self.size=size        
+                for b in self.buffers[:self.queued_buffers]:
+                    lib3.AT_QueueBuffer(self.cam.handle,ctypes.cast(b,ctypes.POINTER(ctypes.c_uint8)),self.size)
+        def deallocate_buffers(self):
+            """Deallocated buffers (flushing should be done manually)"""
+            with self._cnt_lock:
+                if self.buffers:
+                    self.stop_loop()
+                    self.buffers=None
+                    self.size=0
+        def reset(self, buffer_overflows=0):
+            """Reset counter (on frame acquisition)"""
+            self.acq_frames=0
+            self.read_frames=0
+            self.missed_frames=0
+            self.buffer_overflows=buffer_overflows
+            self.overflow_detected=False
+        def _acq_loop(self):
+            while not self.stop_requested:
+                try:
+                    # buff,size=lib3.AT_WaitBuffer(self.cam.handle,300)
+                    # buff_addr=ctypes.cast(buff,ctypes.c_void_p).value
+                    # next_buff=self.buffers[self.acq_frames%len(self.buffers)]
+                    # next_buff_addr=ctypes.addressof(next_buff)
+                    # if buff_addr!=next_buff_addr:
+                    #     all_addr=[ctypes.addressof(rb) for rb in self.buffers]
+                    #     exp_id=all_addr.index(next_buff_addr)
+                    #     act_id=all_addr.index(buff_addr)
+                    #     raise AndorError("unexpected buffer address: expected {}[{}], got {}[{}] (difference of {})".format(next_buff_addr,exp_id,buff_addr,act_id,next_buff_addr-buff_addr))
+                    # if size!=self.size:
+                    #     raise AndorError("unexpected buffer size: expected {}, got {}".format(self.size,size))
+                    _,size=lib3.AT_WaitBuffer(self.cam.handle,300)
+                    if size!=self.size:
+                        raise AndorError("unexpected buffer size: expected {}, got {}".format(self.size,size))
+                except AndorSDK3LibError as e:
+                    if e.code!=13:
+                        raise
+                    continue
+                next_buff=self.buffers[(self.acq_frames+self.queued_buffers)%len(self.buffers)]
+                lib3.AT_QueueBuffer(self.cam.handle,ctypes.cast(next_buff,ctypes.POINTER(ctypes.c_uint8)),self.size)
+                with self._cnt_lock:
+                    self.acq_frames+=1
+                    if self.acq_frames-self.read_frames>len(self.buffers)-self.cam._buffer_overflow:
+                        self.missed_frames+=1
+                        self.read_frames+=1
+        def read(self, skip=False):
+            """Return the oldest available acuqired but not read buffer, and mark it as read"""
+            buff_idx=None
+            with self._cnt_lock:
+                if self.buffers and self.read_frames<self.acq_frames:
+                    buff_idx=self.read_frames%len(self.buffers)
                     self.read_frames+=1
-                return 0
+            if (buff_idx is not None) and not skip:
+                return ctypes.string_at(self.buffers[buff_idx],self.size)
+            return None
+        def start_loop(self):
+            """Start buffer scheduling loop"""
+            self.stop_loop()
+            self.stop_requested=False
+            self._buffer_loop_thread=threading.Thread(target=self._acq_loop,daemon=True)
+            self._buffer_loop_thread.start()
+        def stop_loop(self):
+            """Stop buffer scheduling loop"""
+            if self._buffer_loop_thread is not None:
+                self.stop_requested=True
+                self._buffer_loop_thread.join()
+                self._buffer_loop_thread=None
+            self.reset()
         def overflow(self):
             """Process buffer overflow event"""
             with self._cnt_lock:
-                self.stop=True
-                return 0
-        def need_stop(self):
+                self.overflow_detected=True
+        def new_overflow(self):
             """Check if acquisition restart is needed (buffer overflowed)"""
             with self._cnt_lock:
-                return self.stop
-        def read(self):
-            """Notify of frame read"""
-            with self._cnt_lock:
-                self.read_frames+=1
-                return 0
+                return self.overflow_detected
         def get_status(self):
-            """Get counter status: tuple ``(acquired, read, missed, buffer_overflows)``"""
+            """Get counter status: tuple ``(acquired, read, missed, buffer_size, buffer_overflows)``"""
             with self._cnt_lock:
-                return self.acq_frames,self.read_frames,self.missed_frames,self.buffer_overflows
-    def _register_frame_counter(self):
-        self._unregister_frame_counter()
-        self.set_value("EventSelector","ExposureEndEvent")
-        self.set_value("EventEnable",True)
-        acq_cb=lib3.AT_RegisterFeatureCallback(self.handle,"ExposureEndEvent",lambda *args: self._frame_counter.acq())
+                return self.acq_frames,self.read_frames,self.missed_frames,len(self.buffers or []),self.buffer_overflows
+    def _register_events(self):
+        self._unregister_events()
         self.set_value("EventSelector","BufferOverflowEvent")
         self.set_value("EventEnable",True)
-        buff_cb=lib3.AT_RegisterFeatureCallback(self.handle,"BufferOverflowEvent",lambda *args: self._frame_counter.overflow())
-        self._reg_cb=(acq_cb,buff_cb)
-        self._frame_counter.reset()
-    def _unregister_frame_counter(self):
+        buff_cb=lib3.AT_RegisterFeatureCallback(self.handle,"BufferOverflowEvent",lambda *args: self._buffer_mgr.overflow())
+        self._reg_cb=buff_cb
+        self._buffer_mgr.reset()
+    def _unregister_events(self):
         if self._reg_cb is not None:
-            lib3.AT_UnregisterFeatureCallback(self.handle,"ExposureEndEvent",self._reg_cb[0])
-            self.set_value("EventSelector","ExposureEndEvent")
-            self.set_value("EventEnable",False)
-            lib3.AT_UnregisterFeatureCallback(self.handle,"BufferOverflowEvent",self._reg_cb[1])
+            lib3.AT_UnregisterFeatureCallback(self.handle,"BufferOverflowEvent",self._reg_cb)
             self.set_value("EventSelector","BufferOverflowEvent")
             self.set_value("EventEnable",False)
             self._reg_cb=None
-            self._frame_counter.reset()
+            self._buffer_mgr.reset()
 
     def start_acquisition(self, mode="sequence", nframes=None):
         """
@@ -1307,22 +1364,25 @@ class AndorSDK3Camera(IDevice):
         self.stop_acquisition()
         acq_modes=["sequence","snap"]
         funcargparse.check_parameter_range(mode,"mode",acq_modes)
-        self._setup_ring_buffer(nframes=nframes)
         if mode=="snap":
             self.set_value("CycleMode","Fixed")
             self.set_value("FrameCount",nframes or 1)
         else:
-            self.set_value("CycleMode","Continuous")
-        self._frame_counter.reset()
+            # self.set_value("CycleMode","Continuous") # Zyla bug doesn't allow continuous mode with >1000 FPS
+            self.set_value("CycleMode","Fixed")
+            self.set_value("FrameCount",self.get_value_range("FrameCount")[1])
+        self.create_ring_buffer(nframes)
+        self._buffer_mgr.reset()
         self._last_wait_frame=-1
+        self._buffer_mgr.start_loop()
         self.command("AcquisitionStart")
         self._acq_mode=(mode,nframes)
     def stop_acquisition(self):
         """Stop acquisition"""
         if self.get_value("CameraAcquiring"):
             self.command("AcquisitionStop")
-            self._cleanup_ring_buffer()
-            self._frame_counter.reset()
+            self._buffer_mgr.stop_loop()
+            self.remove_ring_buffer()
         self._acq_mode=None
     def is_acquiring(self):
         """Check if acquisition is in progress"""
@@ -1353,9 +1413,9 @@ class AndorSDK3Camera(IDevice):
         `period` specifies camera polling period.
         """
         ctd=general.Countdown(timeout)
-        last_acq_frame=self._frame_counter.get_status()[0]
+        last_acq_frame=self._buffer_mgr.get_status()[0]
         while not ctd.passed():
-            acq_frame,read_frame=self._frame_counter.get_status()[:2]
+            acq_frame,read_frame=self._buffer_mgr.get_status()[:2]
             since_last_wait=acq_frame-self._last_wait_frame
             self._last_wait_frame=acq_frame
             if since=="lastread" and acq_frame>read_frame:
@@ -1366,125 +1426,39 @@ class AndorSDK3Camera(IDevice):
                 return
             time.sleep(min(period,ctd.time_left()))
         raise AndorTimeoutError()
-
-    class RingBuffer(object):
-        def __init__(self, buffers, size):
-            object.__init__(self)
-            self.buffers=buffers
-            self.idx=0
-            self.size=size
-        def next_buffer(self):
-            return self.buffers[self.idx]
-        def advance(self):
-            self.idx=(self.idx+1)%len(self.buffers)
-        def __len__(self):
-            return len(self.buffers)
+    
     def create_ring_buffer(self, nframes=None):
         """
         Create and set up a new ring buffer.
 
         If a ring buffer is already allocated, remove it and create a new one.
+        Called automatically on acquisition start, doesn't usually need to be called explicitly.
         """
         self.remove_ring_buffer()
         nframes=nframes or self._default_nframes
         frame_size=self.get_value("ImageSizeBytes")
-        buffers=lib3.allocate_buffers(self.handle,nframes+self._buffer_overflow,frame_size)
-        self._ring_buffer=self.RingBuffer(buffers,frame_size)
+        self._buffer_mgr.allocate_buffers(nframes+self._buffer_overflow,frame_size,queued_buffers=nframes)
     def remove_ring_buffer(self):
-        """Remove the ring buffer and clean up the memory."""
-        self._cleanup_ring_buffer()
-        self._ring_buffer=None
+        """
+        Remove the ring buffer and clean up the memory.
+
+        Called automatically on acquisition stop, doesn't usually need to be called explicitly.
+        """
+        lib3.flush_buffers(self.handle)
+        self._buffer_mgr.deallocate_buffers()
     def get_buffer_size(self):
         """Get ring buffer size"""
-        return len(self._ring_buffer) if self._ring_buffer else 0
+        return len(self._buffer_mgr.buffers or [])
     def get_frame_counter_status(self):
         """
         Get frame counter status.
 
-        Return tuple ``(acquired, read, missed, buffer_overflows)`` with number of acquired frames,
+        Return tuple ``(acquired, read, missed, buffer_size, buffer_overflows)`` with number of acquired frames,
         read (or skipped) frames, missed frame, and number of buffer overflows.
         """
-        return self._frame_counter.get_status()
-    def _setup_ring_buffer(self, nframes=None):
-        if self._ring_buffer is None:
-            self.create_ring_buffer(nframes=nframes)
-        else:
-            frame_size=self.get_value("ImageSizeBytes")
-            if (self._ring_buffer.size!=frame_size) or (nframes is not None and len(self._ring_buffer)!=nframes):
-                self.create_ring_buffer(nframes=nframes)
-            else:
-                self._cleanup_ring_buffer()
-                self._ring_buffer.idx=0
-                for b in self._ring_buffer.buffers:
-                    lib3.AT_QueueBuffer(self.handle,ctypes.cast(b,ctypes.POINTER(ctypes.c_uint8)),frame_size)
-    def _cleanup_ring_buffer(self):
-        if self._ring_buffer:
-            lib3.AT_Flush(self.handle)
+        return self._buffer_mgr.get_status()
 
 
-    def _get_next_image(self, timeout=None, ignore_timeout=False):
-        if self._ring_buffer is None:
-            return b""
-        if timeout is None:
-            timeout=0xFFFFFFFF
-        else:
-            timeout=int(timeout*1E3)
-        buff=None
-        try:
-            buff,size=lib3.AT_WaitBuffer(self.handle,timeout)
-        except AndorSDK3LibError as e:
-            if e.code==13:
-                pass
-        if buff:
-            buff_addr=ctypes.addressof(buff.contents)
-            ring_buffer=self._ring_buffer.next_buffer()
-            ring_buff_addr=ctypes.addressof(ring_buffer)
-            if buff_addr!=ring_buff_addr:
-                all_addr=[ctypes.addressof(rb) for rb in self._ring_buffer.buffers]
-                exp_id=all_addr.index(ring_buff_addr)
-                act_id=all_addr.index(buff_addr)
-                raise AndorError("unexpected buffer address: expected {}[{}], got {}[{}] (difference of {})".format(ring_buff_addr,exp_id,buff_addr,act_id,ring_buff_addr-buff_addr))
-            res=ctypes.string_at(buff,size)
-            lib3.AT_QueueBuffer(self.handle,ctypes.cast(ring_buffer,ctypes.POINTER(ctypes.c_uint8)),self._ring_buffer.size)
-            self._ring_buffer.advance()
-        else:
-            res=None
-        self._frame_counter.read()
-        return res
-    def _skip_next_image(self, timeout=None):
-        if self._ring_buffer is None:
-            return
-        if timeout is None:
-            timeout=0xFFFFFFFF
-        else:
-            timeout=int(timeout*1E3)
-        lib3.AT_WaitBuffer(self.handle,timeout)
-        ring_buffer=self._ring_buffer.next_buffer()
-        lib3.AT_QueueBuffer(self.handle,ctypes.cast(ring_buffer,ctypes.POINTER(ctypes.c_uint8)),self._ring_buffer.size)
-        self._ring_buffer.advance()
-        self._frame_counter.read()
-    # def _unpack_12bit(self, buffer, stride=None, width=None):
-    #     """
-    #     Unpack 12-bit Andor packing.
-        
-    #     `stride` is the buffer stride (row size in bytes); if it is ``None``, assume that the rows are tightly packed.
-    #     """
-    #     if stride is None:
-    #         data=np.frombuffer(buffer,dtype="u1")
-    #         result=np.empty(len(data)*2//3,dtype="u2")
-    #         result[0::2]=data[::3]
-    #         result[1::2]=data[2::3]
-    #         result<<=4
-    #         result[0::2]|=data[1::3]&0x0F
-    #         result[1::2]|=data[1::3]>>4
-    #         return result.reshape((-1,width)) if width else result
-    #     else:
-    #         data=np.frombuffer(buffer,dtype="u1").reshape((-1,stride)).astype("<u2")
-    #         fst_uint8,mid_uint8,lst_uint8=data[:,::3],data[:,1::3],data[:,2::3]
-    #         result=np.empty(shape=(fst_uint8.shape[0],lst_uint8.shape[1]+mid_uint8.shape[1]),dtype="<u2")
-    #         result[:,::2]=(fst_uint8[:,:mid_uint8.shape[1]]<<4)|(mid_uint8&0x0F)
-    #         result[:,1::2]=(mid_uint8[:,:lst_uint8.shape[1]]>>4)|(lst_uint8<<4)
-    #         return result[:,:width] if width else result
     def _parse_image(self, img):
         if img is None:
             return None
@@ -1563,7 +1537,7 @@ class AndorSDK3Camera(IDevice):
 
         By default, all non-supplied parameters take extreme values. Binning is the same for both axes.
         """
-        self._cleanup_ring_buffer()
+        self.remove_ring_buffer()
         det_size=self.get_detector_size()
         hend=hend or det_size[0]
         vend=vend or det_size[1]
@@ -1606,28 +1580,33 @@ class AndorSDK3Camera(IDevice):
         Return tuple ``(first, last)`` with images range (inclusive).
         If no images are available, return ``None``.
         """
-        acq_frames,read_frames=self._frame_counter.get_status()[:2]
+        acq_frames,read_frames=self._buffer_mgr.get_status()[:2]
         if acq_frames>read_frames:
             return (read_frames,acq_frames-1)
         else:
             return None
             
     def read_multiple_images(self, rng=None, return_metadata=False):
-        """Read multiple images specified by `rng` (by default, all un-read images)."""
+        """
+        Read multiple images specified by `rng` (by default, all un-read images).
+        
+        If ``return_metadata==True``, return raw metadata along with images.
+        Metadata is a dictionary ``{section: data}``, where ``section`` is the section number (usually 1 or 7), and ``data`` is the corresponding binary data string.
+        """
         if rng is None:
             rng=self.get_new_images_range()
         dim=self.get_data_dimensions()
         images,metadata=np.zeros((0,dim[0],dim[1])),[]
         if rng is not None:
-            acq_frames,read_frames=self._frame_counter.get_status()[:2]
+            acq_frames,read_frames=self._buffer_mgr.get_status()[:2]
             rng=max(rng[0],read_frames),min(rng[1],acq_frames-1)
-            if self._frame_counter.need_stop():
-                bovf=self._frame_counter.buffer_overflows
+            if self._buffer_mgr.new_overflow():
+                bovf=self._buffer_mgr.buffer_overflows
                 self.start_acquisition(*self._acq_mode)
-                self._frame_counter.buffer_overflows+=bovf+1
+                self._buffer_mgr.buffer_overflows+=bovf+1
             for _ in range(read_frames,rng[0]):
-                self._skip_next_image(timeout=0.3)
-            frames=[self._parse_image(self._get_next_image(timeout=.3,ignore_timeout=True)) for _ in range(rng[1]-rng[0]+1)]
+                self._buffer_mgr.read(skip=True)
+            frames=[self._parse_image(self._buffer_mgr.read()) for _ in range(rng[1]-rng[0]+1)]
             frames=[f for f in frames if f is not None]
             if frames:
                 images,metadata=list(zip(*frames))

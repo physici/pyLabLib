@@ -95,7 +95,7 @@ class SharedMemIPCChannel(PipeIPCChannel):
                 return False
             esize*=s
         return True
-    def send_numpy(self, data, method="auto"):
+    def send_numpy(self, data, method="auto", timeout=None):
         """Send numpy array"""
         if method=="auto":
             method="pipe" if data.nbytes<2**16 else "shm"
@@ -111,7 +111,7 @@ class SharedMemIPCChannel(PipeIPCChannel):
             count-=chunk_size
             buff_ptr+=chunk_size
             self.conn.send(chunk_size)
-            self.conn.recv()
+            self._recv_with_timeout(timeout)
     def recv_numpy(self, timeout=None):
         """Receive numpy array"""
         msg=self._recv_with_timeout(timeout)
@@ -148,14 +148,16 @@ class SharedMemIPCTable(object):
         object.__init__(self)
         self.pipe=PipeIPCChannel(pipe_conn)
         if arr is None:
-            self.arr_size=arr_size or self._default_array_size
+            self.arr_size=arr_size+4 or self._default_array_size
             self.arr=Array("c",self.arr_size,lock=lock)
         else:
             self.arr=arr
             self.arr_size=len(arr)
+        self.conn_side=0 if pipe_conn is None else 1
         self.var_table={}
-        self.max_offset=0
+        self.max_offset=4
         self._check_variables()
+        self.arr[self.conn_side*2]=1
 
     def _check_variables(self):
         while True:
@@ -244,6 +246,16 @@ class SharedMemIPCTable(object):
             return np.fromstring(sval,dtype=kind[4:])
         return default
     __getitem__=get_variable
+
+    def is_peer_connected(self):
+        """Check if the peer is connected (i.e., the other side of the pipe is initialized)"""
+        return self.arr[(1-self.conn_side)*2]==b"\x01"
+    def close_connection(self):
+        """Mark the connection as closed"""
+        self.arr[self.conn_side*2+1]=1
+    def is_peer_closed(self):
+        """Check if the peer is closed"""
+        return self.arr[(1-self.conn_side)*2+1]==b"\x01"
 
     def get_peer_args(self):
         """Get arguments required to create a peer connection"""

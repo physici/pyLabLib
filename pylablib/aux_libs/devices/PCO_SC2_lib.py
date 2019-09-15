@@ -789,6 +789,10 @@ class PCOSC2Lib(object):
 		self.PCO_ClearRamSegment=wrapper(lib.PCO_ClearRamSegment, [HANDLE], ["handle"])
 		self.PCO_GetActiveRamSegment=wrapper(lib.PCO_GetActiveRamSegment, [HANDLE,WORD], ["handle",None])
 		self.PCO_SetActiveRamSegment=wrapper(lib.PCO_SetActiveRamSegment, [HANDLE,WORD], ["handle","segment"])
+		self.PCO_SetTransferParametersAuto=wrapper(lib.PCO_SetTransferParametersAuto, [HANDLE,ctypes.c_void_p,ctypes.c_int], ["handle",None,None],
+			rvprep=[None,0], rvref=[False,False])
+		self.PCO_SetActiveLookupTable=wrapper(lib.PCO_SetActiveLookupTable, [HANDLE,DWORD,DWORD], ["handle",None,None],
+			rvprep=[lambda *args:args[1], lambda *args:args[2]], addargs=["lut","offset"])
 
 		self.PCO_GetImageStruct=wrapper(lib.PCO_GetImageStruct, [HANDLE,PCO_Image], ["handle",None],
 			rvprep=[CPCO_Image.prep_struct], rvconv=[CPCO_Image.tup_struct])

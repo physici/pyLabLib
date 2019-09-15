@@ -268,12 +268,14 @@ class AndorSDK3Lib(object):
 		winarch="64bit" if platform.machine().endswith("64") else "32bit"
 		if arch=="32bit" and winarch=="64bit":
 			solis_path=r"C:\Program Files (x86)\Andor SOLIS"
+			sdk3_path=r"C:\Program Files (x86)\Andor SDK3"
 		else:
 			solis_path=r"C:\Program Files\Andor SOLIS"
-		error_message=(	"The library is supplied with Andor Solis software, or {};\n"
+			sdk3_path=r"C:\Program Files\Andor SDK3"
+		error_message=(	"The library is supplied with Andor Solis software, Andor SDK3 software, or {};\n"
 						"Additional required libraries:  atblkbx.dll, atcl_bitflow.dll, atdevapogee.dll, atdevregcam.dll, atusb_libusb.dll, atusb_libusb10.dll;\n"
 						"{}").format(default_source_message,default_placing_message)
-		self.lib=load_lib("atcore.dll",locations=(solis_path,"local","global"),call_conv="stdcall",locally=True,error_message=error_message)
+		self.lib=load_lib("atcore.dll",locations=(solis_path,sdk3_path,"local","global"),call_conv="stdcall",locally=True,error_message=error_message)
 		lib=self.lib
 		AT_H=ctypes.c_int
 		AT_pWC=ctypes.c_wchar_p
@@ -332,15 +334,18 @@ class AndorSDK3Lib(object):
 		lib.AT_RegisterFeatureCallback.argtypes=[AT_H,AT_pWC,self.c_callback,ctypes.c_voidp]
 		lib.AT_RegisterFeatureCallback.restype=ctypes.c_uint32
 		lib.AT_RegisterFeatureCallback.errcheck=errcheck()
-		def AT_RegisterFeatureCallback(handle, feature, callback):
-			def wrapped_callback(*args):
-				try:
-					callback(*args)
-					return 0
-				except:
-					return 1
-			cb=self.c_callback(wrapped_callback)
-			lib.AT_RegisterFeatureCallback(handle,feature,cb,0)
+		def AT_RegisterFeatureCallback(handle, feature, callback, context=None, wrap=True):
+			if wrap:
+				def wrapped_callback(*args):
+					try:
+						callback(*args)
+						return 0
+					except:
+						return 1
+				cb=self.c_callback(wrapped_callback)
+			else:
+				cb=self.c_callback(callback)
+			lib.AT_RegisterFeatureCallback(handle,feature,cb,context)
 			return cb
 		self.AT_RegisterFeatureCallback=AT_RegisterFeatureCallback
 		lib.AT_UnregisterFeatureCallback.argtypes=[AT_H,AT_pWC,self.c_callback,ctypes.c_voidp]
@@ -356,9 +361,18 @@ class AndorSDK3Lib(object):
 		buffs=[]
 		for _ in range(nframes):
 			b=ctypes.create_string_buffer(frame_size)
-			self.AT_QueueBuffer(handle,ctypes.cast(b,ctypes.POINTER(ctypes.c_uint8)),frame_size)
 			buffs.append(b)
 		return buffs
+	def flush_buffers(self, handle):
+		while True:
+			try:
+				self.AT_WaitBuffer(handle,0)
+			except AndorSDK3LibError as e:
+				if e.code==13:
+					break
+				raise
+		self.AT_Flush(handle)
+		return
 
 
 def read_uint12(raw_data, width):
