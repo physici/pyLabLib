@@ -575,7 +575,7 @@ class PCOSC2Camera(IDevice):
         if binmode!=1:
             bin=int(2**np.floor(np.log2(bin)))
         return bin
-    def _trunc_roi(self, hstart=0, hend=None, vstart=0, vend=None, hbin=1, vbin=1):
+    def _trunc_roi(self, hstart=0, hend=None, vstart=0, vend=None, hbin=1, vbin=1, soft_roi=False):
         xdet,ydet=self.get_detector_size()
         if hend is None:
             hend=xdet
@@ -595,11 +595,11 @@ class PCOSC2Camera(IDevice):
             if self.v["general/strCamType/wCamType"]==0x1340: # pco.edge CLHS
                 hstep=16 # seems to be the case (property says 4, but the documentation says 16)
             hminsize=self.v["sensor/strDescription/wMinSizeHorzDESC"]*hbin
-            vsymm="symm_vert_roi" in self._capabilities # or self._is_pco_edge() # pco.edge must be symmetric, can with soft ROI activated it can be asymmetric for output
+            vsymm="symm_vert_roi" in self._capabilities or (self._is_pco_edge() and not soft_roi) # pco.edge must be symmetric, can with soft ROI activated it can be asymmetric for output
             hsymm="symm_hor_roi" in self._capabilities
-            hstart,hend=self._adj_roi_axis(hstart,hend,hminsize,xdet,hstep,hsymm)
+            hstart,hend=self._adj_roi_axis(hstart,hend,hminsize,xdet,hstep*hbin,hsymm)
             vminsize=self.v["sensor/strDescription/wMinSizeVertDESC"]*vbin
-            vstart,vend=self._adj_roi_axis(vstart,vend,vminsize,ydet,vstep,vsymm)
+            vstart,vend=self._adj_roi_axis(vstart,vend,vminsize,ydet,vstep*vbin,vsymm)
         return hstart,hend,vstart,vend,hbin,vbin
     def get_roi(self):
         """
@@ -618,15 +618,21 @@ class PCOSC2Camera(IDevice):
         (start are inclusive, stop are exclusive, starting from 0), `hbin` and `vbin` specify binning.
         By default, all non-supplied parameters take extreme values.
         """
-        hstart,hend,vstart,vend,hbin,vbin=self._trunc_roi(hstart,hend,vstart,vend,hbin,vbin)
-        try:
-            lib.PCO_EnableSoftROI(self.handle,1)
-        except PCOSC2LibError:
-            pass
+        roi=hstart,hend,vstart,vend,hbin,vbin
+        hstart,hend,vstart,vend,hbin,vbin=self._trunc_roi(*roi)
+        lib.PCO_EnableSoftROI(self.handle,0)
         self._arm()
         lib.PCO_SetROI(self.handle,hstart//hbin+1,vstart//vbin+1,hend//hbin,vend//vbin)
         lib.PCO_SetBinning(self.handle,hbin,vbin)
         self._arm()
+        try:
+            lib.PCO_EnableSoftROI(self.handle,1)
+            self._arm()
+            hstart,hend,vstart,vend,hbin,vbin=self._trunc_roi(*roi,soft_roi=True)
+            lib.PCO_SetROI(self.handle,hstart//hbin+1,vstart//vbin+1,hend//hbin,vend//vbin)
+            self._arm()
+        except PCOSC2LibError:
+            pass
         dim=self._get_data_dimensions_rc()
         lib.PCO_SetImageParameters(self.handle,dim[1],dim[0],1)
         if self.v["general/strCamType/wCamType"]==0x1300: # pco.edge 5.5 CL
