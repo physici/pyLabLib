@@ -35,6 +35,12 @@ def _wait_sock_func(func, timeout, wait_callback):
 def get_local_addr():
     """Get local IP address."""
     return socket.gethostbyname(socket.gethostname())
+def get_all_local_addr():
+    """Get a list of all local IP address."""
+    return socket.gethostbyname_ex(socket.gethostname())[2]
+def get_local_hostname():
+    """Get a local host name."""
+    return socket.gethostbyname_ex(socket.gethostname())[0]
 
 class ClientSocket(object):
     """

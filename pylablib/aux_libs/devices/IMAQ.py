@@ -275,6 +275,8 @@ class IMAQCamera(interface.IDevice):
     def clear_all_triggers(self):
         """Disable all triggers of the session"""
         lib.imgSessionTriggerClear(self.sid)
+        self._triggers_in={}
+        self._triggers_out={}
 
 
     def _get_ctypes_buffer(self):
@@ -341,6 +343,7 @@ class IMAQCamera(interface.IDevice):
         if self._acq_params:
             self.stop_acquisition()
             lib.imgSessionAbort(self.sid)
+            self.clear_all_triggers()
             self._deallocate_buffers()
             self._acq_params=None
     def get_acquisition_parameters(self):

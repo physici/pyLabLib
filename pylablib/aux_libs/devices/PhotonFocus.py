@@ -192,10 +192,13 @@ class PhotonFocusIMAQCamera(IMAQCamera):
     
     def setup_max_baudrate(self):
         brs=[115200,57600,38400,19200,9600,4800,2400,1200]
-        for br in brs:
-            if lib.pfIsBaudRateSupported(self.pfcam_port,br):
-                lib.pfSetBaudRate(self.pfcam_port,br)
-                return
+        try:
+            for br in brs:
+                if lib.pfIsBaudRateSupported(self.pfcam_port,br):
+                    lib.pfSetBaudRate(self.pfcam_port,br)
+                    return
+        except PfcamError: # pfSetBaudRate sometimes raises unknown error
+            pass
     def open(self):
         """Open connection to the camera"""
         IMAQCamera.open(self)

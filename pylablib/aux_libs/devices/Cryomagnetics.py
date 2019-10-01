@@ -24,7 +24,7 @@ class LM500(SCPI.SCPIDevice):
             self.write("REMOTE")
         except self.instr.Error:
             self.close()
-        self._add_settings_node("interval",self.get_interval,self.set_interval)
+        self._add_settings_node("interval",self.get_interval,self.set_interval,ignore_error=(RuntimeError,))
         self._add_status_node("level",self.get_level,mux=([1,2],))
         self._add_status_node("fill_status",self.get_fill_status,mux=([1,2],))
         self._add_settings_node("high_level",self.get_high_level,self.set_high_level,mux=([1,2],1))

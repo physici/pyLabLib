@@ -8,6 +8,7 @@ import rpyc
 import importlib
 import pickle
 import warnings
+import socket
 
 
 _default_packers={"numpy":np.ndarray.tostring,"pickle":pickle.dumps}
@@ -74,14 +75,14 @@ class SocketTunnelService(rpyc.SlaveService):
         rpyc.SlaveService.__init__(self)
         self.server=server
     _default_tunnel_timeout=10.
-    def _recv_socket(self):
+    def _recv_socket(self, addr):
         """Set up a listener to receive a socket connection from the other service."""
         def listen(s):
             s.set_timeout(self._default_tunnel_timeout)
             self.tunnel_socket=s
         remote_call=rpyc.async_(self._conn.root._send_socket)
         def port_func(port):
-            remote_call(net.get_local_addr(),port)
+            remote_call(addr,port)
         net.listen(None,0,listen,port_func=port_func,timeout=self._default_tunnel_timeout,connections_number=1,socket_args={"nodelay":True})
     def _send_socket(self, dst_addr, dst_port):
         """Set up a client socket to connect to the other service."""
@@ -126,7 +127,10 @@ class SocketTunnelService(rpyc.SlaveService):
         rpyc.SlaveService.on_connect(self,conn)
         self.peer=conn.root
         if not self.server:
-            self._recv_socket()
+            s=socket.fromfd(conn.fileno(),socket.AF_INET,socket.SOCK_STREAM)
+            src_addr=s.getsockname()[0]
+            s.close()
+            self._recv_socket(src_addr)
     def on_disconnect(self, conn):
         try:
             self.tunnel_socket.close()
