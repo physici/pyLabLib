@@ -389,33 +389,37 @@ def read_uint12(raw_data, width):
 	result[:,1::2]=(mid_uint8[:,:lst_uint8.shape[1]]>>4)|(lst_uint8<<4)
 	return result[:,:width] if width else result
 
-nb_uint8_ro=nb.typeof(np.frombuffer(b"\x00",dtype="u1").reshape((1,1))) # for readonly attribute of a numpy array
-@nb.njit(nb.uint16[:,:](nb_uint8_ro,nb.int64),parallel=False)
-def nb_read_uint12(raw_data, width):
-	"""
-	Convert packed 12bit data (3 bytes per 2 pixels) into unpacked 16bit data (2 bytes per pixel).
+try:
+	nb_uint8_ro=nb.typeof(np.frombuffer(b"\x00",dtype="u1").reshape((1,1))) # for readonly attribute of a numpy array
+	nb_width=nb.typeof(np.zeros([0]).shape[0])
+	@nb.njit(nb.uint16[:,:](nb_uint8_ro,nb_width),parallel=False)
+	def nb_read_uint12(raw_data, width):
+		"""
+		Convert packed 12bit data (3 bytes per 2 pixels) into unpacked 16bit data (2 bytes per pixel).
 
-	`raw_data` is a 2D numpy array with the raw frame data of dimensions ``(nrows, stride)``, where ``stride`` is the size of one row in bytes.
-	`width` is the size of the resulting row in pixels; if it is 0, assumed to be maximal possible size.
+		`raw_data` is a 2D numpy array with the raw frame data of dimensions ``(nrows, stride)``, where ``stride`` is the size of one row in bytes.
+		`width` is the size of the resulting row in pixels; if it is 0, assumed to be maximal possible size.
 
-	Funcation semantics is identical to :func:`read_uint12`, but it is implemented with Numba to speed up calculations.
-	"""
-	h,s=raw_data.shape
-	if width==0:
-		width=(s*2)//3
-	out=np.empty((h,width),dtype=nb.uint16)
-	chwidth=width//2
-	for i in range(h):
-		for j in range(chwidth):
-			fst_uint8=nb.uint16(raw_data[i,j*3])
-			mid_uint8=nb.uint16(raw_data[i,j*3+1])
-			lst_uint8=nb.uint16(raw_data[i,j*3+2])
-			out[i,j*2]=(fst_uint8<<4)|(mid_uint8&0x0F)
-			out[i,j*2+1]=(mid_uint8>>4)|(lst_uint8<<4)
-		if width%2==1:
-			fst_uint8=nb.uint16(raw_data[i,chwidth*3])
-			mid_uint8=nb.uint16(raw_data[i,chwidth*3+1])
-			out[i,width-1]=(fst_uint8<<4)|(mid_uint8&0x0F)
-	return out
+		Funcation semantics is identical to :func:`read_uint12`, but it is implemented with Numba to speed up calculations.
+		"""
+		h,s=raw_data.shape
+		if width==0:
+			width=(s*2)//3
+		out=np.empty((h,width),dtype=nb.uint16)
+		chwidth=width//2
+		for i in range(h):
+			for j in range(chwidth):
+				fst_uint8=nb.uint16(raw_data[i,j*3])
+				mid_uint8=nb.uint16(raw_data[i,j*3+1])
+				lst_uint8=nb.uint16(raw_data[i,j*3+2])
+				out[i,j*2]=(fst_uint8<<4)|(mid_uint8&0x0F)
+				out[i,j*2+1]=(mid_uint8>>4)|(lst_uint8<<4)
+			if width%2==1:
+				fst_uint8=nb.uint16(raw_data[i,chwidth*3])
+				mid_uint8=nb.uint16(raw_data[i,chwidth*3+1])
+				out[i,width-1]=(fst_uint8<<4)|(mid_uint8&0x0F)
+		return out
+except nb.errors.NumbaError:
+	nb_read_uint12=read_uint12
 
 lib=AndorSDK3Lib()

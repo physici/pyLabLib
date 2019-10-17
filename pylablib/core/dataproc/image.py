@@ -128,7 +128,7 @@ class ROI(object):
         return self
 
 
-def get_region(image, center, size, axis=(0,1)):
+def get_region(image, center, size, axis=(-2,-1)):
     """
     Get part of the image with the given center and size (both are tuples ``(i, j)``).
 
@@ -141,7 +141,7 @@ def get_region(image, center, size, axis=(0,1)):
     index[axis[1]]=slice(jspan[0],jspan[1])
     return image[tuple(index)]
 
-def get_region_sum(image, center, size, axis=(0,1)):
+def get_region_sum(image, center, size, axis=(-2,-1)):
     """
     Sum part of the image with the given center and size (both are tuples ``(i, j)``).
     

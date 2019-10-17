@@ -218,7 +218,7 @@ class DCAMLib(object):
         if self._initialized:
             return
         error_message="The library is automatically supplied with Hamamatsu HOKAWO or DCAM-API software"
-        self.lib=load_lib("dcamapi.dll",error_message=error_message)
+        self.lib=load_lib("dcamapi.dll",error_message=error_message,call_conv="stdcall")
         lib=self.lib
 
         wrapper=ctypes_wrap.CTypesWrapper(restype=ctypes.c_int, return_res=False, errcheck=errcheck())

@@ -20,7 +20,10 @@ class DCAMTimeoutError(DCAMError):
 def get_cameras_number():
     """Get number of connected Hamamatsu cameras"""
     lib.initlib()
-    return lib.dcamapi_init()
+    try:
+        return lib.dcamapi_init()
+    except DCAMLibError:
+        return 0
 _open_cameras=0
 
 def restart_lib():
@@ -203,11 +206,11 @@ class DCAMCamera(IDevice):
     def setup_ext_trigger(self, invert=False, delay=0.):
         """Setup external trigger (inversion and delay)"""
         self.set_value("TRIGGER POLARITY",2 if invert else 1)
-        self.set_value("TRIGGER DELAY",delay)
+        self.set_value("TRIGGER DELAY",delay,error_on_missing=False)
     def get_ext_trigger_parameters(self):
         """Return external trigger parameters (inversion and delay)"""
         invert=self.get_value("TRIGGER POLARITY")==2
-        delay=self.get_value("TRIGGER DELAY")
+        delay=self.get_value("TRIGGER DELAY",error_on_missing=False)
         return invert,delay
     def send_software_trigger(self):
         """Send software trigger signal"""
@@ -319,12 +322,16 @@ class DCAMCamera(IDevice):
             min_roi,max_roi=self.get_roi_limits()
             if bin==3:
                 bin=2
+            hstart=(hstart//min_roi[2])*min_roi[2]
+            hend=(hend//min_roi[2])*min_roi[2]
             self.set_value("SUBARRAY HSIZE",min_roi[2])
-            self.set_value("SUBARRAY HPOS",(hstart//4)*4)
-            self.set_value("SUBARRAY HSIZE",(max(hend-hstart,min_roi[2])//4)*4)
+            self.set_value("SUBARRAY HPOS",hstart)
+            self.set_value("SUBARRAY HSIZE",max(hend-hstart,min_roi[2]))
+            vstart=(vstart//min_roi[3])*min_roi[3]
+            vend=(vend//min_roi[3])*min_roi[3]
             self.set_value("SUBARRAY VSIZE",min_roi[3])
-            self.set_value("SUBARRAY VPOS",(vstart//4)*4)
-            self.set_value("SUBARRAY VSIZE",(max(vend-vstart,min_roi[3])//4)*4)
+            self.set_value("SUBARRAY VPOS",(vstart//min_roi[3])*min_roi[3])
+            self.set_value("SUBARRAY VSIZE",max(vend-vstart,min_roi[3]))
             self.set_value("BINNING",min(bin,max_roi[4]))
         return self.get_roi()
     def get_roi_limits(self):
