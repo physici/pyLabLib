@@ -174,7 +174,7 @@ class PhotonFocusIMAQCamera(IMAQCamera):
         self.pfcam_opened=False
         self.v=dictionary.ItemAccessor(self.get_value,self.set_value)
         try:
-            IMAQCamera.__init__(self)
+            IMAQCamera.__init__(self,imaq_name)
         except Exception:
             self.close()
             raise

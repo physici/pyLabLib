@@ -41,14 +41,21 @@ class StreamFormerThread(controller.QTaskThread):
     Methods to overload:
         :meth:`setup`: set up the thread
         :meth:`cleanup`: clean up the thread 
-        :meth:`prepare_row`: modify the new complete row before before adding it to the block
+        :meth:`prepare_new_data`: modify a new data chunk (dictionary of columns) before adding it to the storage
     """
     def setup(self):
         """Set up the thread"""
         pass
-    def prepare_row(self, row):
-        """Prepare the row"""
-        return row
+    def prepare_new_data(self, columns):
+        """
+        Prepare a newly acquried chunk.
+        
+        `column` is a dictionary ``{name: data}`` of newly acquired data,
+        where ``name`` is a channel name, and ``data`` is a list of one or more newly acquired values.
+        Returned data should be in the same format.
+        By default, no modifications are made.
+        """
+        return columns
     def on_new_block(self):
         """Gets called every time a new block is complete"""
         pass
@@ -81,12 +88,13 @@ class StreamFormerThread(controller.QTaskThread):
         For arguments, see :meth:`.StreamFormerThread.add_channel`.
         """
         QueueStatus=collections.namedtuple("QueueStatus",["queue_len","enabled","max_queue_len"])
-        def __init__(self, func=None, max_queue_len=1, required="auto", enabled=True, fill_on="started", latching=True, expand_list=False, default=None):
+        def __init__(self, func=None, max_queue_len=1, required="auto", background=False, enabled=True, fill_on="started", latching=True, expand_list=False, pure_func=True, default=None):
             object.__init__(self)
             funcargparse.check_parameter_range(fill_on,"fill_on",{"started","completed"})
             self.func=func
             self.queue=collections.deque()
             self.required=(func is None) if required=="auto" else required
+            self.background=background
             self.max_queue_len=max_queue_len
             self.enabled=enabled
             self.fill_on=fill_on
@@ -94,30 +102,50 @@ class StreamFormerThread(controller.QTaskThread):
             self.default=default
             self.latching=latching
             self.expand_list=expand_list
+            self.pure_func=pure_func
         def add(self, value):
-            """
-            Add a new value to the queue
-            
-            Return ``True`` is the value was added and the queue was expanded and ``False`` otherwise.
-            """
+            """Add a new value (or list of values) to the queue"""
             if self.expand_list and isinstance(value,list):
-                res=None
-                for v in value:
-                    res=self.add(v)
-                return res
+                vallst=value
             else:
-                data_available=bool(self.queue)
-                if self.enabled:
-                    self.queue.append(value)
-                    if not self.required or (self.max_queue_len>0 and len(self.queue)>self.max_queue_len):
-                        self.queue.popleft()
-                    if self.latching:
-                        self.last_value=value
-                return self.queue and not (data_available)
-        def add_from_func(self):
-            """Fill the queue from the function (if available)"""
+                vallst=[value]
+            if self.enabled:
+                nvals=len(vallst)
+                if not self.required:
+                    toadd=1
+                    topop=len(self.queue)
+                elif self.max_queue_len>0:
+                    nstored=len(self.queue)
+                    rest_len=self.max_queue_len-nstored
+                    if self.max_queue_len<=nvals:
+                        topop=nstored
+                        toadd=self.max_queue_len
+                    else:
+                        toadd=nvals
+                        topop=max(0,nvals-rest_len)
+                else:
+                    topop=0
+                    toadd=nvals
+                for _ in range(topop):
+                    self.queue.popleft()
+                for v in vallst[-toadd:]:
+                    self.queue.append(v)
+                if self.latching:
+                    self.last_value=vallst[-1]
+        def add_from_func(self, n=1):
+            """
+            Fill the queue from the function (if available)
+            
+            `n` specifies number of values to add.
+            """
             if self.enabled and self.func and self.fill_on=="started":
-                self.queue.append(self.func())
+                if self.pure_func:
+                    val=self.func()
+                    for _ in range(n):
+                        self.queue.append(val)
+                else:
+                    for _ in range(n):
+                        self.queue.append(self.func())
                 return True
             return False
         def queued_len(self):
@@ -126,6 +154,13 @@ class StreamFormerThread(controller.QTaskThread):
         def ready(self):
             """Check if at leas one datapoint is ready"""
             return (not self.enabled) or (not self.required) or self.queue
+        def ready_len(self):
+            """
+            Return length of the stored data.
+
+            Return 0 if no data is ready, or -1 if "infinte" amount of data is ready (e.g., channel is off)
+            """
+            return -1 if ((not self.enabled) or (not self.required)) else len(self.queue)
         def enable(self, enable=True):
             """Enable or disable the queue"""
             if self.enabled and not enable:
@@ -134,16 +169,27 @@ class StreamFormerThread(controller.QTaskThread):
         def set_requried(self, required="auto"):
             """Specify if receiving value is required"""
             self.required=(self.func is None) if required=="auto" else required
-        def get(self):
-            """Pop the oldest value"""
+        def get(self, n=1):
+            """
+            Pop the oldest values
+            
+            `n` specifies number of values to pop. Return list of values.
+            """
             if not self.enabled:
-                return None
+                return [None]*n
             elif self.queue:
-                return self.queue.popleft()
+                if self.required:
+                    return [self.queue.popleft() for _ in range(n)]
+                else:
+                    poplen=min(len(self.queue),n)
+                    res=[self.queue.popleft() for _ in range(poplen)]
+                    if poplen<n:
+                        res+=self.get(n-poplen)
+                    return res
             elif self.func:
-                return self.func()
+                return [self.func()]*n if self.pure_func else [self.func() for _ in range(n)]
             elif not self.required:
-                return self.last_value
+                return [self.last_value]*n
             else:
                 raise IndexError("no queued data to get")
         def clear(self):
@@ -159,7 +205,7 @@ class StreamFormerThread(controller.QTaskThread):
             return self.QueueStatus(len(self.queue),self.enabled,self.max_queue_len)
             
 
-    def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", fill_on="started", latching=True, expand_list=False, default=None):
+    def add_channel(self, name, func=None, max_queue_len=1, enabled=True, required="auto", background=False, fill_on="started", latching=True, expand_list=False, pure_func=True, default=None):
         """
         Add a new channel to the queue.
 
@@ -170,18 +216,23 @@ class StreamFormerThread(controller.QTaskThread):
             enabled (bool): determines if the channel is enabled by default (disabled channel always returns ``None``)
             required: determines if the channel is required to receive the value to complete the row;
                 by default, ``False`` if `func` is specified and ``True`` otherwise
+            background: if ``required==True``, determines whether receiving a new sample in this channel starts a new row (if ``background==False``),
+                or if it's simply added; if all sample-receiving channels have ``background==True``, the func-defined channels will effectively
+                be filled when the row is complete (corresponds to ``fill_on=="completed"`` regardless of its actual value).
             fill_on (str): determines when `func` is called to get the channel value;
-                can be either ``"started"`` (when the new row is created) or ``"finished"`` (when the new row is complete)
+                can be either ``"started"`` (when the new row is created) or ``"completed"`` (when the new row is complete)
             latching (bool): determines value of non-`required` channel if `func` is not supplied;
                 if ``True``, it is equal to the last received values; otherwise, it is default
             expand_list (bool): if ``True`` and the received value is list, assume that it contains several datapoints and add them sequentially
                 (note that this would generally required setting `max_queue_len`>1, otherwise only the last received value will show up)
+            pure_func (bool): if ``True``, assume that fast consecutive calls to `func` return the same result, and the function has no side-effects
+                (in this case, several consecutive calls to `func` are approxiamted by a single call result repeated necessary number of times)
             default: default channel value
         """
         if name in self.channels:
             raise KeyError("channel {} already exists".format(name))
-        self.channels[name]=self.ChannelQueue(func,max_queue_len=max_queue_len,required=required,enabled=enabled,
-            fill_on=fill_on,latching=latching,expand_list=expand_list,default=default)
+        self.channels[name]=self.ChannelQueue(func,max_queue_len=max_queue_len,required=required,background=background,enabled=enabled,
+            fill_on=fill_on,latching=latching,expand_list=expand_list,pure_func=pure_func,default=default)
         self.table[name]=[]
     def subscribe_source(self, name, srcs, dsts="any", tags=None, parse=None, filt=None):
         """
@@ -234,30 +285,35 @@ class StreamFormerThread(controller.QTaskThread):
             row={name:value}
         for name,value in viewitems(row):
             ch=self.channels[name]
-            _max_queued_before=max(_max_queued_before,ch.queued_len())
+            if not ch.background:
+                _max_queued_before=max(_max_queued_before,ch.queued_len())
             self.channels[name].add(value)
-            _max_queued_after=max(_max_queued_after,ch.queued_len())
-        row_ready=True
+            if not ch.background:
+                _max_queued_after=max(_max_queued_after,ch.queued_len())
+        new_rows=None
         for _,ch in viewitems(self.channels):
-            if not ch.ready():
-                row_ready=False
+            nready=ch.ready_len()
+            if nready==0:
+                new_rows=0
                 break
-        if row_ready:
-            new_row={}
+            elif nready>0:
+                new_rows=nready if new_rows is None else min(new_rows,nready)
+        if new_rows is not None and new_rows>0:
+            new_columns={}
             for n,ch in viewitems(self.channels):
-                new_row[n]=ch.get()
-            new_row=self.prepare_row(new_row)
-            for n,t in viewitems(self.table):
-                t.append(new_row[n])
-            self._row_cnt+=1
+                new_columns[n]=ch.get(new_rows)
+            new_columns=self.prepare_new_data(new_columns)
+            for n,ch in viewitems(new_columns):
+                self.table[n]+=new_columns[n]
+            self._row_cnt+=new_rows
             if self._row_cnt>=self.block_period:
                 self._row_cnt=0
                 self.on_new_block()
         elif _max_queued_after>_max_queued_before:
             for _,ch in viewitems(self.channels):
-                while ch.queued_len()<_max_queued_after:
-                    if not ch.add_from_func():
-                        break
+                chl=ch.queued_len()
+                if chl<_max_queued_after:
+                    ch.add_from_func(_max_queued_after-chl)
 
 
 
@@ -463,7 +519,8 @@ class TableAccumulator(object):
             maxlen: maximal column length (if stored length is larger, return last `maxlen` rows)
         """
         channels=channels or self.channels
-        return dict(zip(channels,self.get_data_columns(maxlen=maxlen)))
+        channels=list(set(channels))
+        return dict(zip(channels,self.get_data_columns(channels=channels,maxlen=maxlen)))
 
 
 class TableAccumulatorThread(controller.QTaskThread):
