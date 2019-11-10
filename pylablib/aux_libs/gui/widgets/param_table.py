@@ -60,7 +60,9 @@ class ParamTable(QtWidgets.QWidget):
             name (str): table widget name
             add_indicator (bool): if ``True``, add indicators for all added widgets by default.
             display_table (bool): as :class:`.IndicatorValuesTable` object used to access table values; by default, create one internally
-            display_table_root (str): if not ``None``, specify root (i.e., path prefix) for values inside the table.
+            display_table_root (str): if not ``None``, specify root (i.e., path prefix) for values inside the table;
+                if not specified, then there's no additional root for internal table (``display_table is None``),
+                or it is equal to `name` if there is an external table  (``display_table is not None``)
             gui_thread_safe (bool): if ``True``, all value-access and indicator-access calls
                 (``get/set_value``, ``get/set_all_values``, ``get/set_indicator``, and ``update_indicators``) are automatically called in the GUI thread.
         """
@@ -166,6 +168,18 @@ class ParamTable(QtWidgets.QWidget):
         self._add_widget(name,self.ParamRow(widget,None,value_handler,indicator_handler))
         return value_handler
 
+    def add_virtual_element(self, name, value=None, add_indicator=None):
+        """
+        Add a virtual table element.
+
+        Doesn't correspond to any actual widget, but behaves very similarly from the application point of view
+        (its value can be set or read, it has on-hcange events, it can have indicator).
+        """
+        value_handler=values_module.VirtualValueHandler(value)
+        if add_indicator is None:
+            add_indicator=self.add_indicator
+        indicator_handler=values_module.VirtualIndicatorHandler if add_indicator else None
+        self._add_widget(name,self.ParamRow(None,None,value_handler,indicator_handler))
     def add_button(self, name, caption, checkable=False, value=False, label=None, add_indicator=None, location=(None,0)):
         """
         Add a button to the table.
@@ -290,10 +304,10 @@ class ParamTable(QtWidgets.QWidget):
         """
         widget=QtWidgets.QComboBox(self)
         widget.setObjectName(_fromUtf8(self.name+"_"+name))
-        if options is not None:
+        if options:
             widget.addItems(options)
-        if value is not None:
-            widget.setCurrentIndex(value)
+            if value is not None:
+                widget.setCurrentIndex(value)
         return self.add_simple_widget(name,widget,label=label,add_indicator=add_indicator)
 
     def add_spacer(self, height, width=1, location=(None,0)):
@@ -322,7 +336,9 @@ class ParamTable(QtWidgets.QWidget):
         if names is None:
             names=self.params.keys()
         for name in names:
-            self.params[name].widget.setEnabled(not locked)
+            widget=self.params[name].widget
+            if widget is not None:
+                widget.setEnabled(not locked)
 
     @controller.gui_thread_method
     def get_value(self, name):
@@ -332,7 +348,7 @@ class ParamTable(QtWidgets.QWidget):
     def set_value(self, name, value):
         """Set value of a widget with the given name"""
         par=self.params[name]
-        if self.change_focused_control or not par.widget.hasFocus():
+        if self.change_focused_control or par.widget is None or not par.widget.hasFocus():
             return self.display_table.set_value((self.display_table_root,name),value)
     @controller.gui_thread_method
     def get_all_values(self):
@@ -361,6 +377,10 @@ class ParamTable(QtWidgets.QWidget):
     def set_indicator(self, name, value):
         """Set indicator value for a widget with the given name"""
         return self.display_table.set_indicator((self.display_table_root,name),value)
+    @controller.gui_thread_method
+    def get_all_indicators(self):
+        """Get all indicator values"""
+        return self.display_table.get_all_indicators(root=self.display_table_root)
     @controller.gui_thread_method
     def update_indicators(self):
         """Update all indicators (set their value """

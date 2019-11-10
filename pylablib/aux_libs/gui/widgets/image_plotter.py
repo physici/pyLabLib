@@ -51,14 +51,14 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.setObjectName("settings_table")
         self.layout.addWidget(self.settings_table)
         self.img_lim=(0,65536)
-        self.settings_table.setupUi("img_settings",add_indicator=True,display_table=display_table,display_table_root=display_table_root)
+        self.settings_table.setupUi("img_settings",add_indicator=False,display_table=display_table,display_table_root=display_table_root)
         self.settings_table.add_text_label("size",label="Image size:")
         self.settings_table.add_check_box("flip_x","Flip X",value=False)
         self.settings_table.add_check_box("flip_y","Flip Y",value=False,location=(-1,1))
-        self.settings_table.add_check_box("transpose","Transpose",value=False)
+        self.settings_table.add_check_box("transpose","Transpose",value=True)
         self.settings_table.add_check_box("normalize","Normalize",value=False)
-        self.settings_table.add_num_edit("minlim",value=self.img_lim[0],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Minimal intensity:")
-        self.settings_table.add_num_edit("maxlim",value=self.img_lim[1],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Maximal intensity:")
+        self.settings_table.add_num_edit("minlim",value=self.img_lim[0],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Minimal intensity:",add_indicator=True)
+        self.settings_table.add_num_edit("maxlim",value=self.img_lim[1],limiter=self.img_lim+("coerce","int"),formatter=("int"),label="Maximal intensity:",add_indicator=True)
         self.settings_table.add_check_box("show_lines","Show lines",value=True).value_changed_signal().connect(self.setup_gui_state)
         self.settings_table.add_num_edit("vlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="X line:")
         self.settings_table.add_num_edit("hlinepos",value=0,limiter=(0,None,"coerce","float"),formatter=("float","auto",1,True),label="Y line:")
@@ -101,6 +101,9 @@ class ImageViewController(QtWidgets.QWidget):
         """Set all control values"""
         self.settings_table.set_all_values(params)
         self.setup_gui_state()
+    def get_all_indicators(self):
+        """Get all GUI indicators as a dictionary"""
+        return self.settings_table.get_all_indicators()
 
 
 builtin_cmaps={ "gray":([0,1.],[(0.,0.,0.),(1.,1.,1.)]),
@@ -143,7 +146,8 @@ class ImageView(QtWidgets.QWidget):
         """
         self.name=name
         self.setObjectName(self.name)
-        self.single=False
+        self.single_armed=False
+        self.single_acquired=False
         self.layout=QtWidgets.QVBoxLayout(self)
         self.layout.setContentsMargins(0,0,0,0)
         self.layout.setObjectName("layout")
@@ -258,8 +262,10 @@ class ImageView(QtWidgets.QWidget):
 
         The image display won't be updated until :meth:`update_image` is called
         """
-        if self._get_params().v["update_image"]:
+        if self._get_params().v["update_image"] or self.single_armed:
             self.img=img
+            self.single_armed=False
+            self.single_acquired=True
     @controller.exsafe
     def center_lines(self):
         """Center coordinate lines"""
@@ -268,7 +274,7 @@ class ImageView(QtWidgets.QWidget):
         self.imgHLine.setPos(imshape[1]/2)
     def arm_single(self):
         """Arm the single-image trigger"""
-        self.single=True
+        self.single_armed=True
     def set_rectangle(self, name, center=None, size=None):
         """
         Add or change parameters of a rectangle with a given name.
@@ -363,9 +369,9 @@ class ImageView(QtWidgets.QWidget):
         with self._no_events():
             params=self._get_params()
             if not do_redraw:
-                if not (params.v["update_image"] or self.single):
+                if not (params.v["update_image"] or self.single_acquired):
                     return params
-                self.single=False
+                self.single_acquired=False
             draw_img=self.img
             if self.xbin>1:
                 draw_img=filters.decimate(draw_img,self.xbin,dec_mode=self.dec_mode,axis=0)

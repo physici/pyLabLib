@@ -14,7 +14,7 @@ class IGUIController(QtCore.QObject):
         self.widgets_desc={}
         self.widgets={}
         self.ctl=controller.get_gui_controller()
-        self.params_table=values_module.ValuesTable()
+        self.params_table=values_module.IndicatorValuesTable()
 
     TWidget=collections.namedtuple("TWidget",["params_path"])
     def add_widget_desc(self, name, params_path=None):
@@ -50,3 +50,6 @@ class IGUIController(QtCore.QObject):
     def set_all_values(self, params):
         """Set all widget parameter values"""
         return self.params_table.set_all_values(params)
+    def get_all_indicators(self):
+        """Get all GUI indicators as a dictionary"""
+        return self.params_table.get_all_indicators()

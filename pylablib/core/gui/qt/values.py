@@ -108,6 +108,39 @@ class IValueHandler(object):
             return self.widget.value_changed
         return None
 
+
+class VirtualValueHandler(IValueHandler):
+    """
+    Virtual value handler (to simulate controls which are not present in the GUI).
+
+    Args:
+        value: initial value
+        complex_value (bool): if ``True``, the internal value is assumed to be complex, so it is forced to be a :class:`.Dictionary`.
+    """
+    def __init__(self, value=None, complex_value=False):
+        IValueHandler.__init__(self,None)
+        self.complex_value=complex_value
+        self.value=dictionary.Dictionary(value) if complex_value else value
+        self.value_changed=QtCore.pyqtSignal("PyQt_PyObject")
+    def get_value(self, name=None):
+        if name is None:
+            return self.value
+        else:
+            return self.value[name]
+    def set_value(self, value, name=None):
+        if name is None:
+            if self.complex_value:
+                self.value=dictionary.Dictionary(value)
+            else:
+                self.value=value
+        else:
+            if name in self.value:
+                del self.value[name]
+            self.value[name]=value
+        self.value_changed.emit(self.value)
+    def value_changed_signal(self):
+        return self.value_changed
+
 _default_getters=("get_value","get_all_values")
 _default_setters=("set_value","set_all_values")
 class IDefaultValueHandler(IValueHandler):
@@ -389,6 +422,14 @@ class ValuesTable(object):
     def add_table(self, name, table):
         """Add a nested :class:`ValuesTable` under a given name"""
         return self.add_handler(name,IDefaultValueHandler(table))
+    def add_virtual_element(self, name, value=None):
+        """
+        Add a virtual value element.
+
+        Doesn't correspond to any actual widget, but behaves very similarly from the application point of view
+        (its value can be set or read, it has on-hcange events, it can have indicator).
+        """
+        return self.add_handler(name,VirtualValueHandler(value))
     _default_value_types=(edit.LVTextEdit,edit.LVNumEdit,QtWidgets.QLineEdit,QtWidgets.QCheckBox,QtWidgets.QPushButton,QtWidgets.QComboBox)
     def add_all_children(self, root, root_name=None, types_include=None, types_exclude=(), names_exclude=None):
         """
@@ -507,8 +548,10 @@ class IIndicatorHandler(object):
         If ``name`` is not ``None``, it specifies the name of the indicator parameter inside the widget (for complex widgets).
         """
         raise NotImplementedError("IIndicatorHandler.set_value")
-_default_indicator_getters=("get_indicator",)
-_default_indicator_setters=("set_indicator",)
+
+VirtualIndicatorHandler=VirtualValueHandler
+_default_indicator_getters=("get_indicator","get_all_indicators")
+_default_indicator_setters=("set_indicator","set_all_indicators")
 class IDefaultIndicatorHandler(IIndicatorHandler):
     """
     Default indicator handler, typically used for custom widgets.
@@ -523,31 +566,43 @@ class IDefaultIndicatorHandler(IIndicatorHandler):
         IIndicatorHandler.__init__(self)
         self.widget=widget
         self.get_indicator_kind=get_method_kind(getattr(self.widget,"get_indicator",None))
-        if not self.get_indicator_kind:
-            raise ValueError("can't find default indicator getter for widget {}".format(self.widget))
+        self.get_all_indicators_kind="simple" if hasattr(self.widget,"get_all_indicators") else None
         self.set_indicator_kind=get_method_kind(getattr(self.widget,"get_indicator",None),add_args=1)
-        if not self.set_indicator_kind:
-            raise ValueError("can't find default indicator setter for widget {}".format(self.widget))
+        self.set_all_indicators_kind="simple" if hasattr(self.widget,"set_all_indicators") else None
         self.default_name=default_name
     def get_value(self, name=None):
+        if not (self.get_indicator_kind or self.get_all_indicators_kind):
+            raise ValueError("can't find default indicator getter for widget {}".format(self.widget))
         if not name:
             if self.get_indicator_kind=="simple":
                 return self.widget.get_indicator()
             elif self.get_indicator_kind=="named":
                 return self.widget.get_indicator(self.default_name)
+            else:
+                return self.widget.get_all_indicators()
         else:
             if self.get_indicator_kind=="named":
                 return self.widget.get_indicator()
+            elif self.get_all_indicators_kind=="simple":
+                return self.widget.get_all_indicators()[name]
         raise ValueError("can't find indicator getter for widget {} with name {}".format(self.widget,name))
     def set_value(self, value, name=None):
+        if not (self.set_indicator_kind or self.set_all_indicators_kind):
+            raise ValueError("can't find default indicator setter for widget {}".format(self.widget))
         if not name:
             if self.set_indicator_kind=="simple":
                 return self.widget.set_indicator(value)
             elif self.set_indicator_kind=="named":
                 return self.widget.set_indicator(self.default_name,value)
+            else:
+                return self.widget.set_all_indicators(value)
         else:
             if self.set_indicator_kind=="named":
                 return self.widget.set_indicator(name,value)
+            elif self.set_all_indicators_kind=="simple":
+                if isinstance(name,list):
+                    name="/".join(name)
+                return self.widget.set_all_indicators({name:value})
         raise ValueError("can't find indicator setter for widget {} with name {}".format(self.widget,name))
 class FuncLabelIndicatorHandler(IIndicatorHandler):
     """
@@ -621,12 +676,13 @@ class WidgetLabelIndicatorHandler(IIndicatorHandler):
     def set_value(self, value, name=None):
         return self.label_handler.set_value(self.repr_value(value,name=name))
 
-def get_default_indicator_handler(widget, label=None):
+def get_default_indicator_handler(widget, label=None, require_setter=False):
     """Autodetect indicator handler for the given widget and label"""
     if label is not None:
         return WidgetLabelIndicatorHandler(label,widget)
-    if has_methods(widget,[_default_indicator_getters,_default_indicator_setters]):
-        return IDefaultIndicatorHandler(widget)
+    if has_methods(widget,[_default_indicator_getters]):
+        if (not require_setter) or has_methods(widget,[_default_indicator_setters]):
+            return IDefaultIndicatorHandler(widget)
     return None
 
 
@@ -684,6 +740,18 @@ class IndicatorValuesTable(ValuesTable):
         `ind_name` can distinguish different sub-indicators with the same name, if the same value has multiple indicators.
         """
         return self.add_indicator_handler(name,FuncLabelIndicatorHandler(label,repr_func=repr_func),ind_name=ind_name)
+    def add_widget(self, name, widget):
+        h=ValuesTable.add_widget(self,name,widget)
+        self.add_indicator_handler(name,IDefaultIndicatorHandler(widget))
+        return h
+    def add_virtual_element(self, name, value=None):
+        h=ValuesTable.add_virtual_element(self,name,value=value)
+        self.add_indicator_handler(name,VirtualIndicatorHandler(value))
+        return h
+    def add_table(self, name, table):
+        h=ValuesTable.add_table(self,name,table)
+        self.add_indicator_handler(name,IDefaultIndicatorHandler(table))
+        return h
 
     @controller.gui_thread_method
     def get_indicator(self, name, ind_name="__default__"):
@@ -713,7 +781,7 @@ class IndicatorValuesTable(ValuesTable):
                 if (include is None) or ("/".join(n) in include):
                     try:
                         values[n]=self.get_indicator(n,ind_name=ind_name)
-                    except KeyError:
+                    except (KeyError, ValueError):
                         pass
         return values
     @controller.gui_thread_method
@@ -745,7 +813,10 @@ class IndicatorValuesTable(ValuesTable):
         for n,v in dictionary.as_dictionary(values).iternodes(include_path=True):
             if self.indicator_handlers.has_entry((root,n,"__default__"),kind="leaf"):
                 if (include is None) or ("/".join(n) in include):
-                    self.set_indicator((root,n),v)
+                    try:
+                        self.set_indicator((root,n),v)
+                    except ValueError:
+                        pass
     @controller.gui_thread_method
     def update_indicators(self, root="", include=None):
         """
@@ -756,4 +827,7 @@ class IndicatorValuesTable(ValuesTable):
             if (include is None) or ("/".join(n) in include):
                 p=(root,n)
                 if p in self.indicator_handlers:
-                    self.set_indicator(p,self.get_value(p))
+                    try:
+                        self.set_indicator(p,self.get_value(p))
+                    except ValueError:
+                        pass
