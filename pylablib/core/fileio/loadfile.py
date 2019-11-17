@@ -133,6 +133,7 @@ def _load_dict_and_comments(f, case_normalization=None, inline_dtype="generic"):
     data=dictionary.Dictionary(case_sensitive=case_sensitive, case_normalization=case_normalization or "lower")
     comment_lines=[]
     line=f.readline()
+    root_keys=[]
     prev_key=None
     while line:
         line=line.strip()
@@ -141,9 +142,19 @@ def _load_dict_and_comments(f, case_normalization=None, inline_dtype="generic"):
                 parsed=_parse_dict_line(line)
                 if parsed is not None:
                     if len(parsed)==1:
-                        prev_key=parsed # single-key line possibly means that an inline table follows
+                        key=parsed[0]
+                        if key.startswith("///"): # root key one level up
+                            root_keys=root_keys[:-1]
+                        elif key.startswith("//"): # new nested root key
+                            root_keys.append(key[2:])
+                        else:
+                            if root_keys:
+                                key="/".join(root_keys)+"/"+key
+                            prev_key=(key,) # single-key line possibly means that an inline table follows
                     else:
                         key,value=parsed
+                        if root_keys:
+                            key="/".join(root_keys)+"/"+key
                         data[key]=value
                         prev_key=key
             else:

@@ -386,9 +386,18 @@ class ParamTable(QtWidgets.QWidget):
         """Update all indicators (set their value """
         return self.display_table.update_indicators(root=self.display_table_root,include=self.params)
 
-    def clear(self):
-        """Clear the table (remove all widgets)"""
+    def clear(self, disconnect=False):
+        """
+        Clear the table (remove all widgets)
+        
+        If ``disconnect==True``, also disconnect all slots connected to the ``value_changed`` signal.
+        """
         if self.params:
+            if disconnect:
+                try:
+                    self.value_changed.disconnect()
+                except TypeError: # no signals connected
+                    pass
             for name in self.params:
                 path=(self.display_table_root,name)
                 self.display_table.remove_handler(path)

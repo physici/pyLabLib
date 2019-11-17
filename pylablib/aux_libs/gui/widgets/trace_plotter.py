@@ -12,6 +12,7 @@ from ....core.gui.qt.thread import controller
 from ....core.gui.qt import values as values_module
 from ....core.utils import funcargparse, dictionary
 from ....core.dataproc import waveforms
+from ..helpers import TableAccumulator, TableAccumulatorThread
 
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph
@@ -43,15 +44,16 @@ class TracePlotterController(QtWidgets.QWidget):
         self.display_table=display_table or values_module.IndicatorValuesTable()
         self.display_table_root=display_table_root or ""
         self.plotter=plotter
-        self.plotter.attach_controller(self)
+        self.plotter._attach_controller(self)
 
         self.name=name
         self.setObjectName(self.name)
-        self.layout = QtWidgets.QVBoxLayout(self)
-        self.layout.setContentsMargins(0,0,0,0)
-        self.layout.setObjectName("layout")
+        self.hLayout = QtWidgets.QVBoxLayout(self)
+        self.hLayout.setContentsMargins(0,0,0,0)
+        self.hLayout.setObjectName("hLayout")
         self.channelsGroupBox = QtWidgets.QGroupBox(self)
         self.channelsGroupBox.setObjectName("channelsGroupBox")
+        self.channelsGroupBox.setTitle("Channels")
         self.channelsGroupLayout = QtWidgets.QVBoxLayout(self.channelsGroupBox)
         self.channelsGroupLayout.setContentsMargins(0, 0, 0, -1)
         self.channelsGroupLayout.setObjectName("channelsGroupLayout")
@@ -59,9 +61,10 @@ class TracePlotterController(QtWidgets.QWidget):
         self.channels_table.setMinimumSize(QtCore.QSize(20, 20))
         self.channels_table.setObjectName("channels_table")
         self.channelsGroupLayout.addWidget(self.channels_table)
-        self.layout.addWidget(self.channelsGroupBox)
+        self.hLayout.addWidget(self.channelsGroupBox)
         self.plottingGroupBox = QtWidgets.QGroupBox(self)
         self.plottingGroupBox.setObjectName("plottingGroupBox")
+        self.plottingGroupBox.setTitle("Plotting")
         self.plottingGroupLayout = QtWidgets.QHBoxLayout(self.plottingGroupBox)
         self.plottingGroupLayout.setContentsMargins(0, 0, 0, -1)
         self.plottingGroupLayout.setObjectName("plottingGroupLayout")
@@ -69,10 +72,10 @@ class TracePlotterController(QtWidgets.QWidget):
         self.plot_params_table.setMinimumSize(QtCore.QSize(20, 20))
         self.plot_params_table.setObjectName("plot_params_table")
         self.plottingGroupLayout.addWidget(self.plot_params_table)
-        self.layout.addWidget(self.plottingGroupBox)
+        self.hLayout.addWidget(self.plottingGroupBox)
         spacerItem = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.layout.addItem(spacerItem)
-        self.layout.setStretch(2, 1)
+        self.hLayout.addItem(spacerItem)
+        self.hLayout.setStretch(2, 1)
 
         self.channels_table.setupUi("channels",add_indicator=False,display_table=self.display_table,display_table_root=self.display_table_root+"/channels")
         self.setup_channels()
@@ -80,8 +83,6 @@ class TracePlotterController(QtWidgets.QWidget):
         self.plot_params_table.add_button("update_plot","Updating",checkable=True)
         self.plot_params_table.add_num_edit("disp_last",1,limiter=(1,None,"coerce","int"),formatter=("int"),label="Display last: ")
         self.plot_params_table.add_button("reset_history","Reset").value_changed_signal().connect(self.plotter.reset_history)
-
-        self.plotter.attach_controller(self)
 
     def get_all_values(self):
         """Get all control values"""
@@ -102,11 +103,11 @@ class TracePlotterController(QtWidgets.QWidget):
         """
         self.channels_table.clear()
         if self.plotter.channel_indices:
-            channel_names=[self.plotter.channels[idx,"name"] for idx in self.plotter.channel_indices]
+            channel_names=[self.plotter.channels[idx]["name"] for idx in self.plotter.channel_indices]
             self.channels_table.add_combo_box("xaxis",0,options=channel_names,label="X axis")
             self.channels_table.add_combo_box("order_by",0,options=channel_names,label="Order by")
             for idx in self.plotter.channel_indices:
-                name=self.plotter.channels[idx,"name"]
+                name=self.plotter.channels[idx]["name"]
                 self.channels_table.add_check_box(idx+"_enabled",name)
     def get_enabled_channels(self):
         """Get a list of enabled channels"""
@@ -118,6 +119,9 @@ class TracePlotter(QtWidgets.QWidget):
     Trace plotter object.
 
     Built on top of :class:`pyqtgraph.PlotWidget` class.
+
+    Intended for plotting of gradually-accumulated data;
+    designed to work tightly with :class:`.TableAccumulator` or :class:`TableAccumulatorThread` as data sources.
 
     Args:
         parent: parent widget
@@ -135,12 +139,12 @@ class TracePlotter(QtWidgets.QWidget):
         """
         self.name=name
         self.setObjectName(self.name)
-        self.layout=QtWidgets.QVBoxLayout(self)
-        self.layout.setContentsMargins(0,0,0,0)
-        self.layout.setObjectName("layout")
+        self.hLayout=QtWidgets.QVBoxLayout(self)
+        self.hLayout.setContentsMargins(0,0,0,0)
+        self.hLayout.setObjectName("layout")
         self.plotWidget = pyqtgraph.PlotWidget(self)
         self.plotWidget.setObjectName("plotWidget")
-        self.layout.addWidget(self.plotWidget)
+        self.hLayout.addWidget(self.plotWidget)
         self.plotWidget.addLegend()
         self.plotWidget.setLabel("left","Signal")
         self.plotWidget.showGrid(True,True,0.7)
@@ -148,14 +152,14 @@ class TracePlotter(QtWidgets.QWidget):
         self.ctl=None
         self.channels={}
         self.channel_indices=[]
-        self.data_src_kind="none"
+        self.data_src_kind=None
         self.data_src=None
         self.add_end_marker=add_end_marker
         self.displayed=[]
         self.vlines=[]
         self.vmarks=[]
     
-    def attach_controller(self, ctl):
+    def _attach_controller(self, ctl):
         """
         Attach :class:`TracePlotterController` object.
 
@@ -174,7 +178,7 @@ class TracePlotter(QtWidgets.QWidget):
         ``"factor"`` - rescaling factor applied before plotting.
         """
         self.channels=channels.copy()
-        self.channel_indices=channel_indices or list(channels.keys(ordered=True))
+        self.channel_indices=channel_indices or sorted(channels.keys())
         mpl_colors=['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#bcbd22','#17becf']
         old_style_colors=['#40FF40','#4040FF','#FF4040','#FFFF00','#00FFFF','#FF00FF','#C0C0C0','#404040']
         colors=(mpl_colors+old_style_colors)*len(channels)
@@ -186,7 +190,9 @@ class TracePlotter(QtWidgets.QWidget):
                 ch["color"]=colors.pop(0)
         if self.ctl:
             self.ctl.setup_channels()
-        self.update_plot_lines()
+        self._update_plot_lines()
+
+
 
     on_reset=QtCore.pyqtSignal()
     @controller.exsafeSlot()
@@ -202,7 +208,7 @@ class TracePlotter(QtWidgets.QWidget):
 
 
 
-    def update_plot_lines(self):
+    def _update_plot_lines(self):
         """
         Update plot lines settings.
         
@@ -230,7 +236,7 @@ class TracePlotter(QtWidgets.QWidget):
         enabled=self.ctl.get_enabled_channels() if self.ctl else self.channel_indices
         if enabled!=self.displayed:
             self.displayed=enabled
-            self.update_plot_lines()
+            self._update_plot_lines()
         return enabled
     
     def _get_required_channels(self):
@@ -259,7 +265,7 @@ class TracePlotter(QtWidgets.QWidget):
         return table_accum_thread.get_data_sync(channels,maxlen=maxlen,fmt="dict")
 
 
-    def setup_data_source(self, src=None, kind="none"):
+    def setup_data_source(self, src=None):
         """
         Setup data source.
         
@@ -267,9 +273,15 @@ class TracePlotter(QtWidgets.QWidget):
         The source is used to automatically grab channel data and receive reset commands.
         Not necessary, if the data is provided explicitly to :meth:`update_plot`.
         """
-        funcargparse.check_parameter_range(kind,"kind",["none","accum","accum_thread"])
-        self.data_src_kind=kind
-        self.data_src=None if kind=="none" else src
+        if isinstance(src,TableAccumulator):
+            self.data_src_kind="accum"
+        elif isinstance(src,TableAccumulatorThread):
+            self.data_src_kind="accum_thread"
+        elif src is None:
+            self.data_src_kind=None
+        else:
+            raise ValueError("unrecognized data source: {}".format(src))
+        self.data_src=src
     def get_data_from_source(self):
         """
         Get data from the default source.
@@ -309,7 +321,7 @@ class TracePlotter(QtWidgets.QWidget):
             for idx in data_channels:
                 col=np.asarray(data[idx])
                 if "factor" in self.channels[idx]:
-                    col=col*self.channels[idx,"factor"]
+                    col=col*self.channels[idx]["factor"]
                 norm_data.append(col)
             if norm_data and len(norm_data[0]):
                 last_pts=[col[-1] for col in norm_data]
@@ -329,4 +341,4 @@ class TracePlotter(QtWidgets.QWidget):
                         vm.setData([last_pts[0]],[pt])
             if any(autorange):
                 self.plotWidget.plotItem.enableAutoRange(x=autorange[0],y=autorange[1])
-            self.plotWidget.setLabel("bottom",self.channels[xaxis,"legend_name"])
+            self.plotWidget.setLabel("bottom",self.channels[xaxis]["legend_name"])

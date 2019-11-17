@@ -42,14 +42,14 @@ class ImageViewController(QtWidgets.QWidget):
         """
         self.name=name
         self.setObjectName(self.name)
-        self.layout=QtWidgets.QHBoxLayout(self)
-        self.layout.setContentsMargins(0,0,0,0)
-        self.layout.setObjectName("layout")
+        self.hLayout=QtWidgets.QHBoxLayout(self)
+        self.hLayout.setContentsMargins(0,0,0,0)
+        self.hLayout.setObjectName("hLayout")
         self.view=view
-        self.view.attach_controller(self)
+        self.view._attach_controller(self)
         self.settings_table=ParamTable(self)
         self.settings_table.setObjectName("settings_table")
-        self.layout.addWidget(self.settings_table)
+        self.hLayout.addWidget(self.settings_table)
         self.img_lim=(0,65536)
         self.settings_table.setupUi("img_settings",add_indicator=False,display_table=display_table,display_table_root=display_table_root)
         self.settings_table.add_text_label("size",label="Image size:")
@@ -67,7 +67,7 @@ class ImageViewController(QtWidgets.QWidget):
         self.settings_table.add_button("center_lines","Center lines").value_changed_signal().connect(view.center_lines)
         self.settings_table.value_changed.connect(lambda: self.view.update_image(update_controls=False,do_redraw=True))
         self.settings_table.add_spacer(10)
-        self.settings_table.add_button("update_image","Updating",checkable=True)
+        self.settings_table.add_button("update_image","Updating",checkable=True).value_changed_signal().connect(view._set_image_update)
         self.settings_table.add_button("single","Single").value_changed_signal().connect(self.view.arm_single)
         self.settings_table.add_padding()
 
@@ -76,6 +76,7 @@ class ImageViewController(QtWidgets.QWidget):
         Set up image limits
 
         Can specify either only upper limit (lower stays the same), or both limits.
+        Value of ``None`` implies no limit.
         """
         if len(args)==1:
             self.img_lim=(self.img_lim[0],args[0])
@@ -148,10 +149,11 @@ class ImageView(QtWidgets.QWidget):
         self.setObjectName(self.name)
         self.single_armed=False
         self.single_acquired=False
-        self.layout=QtWidgets.QVBoxLayout(self)
-        self.layout.setContentsMargins(0,0,0,0)
-        self.layout.setObjectName("layout")
+        self.hLayout=QtWidgets.QVBoxLayout(self)
+        self.hLayout.setContentsMargins(0,0,0,0)
+        self.hLayout.setObjectName("hLayout")
         self.img=np.zeros(img_size)
+        self.do_image_update=False
         self.xbin=1
         self.ybin=1
         self.dec_mode="mean"
@@ -159,8 +161,8 @@ class ImageView(QtWidgets.QWidget):
             self.setMinimumSize(QtCore.QSize(*min_size))
         self.imageWindow=pyqtgraph.ImageView(self)
         self.imageWindow.setObjectName("imageWindow")
-        self.layout.addWidget(self.imageWindow)
-        self.layout.setStretch(0,4)
+        self.hLayout.addWidget(self.imageWindow)
+        self.hLayout.setStretch(0,4)
         self.set_colormap("hot_sat")
         self.imageWindow.ui.roiBtn.hide()
         self.imageWindow.ui.menuBtn.hide()
@@ -182,8 +184,8 @@ class ImageView(QtWidgets.QWidget):
         self.cut_lines=[pyqtgraph.PlotCurveItem(pen="#B0B000",name="Horizontal"), pyqtgraph.PlotCurveItem(pen="#B000B0",name="Vertical")]
         for c in self.cut_lines:
             self.plotWindow.addItem(c)
-        self.layout.addWidget(self.plotWindow)
-        self.layout.setStretch(1,1)
+        self.hLayout.addWidget(self.plotWindow)
+        self.hLayout.setStretch(1,1)
         self.plotWindow.setVisible(False)
         self._signals_connected=False
         self._connect_signals()
@@ -192,7 +194,7 @@ class ImageView(QtWidgets.QWidget):
         self.imageWindow.getHistogramWidget().sigLevelsChanged.connect(self.update_image_controls)
         self.rectangles={}
 
-    def attach_controller(self, ctl):
+    def _attach_controller(self, ctl):
         """
         Attach :class:`ImageViewController` object.
 
@@ -212,6 +214,9 @@ class ImageView(QtWidgets.QWidget):
                 "hlinepos":0,
                 "linecut_width":0,
                 "update_image":True})
+    @controller.exsafeSlot("bool")
+    def _set_image_update(self, do_update):
+        self.do_image_update=do_update
 
     def set_colormap(self, cmap):
         """
@@ -260,9 +265,11 @@ class ImageView(QtWidgets.QWidget):
         """
         Set the current image.
 
-        The image display won't be updated until :meth:`update_image` is called
+        The image display won't be updated until :meth:`update_image` is called.
+        This function is thread-safe (i.e., the application state remains consistent if it's called from another thread,
+        although race conditions on simultaneous calls from multiple threads still might happen).
         """
-        if self._get_params().v["update_image"] or self.single_armed:
+        if self.do_image_update or self.single_armed:
             self.img=img
             self.single_armed=False
             self.single_acquired=True
@@ -359,17 +366,20 @@ class ImageView(QtWidgets.QWidget):
         return img
     # Update image plot
     @controller.exsafe
-    def update_image(self, update_controls=False, do_redraw=False):
+    def update_image(self, update_controls=False, do_redraw=False, only_new_image=True):
         """
         Update displayed image.
 
         If ``update_controls==True``, update control values (such as image min/max values and line positions).
         If ``do_redraw==True``, force update regardless of the ``"update_image"`` button state; otherwise, update only if it is enabled.
+        If ``only_new_image==True`` and the image hasn't changed since the last call to ``update_image``, skip redraw (however, if ``do_redraw==True``, force redrawing regardless).
         """
         with self._no_events():
             params=self._get_params()
             if not do_redraw:
                 if not (params.v["update_image"] or self.single_acquired):
+                    return params
+                if only_new_image and not self.single_acquired:
                     return params
                 self.single_acquired=False
             draw_img=self.img

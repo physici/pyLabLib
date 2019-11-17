@@ -15,7 +15,7 @@ _default_signal_pool=spool.SignalPool()
 
 _created_threads={}
 _running_threads={}
-_stopped_threads={}
+_stopped_threads=set()
 _running_threads_lock=threading.Lock()
 _running_threads_notifier=synchronizing.QMultiThreadNotifier()
 _running_threads_stopping=False
@@ -177,6 +177,7 @@ class QThreadController(QtCore.QObject):
         self._params_val_lock=threading.Lock()
         self._params_exp={}
         self._params_exp_lock=threading.Lock()
+        self._params_funcs=dictionary.Dictionary()
         # set up high-level synchronization
         self._exec_notes={}
         self._exec_notes_lock=threading.Lock()
@@ -471,6 +472,8 @@ class QThreadController(QtCore.QObject):
         split_name=tuple(dictionary.normalize_path(name))
         notify_list=[]
         with self._params_val_lock:
+            if name in self._params_funcs:
+                del self._params_funcs[name]
             self._params_val.add_entry(name,value,force=True)
             for exp_name in self._params_exp:
                 if exp_name==split_name[:len(exp_name)] or split_name==exp_name[:len(split_name)]:
@@ -481,12 +484,29 @@ class QThreadController(QtCore.QObject):
         if notify:
             notify_tag.replace("*",name)
             self.send_signal("any",notify_tag,value)
+    def set_func_variable(self, name, func, use_lock=True):
+        """
+        Set a 'function' variable.
+
+        Acts as a thread variable to the extrnal user, but instead of reading a stored value, it executed a function instead.
+        Note, that the function is executed in the caller thread (i.e., the thread which tries to access the variable),
+        so use of synchronization methods (commands, signals, locks) is highly advised.
+
+        If ``use_lock==True``, then the function call will be wrapped into the usual variable lock,
+        i.e., it won't run concurrently with other variable access.
+        """
+        with self._params_val_lock:
+            self._params_funcs[name]=func,use_lock
+            if name in self._params_val:
+                del self._params_val[name]
     def __setitem__(self, name, value):
         self.set_variable(name,value)
     def __delitem__(self, name):
         with self._params_val_lock:
             if name in self._params_val:
                 del self._params_val[name]
+            if name in self._params_funcs:
+                del self._params_funcs[name]
     def __contains__(self, name):
         with self._params_val_lock:
             return name in self._params_val
@@ -518,11 +538,21 @@ class QThreadController(QtCore.QObject):
         If ``copy_branch==True`` and the variable is a :class:`.Dictionary` branch, return its copy to ensure that it stays unaffected on possible further variable assignments.
         """
         with self._params_val_lock:
-            if missing_error and name not in self._params_val:
+            if name in self._params_val:
+                var=self._params_val[name]
+                if copy_branch and dictionary.is_dictionary(var):
+                    var=var.copy()
+            elif name in self._params_funcs:
+                func,use_lock=self._params_funcs[name]
+                if use_lock:
+                    with self._params_val_lock:
+                        var=func()
+                else:
+                    var=func()
+            elif missing_error:
                 raise KeyError("no parameter {}".format(name))
-            var=self._params_val.get(name,default)
-            if copy_branch and dictionary.is_dictionary(var):
-                var=var.copy()
+            else:
+                var=default
         return var
     def __getitem__(self, name):
         return self.get_variable(name,missing_error=True)
@@ -1242,7 +1272,7 @@ def _unregister_controller(controller):
         name=controller.name
         if name not in _running_threads:
             raise threadprop.NoControllerThreadError("thread with name {} doesn't exist".format(name))
-        _stopped_threads[name]=controller
+        _stopped_threads.add(name)
         del _running_threads[name]
     _running_threads_notifier.notify()
 

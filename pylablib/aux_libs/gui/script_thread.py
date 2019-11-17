@@ -1,5 +1,5 @@
 from ...core.gui.qt.thread import controller, signal_pool
-from ...core.utils import general
+from ...core.utils import general, functions
 
 from PyQt5 import QtCore
 
@@ -96,7 +96,7 @@ class ScriptThread(controller.QTaskThread):
 
 
     def setup_task(self, *args, **kwargs):
-        self.setup_script(*args,**kwargs)
+        functions.call_cut_args(self.setup_script,*args,**kwargs)
     def finalize_task(self):
         self.finalize_script()
 
