@@ -14,7 +14,7 @@ class LVNumLabel(QtWidgets.QLabel):
         self._value=None
         self.allow_text=allow_text
         if value is not None:
-            self.set_value(None)
+            self.set_value(value)
             
     def change_limiter(self, limiter):
         """Change current numerical limiter"""

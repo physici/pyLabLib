@@ -180,11 +180,18 @@ def remove_longest_term(msg, terms):
 
 _backends={}
 
-class IBackendOpenError(RuntimeError):
+class IBackendOpenError(IOError):
     pass
 
 try:
     import visa
+
+    class VisaBackendOpenError(IBackendOpenError,visa.VisaIOError):
+        """Visa backend opening error"""
+        def __init__(self, e):
+            IBackendOpenError.__init__(self)
+            visa.VisaIOError.__init__(self,e.error_code)
+
     class VisaDeviceBackend(IDeviceBackend):
         """
         NIVisa backend (via pyVISA).
@@ -203,12 +210,8 @@ try:
         _default_operation_cooldown=0.03
         _backend="visa"
         Error=visa.VisaIOError
-        """Base class for the errors raised by the backend operations""" 
-        class BackendOpenError(IBackendOpenError,visa.VisaIOError):
-            """Visa backend opening error"""
-            def __init__(self, e):
-                IBackendOpenError.__init__(self)
-                visa.VisaIOError.__init__(self,e.error_code)
+        """Base class for the errors raised by the backend operations"""
+        BackendOpenError=VisaBackendOpenError
         
         if visa.__version__<"1.6": # older pyvisa versions have a slightly different interface
             def _set_timeout(self, timeout):
@@ -271,7 +274,7 @@ try:
                 self.cooldown()
                 self.set_timeout(timeout)
             except self.Error as e:
-                raise self.BackendOpenError(e)
+                raise VisaBackendOpenError(e)
             
         def open(self):
             """Open the connection."""
@@ -385,6 +388,12 @@ except ImportError:
 try:
     import serial
 
+    class SerialBackendOpenError(IBackendOpenError,serial.SerialException):
+        """Serial backend opening error"""
+        def __init__(self, e):
+            IBackendOpenError.__init__(self)
+            serial.SerialException.__init__(self,*e.args)
+
     class SerialDeviceBackend(IDeviceBackend):
         """
         Serial backend (via pySerial).
@@ -410,11 +419,7 @@ try:
         _backend="serial"
         Error=serial.SerialException
         """Base class for the errors raised by the backend operations"""
-        class BackendOpenError(IBackendOpenError,serial.SerialException):
-            """Serial backend opening error"""
-            def __init__(self, e):
-                IBackendOpenError.__init__(self)
-                serial.SerialException.__init__(self,*e.args)
+        BackendOpenError=SerialBackendOpenError
         
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts","dsrdtr"]
         _default_conn=["COM1",19200,8,"N",1,0,0,0]
@@ -446,7 +451,7 @@ try:
                 self.cooldown()
                 self.set_timeout(timeout)
             except self.Error as e:
-                raise self.BackendOpenError(e) from None
+                raise SerialBackendOpenError(e) from None
             
         def _do_open(self):
             general.retry_wait(self.instr.open, self._open_retry_times, 0.3)
@@ -617,6 +622,12 @@ except ImportError:
 try:
     import ft232
 
+    class FT232BackendOpenError(IBackendOpenError,ft232.Ft232Exception):
+        """FT232 backend opening error"""
+        def __init__(self, e):
+            IBackendOpenError.__init__(self)
+            ft232.Ft232Exception.__init__(self,*e.args)
+
     class FT232DeviceBackend(IDeviceBackend):
         """
         FT232 backend (via pyft232).
@@ -642,11 +653,7 @@ try:
         _backend="ft232"
         Error=ft232.Ft232Exception
         """Base class for the errors raised by the backend operations"""
-        class BackendOpenError(IBackendOpenError,ft232.Ft232Exception):
-            """FT232 backend opening error"""
-            def __init__(self, e):
-                IBackendOpenError.__init__(self)
-                ft232.Ft232Exception.__init__(self,*e.args)
+        BackendOpenError=FT232BackendOpenError
         
         _conn_params=["port","baudrate","bytesize","parity","stopbits","xonxoff","rtscts"]
         _default_conn=[None,9600,8,"N",1,0,0]
@@ -671,7 +678,7 @@ try:
                 self.set_timeout(timeout)
                 self._conn_params=(port,conn_dict,timeout)
             except self.Error as e:
-                raise self.BackendOpenError(e)
+                raise FT232BackendOpenError(e)
             
         def _do_open(self):
             if self.is_opened():
@@ -828,6 +835,11 @@ except (ImportError,NameError,OSError):
 
 
 
+class NetworkBackendOpenError(IBackendOpenError,net.socket.error):
+    """Network backend opening error"""
+    def __init__(self, e):
+        IBackendOpenError.__init__(self)
+        net.socket.error.__init__(self,*e.args)
 
 class NetworkDeviceBackend(IDeviceBackend):
     """
@@ -852,11 +864,7 @@ class NetworkDeviceBackend(IDeviceBackend):
     _backend="network"
     Error=net.socket.error
     """Base class for the errors raised by the backend operations"""
-    class BackendOpenError(IBackendOpenError,net.socket.error):
-        """Network backend opening error"""
-        def __init__(self, e):
-            IBackendOpenError.__init__(self)
-            net.socket.error.__init__(self,*e.args)
+    BackendOpenError=NetworkBackendOpenError
 
     def __init__(self, conn, timeout=10., term_write=None, term_read=None, datatype="auto"):
         if term_write is None:
@@ -875,7 +883,7 @@ class NetworkDeviceBackend(IDeviceBackend):
             self.cooldown()
             self.set_timeout(timeout)
         except self.Error as e:
-            raise self.BackendOpenError(e)
+            raise NetworkBackendOpenError(e)
     
     _conn_params=["addr","port"]
     _default_conn=["127.0.0.1",80]
@@ -1004,6 +1012,12 @@ try:
     import usb.backend.libusb1
     import usb.backend.openusb
 
+    class PyUSBBackendOpenError(IBackendOpenError,usb.USBError):
+        """USB backend opening error"""
+        def __init__(self, e):
+            IBackendOpenError.__init__(self)
+            usb.USBError.__init__(self,*e.args)
+
     class PyUSBDeviceBackend(IDeviceBackend):
         """
         USB backend (via PyUSB package).
@@ -1025,11 +1039,7 @@ try:
         _backend="pyusb"
         Error=usb.USBError
         """Base class for the errors raised by the backend operations"""
-        class BackendOpenError(IBackendOpenError,usb.USBError):
-            """USB backend opening error"""
-            def __init__(self, e):
-                IBackendOpenError.__init__(self)
-                usb.USBError.__init__(self,*e.args)
+        BackendOpenError=PyUSBBackendOpenError
         
         _conn_params=["vendorID","productID","index","endpoint_read","endpoint_write","backend"]
         _default_conn=[0x0000,0x0000,0,0x00,0x01,"libusb1"]
@@ -1047,7 +1057,7 @@ try:
             try:
                 self.open()
             except self.Error as e:
-                raise self.BackendOpenError(e)
+                raise PyUSBBackendOpenError(e)
             
         def open(self):
             """Open the connection."""
@@ -1055,7 +1065,7 @@ try:
             backend=self._usb_backends[self.conn["backend"]].get_backend()
             all_devs=list(usb.core.find(idVendor=self.conn["vendorID"],idProduct=self.conn["productID"],backend=backend,find_all=True))
             if len(all_devs)<idx+1:
-                raise self.BackendOpenError("can't find device with index {}; {} devices found".format(idx,len(all_devs)))
+                raise PyUSBBackendOpenError("can't find device with index {}; {} devices found".format(idx,len(all_devs)))
             self.instr=all_devs[idx]
             self.ep_read=self.conn["endpoint_read"]
             self.ep_write=self.conn["endpoint_write"]

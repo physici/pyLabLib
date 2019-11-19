@@ -229,13 +229,13 @@ class ParamTable(QtWidgets.QWidget):
         if value is not None:
             widget.setText(str(value))
         return self.add_simple_widget(name,widget,label=label,add_indicator=False,location=location)
-    def add_num_label(self, name, value=None, limiter=None, formatter=None, label=None, location=(None,0)):
+    def add_num_label(self, name, value=0, limiter=None, formatter=None, label=None, location=(None,0)):
         """
         Add a numerical label to the table.
 
         Args:
             name (str): widget name (used to reference its value in the values table)
-            value (bool): specifies initial value
+            value (float): specifies initial value
             limiter (tuple): tuple ``(upper_limit, lower_limit, action, value_type)`` specifying value limits;
                 see :func:`.limit.as_limiter` for details
             formatter (tuple): either ``"int"`` (for integer values), or tuple specifying floating value format;

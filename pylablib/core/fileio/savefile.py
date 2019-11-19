@@ -361,33 +361,3 @@ def save(data, path="", output_format=None, loc="file", **kwargs):
     loc=location.get_location(loc,path)
     f=location.LocationFile(loc)
     output_format.write(f,data)
-    
-    
-    
-    
-def test():
-    file_utils.retry_remove_dir("test_folder")
-    dt=datatable.DataTable()
-    dt.c.append(dt.idx(),'t')
-    dt.expand(20)
-    dt.c.append(dt['t']**2+.5j,'x')
-    #dt.c.append(dt['t']**2,'x')
-    save(dt,"test_folder/some_folder/test_table.dat")
-    save(dt,"test_folder/some_folder/custom_columns.dat",columns=["ct","cx"])
-    save(dt,"test_folder/some_folder/test_table_bin.dat",output_format="bin")
-    dd=dictionary.Dictionary()
-    dd["x/a"]=1
-    dd["x/b"]=2
-    dd["y/a"]=["a",2,3.5]
-    dd["DataTable"]=dt
-    save(dd,"test_folder/test_dict.dat",inline_reps={"complex":"{:.5f}"})
-    save(dd,"test_folder/test_dict_external_def.txt",table_format="csv")
-    save(dd,"test_folder/test_dict_external.txt",table_format=dict_entry.build_entry("table",table_format="csv",ext="csv",custom_reps={"complex":"{:.5f}"}))
-    folder_loc=location.get_location("folder","test_folder/test_dict_external_folder",default_ext="txt",default_name="Data")
-    save(dd,None,table_format="csv",loc=folder_loc)
-    save(dd,"test_folder/test_dict_asbin.dat",table_format="bin")
-    f=datafile.DataFile(dd,props={"p1":75,"p2":[2,5,7],"ABC":"CDF"},comments=["comment1", "Much longer comment 2"])
-    save(f,"test_folder/test_file.dat",table_format="inline")
-    save(f,"test_folder/test_file_ext.dat",table_format="csv")
-    dd["DataTable"]=dict_entry.build_entry(dt,table_format="csv",name="CustomTable")
-    save(dd,"test_folder/test_dict_custom.txt")
