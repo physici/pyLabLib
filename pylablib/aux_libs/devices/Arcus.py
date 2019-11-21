@@ -6,6 +6,7 @@ import os.path
 import ctypes
 import time
 import sys
+import struct
 
 class ArcusError(RuntimeError):
     """Generic Arcus error."""
@@ -71,7 +72,7 @@ class GenericPerformaxStage(IDevice):
         for _ in range(5):
             code=self.dll.fnPerformaxComOpen(DWORD(int(self.idx)),phandle)
             if code:
-                self.handle=int.from_bytes(phandle.raw[:hlen],sys.byteorder,signed=False)
+                self.handle=struct.unpack("P",phandle.raw[:hlen])[0]
                 self.dll.fnPerformaxComFlush(self.handle)
                 return
             time.sleep(0.3)

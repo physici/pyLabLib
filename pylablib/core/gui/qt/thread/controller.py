@@ -1,3 +1,4 @@
+from __future__ import print_function # Python 2 compatibility
 from ....utils import general, funcargparse, dictionary, functions as func_utils
 from . import signal_pool as spool, threadprop, synchronizing, callsync
 
@@ -1165,10 +1166,7 @@ class QTaskThread(QMultiRepeatingThreadController):
 
     ### Request calls ###
     def _schedule_comm(self, name, args, kwargs, callback=None, sync_result=True):
-        try:
-            comm,sched=self._commands[name]
-        except KeyError:
-            raise KeyError("unrecognized command {}".format(name)) from None
+        comm,sched=self._commands[name]
         call=sched.build_call(comm,args,kwargs,callback=callback,pass_result=True,callback_on_fail=False,sync_result=sync_result)
         sched.schedule(call)
         return call.result_synchronizer
@@ -1176,10 +1174,7 @@ class QTaskThread(QMultiRepeatingThreadController):
         """
         Invoke a command directly and immediately in the current thread.
         """
-        try:
-            comm,_=self._commands[name]
-        except KeyError:
-            raise KeyError("unrecognized command {}".format(name)) from None
+        comm,_=self._commands[name]
         return comm(*(args or []),**(kwargs or {}))
     def call_command(self, name, args=None, kwargs=None, callback=None):
         """

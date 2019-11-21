@@ -140,7 +140,7 @@ class MDT69xA(ThorlabsInterface):
             self.get_id(timeout=2.)
         except self.instr.Error as e:
             self.close()
-            raise self.instr.BackendOpenError(e) from None
+            raise self.instr.BackendOpenError(e)
 
     _id_comm="I"
     def get_voltage(self, channel="x"):
@@ -200,7 +200,7 @@ class KinesisDevice(backend.IBackendWrapper):
         Otherwise, show all devices (some of them might not be Thorlabs-related).
         """
         def _is_thorlabs_id(id):
-            return re.match(rb"^\d{8}$",id[0]) is not None
+            return re.match(br"^\d{8}$",id[0]) is not None
         ids=ft232.list_devices()
         if filter_ids:
             ids=[id for id in ids if _is_thorlabs_id(id)]

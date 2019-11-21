@@ -3,9 +3,9 @@
 from . import module as module_utils, net, py3, strpack
 
 import numpy as np
-import rpyc
 
 import importlib
+rpyc=importlib.import_module("rpyc") # Python 2 compatibiltiy (importing module from a module with the same name)
 import pickle
 import warnings
 import socket

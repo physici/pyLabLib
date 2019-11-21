@@ -1,3 +1,4 @@
+from __future__ import print_function # Python 2 compatibility
 from ...core.utils import net, general
 from ...core.devio.interface import IDevice
 

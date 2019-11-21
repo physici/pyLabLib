@@ -74,6 +74,7 @@ class IDeviceBackend(object):
         return True
     def __bool__(self):
         return self.is_opened()
+    __nonzero__=__bool__ # Python 2 compatibility
 
     
     def lock(self, timeout=None):
@@ -451,7 +452,7 @@ try:
                 self.cooldown()
                 self.set_timeout(timeout)
             except self.Error as e:
-                raise SerialBackendOpenError(e) from None
+                raise SerialBackendOpenError(e)
             
         def _do_open(self):
             general.retry_wait(self.instr.open, self._open_retry_times, 0.3)
@@ -626,7 +627,11 @@ try:
         """FT232 backend opening error"""
         def __init__(self, e):
             IBackendOpenError.__init__(self)
-            ft232.Ft232Exception.__init__(self,*e.args)
+            msgs=ft232.Ft232Exception.errors
+            code=msgs.index(e.msg) if e.msg in msgs else 1
+            ft232.Ft232Exception.__init__(self,code)
+        def __str__(self):
+            return self.msg
 
     class FT232DeviceBackend(IDeviceBackend):
         """

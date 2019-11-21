@@ -7,6 +7,7 @@ import contextlib
 import time
 import collections
 import ctypes
+from future.utils import raise_from
 
 
 from . import IMAQ_lib
@@ -116,9 +117,9 @@ class IMAQCamera(interface.IDevice):
         """Get value of an integer attribute with a given name"""
         try:
             return lib.imgGetAttribute_uint32(self.sid,self._norm_attr(attr))
-        except IMAQError as e:
+        except IMAQError:
             if default is None:
-                raise e from None
+                raise
             return default
     def set_int_value(self, attr, value):
         """Set value of an integer attribute with a given name"""
@@ -128,9 +129,9 @@ class IMAQCamera(interface.IDevice):
         """Get value of a floating point attribute with a given name"""
         try:
             return lib.imgGetAttribute_double(self.sid,self._norm_attr(attr))
-        except IMAQError as e:
+        except IMAQError:
             if default is None:
-                raise e from None
+                raise
             return default
     def set_float_value(self, attr, value):
         """Set value of a floating point attribute with a given name"""
@@ -438,11 +439,11 @@ class IMAQCamera(interface.IDevice):
             lib.imgSessionWaitSignal2(self.sid,4,11,0,int(timeout*1000))
         except IMAQError as e:
             if e.name=="IMG_ERR_TIMEOUT":
-                raise IMAQTimeoutError() from None
+                raise_from(IMAQTimeoutError(),None)
             elif e.name=="IMG_ERR_BOARD_NOT_RUNNING" and not self.acquisition_in_progress():
                 pass
             else:
-                raise e from None
+                raise
         self._last_wait_frame=self._acquired_frames()-1
         return
         

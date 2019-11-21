@@ -23,7 +23,7 @@ class Lakeshore218(SCPI.SCPIDevice):
             self.get_id(timeout=2.)
         except self.instr.Error as e:
             self.close()
-            raise self.instr.BackendOpenError(e) from None
+            raise self.instr.BackendOpenError(e)
     
     def is_enabled(self, channel):
         """Check if a given channel is enabled"""
@@ -73,7 +73,7 @@ class Lakeshore370(SCPI.SCPIDevice):
             self.get_id(timeout=2.)
         except self.instr.Error as e:
             self.close()
-            raise self.instr.BackendOpenError(e) from None
+            raise self.instr.BackendOpenError(e)
     
     def get_resistance(self, channel):
         """Get resistance readings (in Ohm) on a given channel"""

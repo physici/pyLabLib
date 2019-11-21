@@ -26,7 +26,7 @@ class TPG261(backend.IBackendWrapper):
             self.query("BAU")
         except self.instr.Error as e:
             self.close()
-            raise self.instr.BackendOpenError(e) from None
+            raise self.instr.BackendOpenError(e)
     
     def comm(self, msg):
         """Send a command to the device"""

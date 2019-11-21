@@ -29,10 +29,10 @@ else:
     def as_str(data):
         try:
             return data if isinstance(data,str) else data.decode()
-        except UnicodeDecodeError as e:
+        except UnicodeDecodeError:
             if use_locenc:
                 return data.decode(encoding=locenc)
-            raise e from None
+            raise
     def as_bytes(data):
         return data if isinstance(data,bytes) else (data.encode("utf-8") if isinstance(data,str) else bytes(data))
     as_builtin_bytes=as_bytes

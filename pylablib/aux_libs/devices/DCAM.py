@@ -9,6 +9,7 @@ import collections
 import ctypes
 import contextlib
 import time
+from future.utils import raise_from
 
 from .DCAM_lib import lib, DCAMLibError
 
@@ -454,7 +455,7 @@ class DCAMCamera(IDevice):
                 except DCAMLibError as e:
                     if e.text_code=="DCAMERR_TIMEOUT":
                         if ctd.passed():
-                            raise DCAMTimeoutError from None
+                            raise_from(DCAMTimeoutError,None)
                     else:
                         raise
                 time.sleep(period)
