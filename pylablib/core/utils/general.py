@@ -528,7 +528,7 @@ def call_every(func, times=1, cooldown=0., default=None):
     If both conditions are specified, they should be satisfied simultaneously.
     `default` specifies return value if `func` wasn't called.
     """
-    state=[0,-cooldown] # counter, last_call_time
+    state=[times,-cooldown] # counter, last_call_time
     @functions.getargsfrom(func)
     def wrapped(*args, **kwargs):
         curr_t=time.time()
@@ -542,6 +542,32 @@ def call_every(func, times=1, cooldown=0., default=None):
         return res
     return wrapped
 
+def call_limit(func, times=1, cooldown=0., limit=None, default=None):
+    """
+    Wrap `func` such that calls to it are forwarded only under certain conditions.
+
+    If ``times>1``, then `func` is called after at least `times` calls to the wrapped function.
+    If ``cooldown>0``, then `func` is called after at least `cooldown` seconds passed since the last call.
+    if ``limit is not None``, then `func` is called only first `limit` times.
+    If several conditions are specified, they should be satisfied simultaneously.
+    `default` specifies return value if `func` wasn't called.
+    Returned function also has an added method ``reset``, which resets the internal call and time counters.
+    """
+    state=[times,0,-cooldown] # misses since last call, successfull calls, last call time
+    @functions.getargsfrom(func)
+    def wrapped(*args, **kwargs):
+        curr_t=time.time()
+        if (state[0]>=times-1) and (curr_t>state[1]+cooldown) and (limit is None or state[2]<limit):
+            state[:]=0,curr_t,state[2]+1
+            res=func(*args,**kwargs)
+        else:
+            state[0]+=1
+            res=default
+        return res
+    def reset():
+        state[:]=times,0,-cooldown
+    wrapped.reset=reset
+    return wrapped
 
 
 ### Docstring inheritance ###

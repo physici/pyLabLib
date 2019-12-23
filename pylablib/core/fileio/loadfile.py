@@ -326,7 +326,7 @@ class DictionaryInputFileFormat(ITextInputFileFormat):
         creation_time=_extract_savetime_comment(comments)
         def map_entries(ptr):
             if dict_entry.special_load_rules(ptr):
-                entry=dict_entry.IDictionaryEntry.from_dict(ptr,location_file.loc)
+                entry=dict_entry.from_dict(ptr,location_file.loc)
                 if entry_format=="value":
                     entry=entry.data
                 return entry

@@ -20,7 +20,7 @@ from . import general as general_utils  #@UnresolvedImport
 from .general import any_item, merge_dicts, filter_dict, map_dict_keys, map_dict_values, invert_dict
 from .general import flatten_list, partition_list, sort_set_by_list, compare_lists
 from .general import RetryOnException, SilenceException, retry_wait
-from .general import UIDGenerator, NamedUIDGenerator, Countdown, Timer, call_every
+from .general import UIDGenerator, NamedUIDGenerator, Countdown, Timer, call_every, call_limit
 from .general import setbp
 
 from . import log as log_utils

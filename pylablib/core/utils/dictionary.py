@@ -402,7 +402,7 @@ class Dictionary(object):
                 yield p,makev(p,v)
     iteritems=viewitems # for compatibility
     items=viewitems
-    def viewvalues(self, leafs=False):
+    def viewvalues(self, ordered=False, leafs=False, wrap_branches=True):
         """
         Analog of ``dict.viewvalues()``, iterating only over the immediate children of the root.
 
@@ -410,9 +410,12 @@ class Dictionary(object):
             ordered (bool): If ``True``, loop over keys in alphabetic order.
             leafs (bool): If ``True``, loop over leaf nodes (i.e., behave as 'flat' dictionary);
                 otherwise, loop over immediate children (i.e., behave as 'nested' dictionary)
+            wrap_branches (bool): if ``True``, wrap sub-branches into :class:`DictionaryPointer` objects; otherwise, return them as nested built-in dictionaries
         """
-        return self.iternodes(to_visit="leafs") if leafs else viewvalues_(self._data)
+        for _,v in self.items(ordered=ordered,leafs=leafs,wrap_branches=wrap_branches):
+            yield v
     itervalues=viewvalues
+    values=viewvalues
     def viewkeys(self, ordered=False):
         """
         Analog of ``dict.viewkeys()``, iterating only over the immediate children of the root.
@@ -476,7 +479,7 @@ class Dictionary(object):
             if topdown and (to_visit in {"branches","all"}):
                 yield (path,br) if include_path else br
             if to_visit in {"leafs","all"}:
-                for k,v in viewitems_(br,wrap_branches=False):
+                for k,v in br.viewitems(ordered=ordered,wrap_branches=False):
                     if not self._is_branch(v):
                         yield (path+[k],v) if include_path else v
             if (not topdown) and (to_visit in {"branches","all"}):

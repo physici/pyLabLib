@@ -26,8 +26,9 @@ class FunctionSignature(object):
         name (str): Function name.
         doc (str): Function docstring. 
     """
-    def __init__(self, arg_names=None, defaults=None, varg_name=None, kwarg_name=None, cls=None, obj=None, name=None, doc=None):
+    def __init__(self, arg_names=None, defaults=None, varg_name=None, kwarg_name=None, kwonly_arg_names=None, cls=None, obj=None, name=None, doc=None):
         self.arg_names=arg_names or []
+        self.kwonly_arg_names=kwonly_arg_names or []
         self.defaults=defaults or {}
         self.varg_name=varg_name
         self.kwarg_name=kwarg_name
@@ -55,8 +56,9 @@ class FunctionSignature(object):
         else:
             args_sig=", ".join(pass_order)
         varg_sig=("*"+self.varg_name) if self.varg_name else ""
+        kwonly_args_sig=", ".join(["{}={}".format(n,self.defaults[n]) for n in self.kwonly_arg_names])
         kwarg_sig=("**"+self.kwarg_name) if self.kwarg_name else ""
-        sigs=[args_sig,varg_sig,kwarg_sig]
+        sigs=[args_sig,varg_sig,kwonly_args_sig,kwarg_sig]
         sigs=[s for s in sigs if s!=""]
         return ", ".join(sigs)
     def wrap_function(self, func, pass_order=None):
@@ -64,7 +66,7 @@ class FunctionSignature(object):
         Wrap a function `func` into a containing function with this signature.
         
         Sets function name, argument names, default values, object and class (for methods) and docstring.
-        If `pass_order` is not ``None``, it determines the order in which the arguments are passed to the wrapped function.
+        If `pass_order` is not ``None``, it determines the order in which the positional arguments are passed to the wrapped function.
         """
         eval_string="lambda {0}: _func_({1})".format(self.signature(),self.signature(pass_order))
         wrapped=eval(eval_string,{'_func_':func})
@@ -108,16 +110,37 @@ class FunctionSignature(object):
             return len(self.arg_names)
     
     @staticmethod
-    def from_function(func):
+    def from_function(func, follow_wrapped=True):
         """
         Get signature of the given function or method.
+
+        If ``follow_wrapped==True``, follow ``__wrapped__`` attributes until the innermost function
+        (useful for getting signatures of functions wrapped using ``functools`` methods).
         """
+        ifunc=func
+        if follow_wrapped:
+            while hasattr(ifunc,"__wrapped__"):
+                ifunc=ifunc.__wrapped__
         try:
-            args=inspect.getargspec(func)
-        except TypeError:
-            func=func.__call__
-            args=inspect.getargspec(func)
-        defaults=args.defaults and dict(zip(args.args[::-1],args.defaults[::-1]))
+            try:
+                args=inspect.getfullargspec(ifunc)
+            except TypeError:
+                ifunc=ifunc.__call__
+                args=inspect.getfullargspec(ifunc)
+            defaults=dict(zip(args.args[::-1],args.defaults[::-1])) if args.defaults else {}
+            if args.kwonlydefaults:
+                defaults.update(args.kwonlydefaults)
+            kwonly_arg_names=args.kwonlyargs
+            kwargs=args.varkw
+        except AttributeError:
+            try:
+                args=inspect.getargspec(ifunc)
+            except TypeError:
+                ifunc=ifunc.__call__
+                args=inspect.getargspec(ifunc)
+            defaults=args.defaults and dict(zip(args.args[::-1],args.defaults[::-1]))
+            kwonly_arg_names=None
+            kwargs=args.keywords
         try:
             cls=func.__self__.__class__
             obj=func.__self__
@@ -125,10 +148,11 @@ class FunctionSignature(object):
         except AttributeError:
             cls=None
             obj=None
-        return FunctionSignature(args.args,defaults,args.varargs,args.keywords,cls,obj,func.__name__,func.__doc__)
+        return FunctionSignature(arg_names=args.args,defaults=defaults,varg_name=args.varargs,kwarg_name=kwargs,kwonly_arg_names=kwonly_arg_names,
+            cls=cls,obj=obj,name=func.__name__,doc=func.__doc__)
     def copy(self):
         """Return a copy"""
-        return FunctionSignature(arg_names=self.arg_names,defaults=self.defaults,varg_name=self.varg_name,kwarg_name=self.kwarg_name,
+        return FunctionSignature(arg_names=self.arg_names,defaults=self.defaults,varg_name=self.varg_name,kwarg_name=self.kwarg_name,kwonly_arg_names=self.kwonly_arg_names,
                 cls=self.cls,obj=self.obj,name=self.name,doc=self.doc)
     def as_simple_func(self):
         """
@@ -140,7 +164,7 @@ class FunctionSignature(object):
         if self.obj is None:
             return self.copy()
         else:
-            return FunctionSignature(arg_names=self.arg_names[1:],defaults=self.defaults,varg_name=self.varg_name,kwarg_name=self.kwarg_name,
+            return FunctionSignature(arg_names=self.arg_names[1:],defaults=self.defaults,varg_name=self.varg_name,kwarg_name=self.kwarg_name,kwonly_arg_names=self.kwonly_arg_names,
                 cls=None,obj=None,name=self.name,doc=self.doc)
     @staticmethod
     def merge(inner, outer, add_place="front", merge_duplicates=True, overwrite=None, hide_outer_obj=False):
@@ -178,6 +202,7 @@ class FunctionSignature(object):
             arg_names=outer.arg_names+[a for a in inner.arg_names if not a in outer.arg_names]
         else:
             raise ValueError("unrecognized add_place: {0}".format(add_place))
+        kwonly_arg_names=inner.kwonly_arg_names+[a for a in outer.kwonly_arg_names if not a in inner.kwonly_arg_names]
         if (inner.obj is None) and (outer.obj is not None): # hide "self" argument from the inner function, as it will be bound later
             out_arg_names=outer.arg_names[1:]
         else:
@@ -195,7 +220,12 @@ class FunctionSignature(object):
         ow_cls="cls" in overwrite or ("obj" in overwrite and outer.obj is not None)
         cls=outer.cls if ow_cls or inner.cls is None else inner.cls
         obj=outer.obj if "obj" in overwrite or inner.obj is None else inner.obj
-        return FunctionSignature(arg_names,defaults,varg_name,kwarg_name,cls,obj,name,doc),pass_order
+        return FunctionSignature(arg_names=arg_names,defaults=defaults,varg_name=varg_name,kwarg_name=kwarg_name,kwonly_arg_names=kwonly_arg_names,
+            cls=cls,obj=obj,name=name,doc=doc),pass_order
+
+def funcsig(func, follow_wrapped=True):
+    """Return a function signature object"""
+    return FunctionSignature.from_function(func,follow_wrapped=follow_wrapped)
     
 def getargsfrom(source, **merge_params):
     """
@@ -231,8 +261,9 @@ def call_cut_args(func, *args, **kwargs):
         cut_kwargs=kwargs
     else:
         cut_kwargs={}
+        arg_names=sig.arg_names+sig.kwonly_arg_names
         for n,v in viewitems(kwargs):
-            if n in sig.arg_names:
+            if n in arg_names:
                 cut_kwargs[n]=v
     max_args_num=sig.max_args_num()
     if max_args_num is None:

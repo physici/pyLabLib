@@ -182,18 +182,21 @@ class DictionaryOutputFileFormat(ITextOutputFileFormat):
         inline_columns_delimiter (str): Used to separate entries in a row for inline tables.
         inline_reps (str): If not ``None``, defines custom representations to be passed to :func:`.utils.string.to_string` function when writing inline tables.
         param_reps (str): If not ``None``, defines custom representations to be passed to :func:`.utils.string.to_string` function when writing Dictionary entries.
+        use_rep_classes (bool): If ``True``, use representation classes for Dictionary entries (e.g., numpy arrays will be represented as ``"array([1, 2, 3])"`` instead of just ``"[1, 2, 3]"``);
+            This improves storage fidelity, but makes result harder to parse (e.g., by external string parsers).
         **kwargs (dict): Default `**kwargs` values for the :meth:`IOutputFileFormat.write` method.
     """
-    def __init__(self, save_props=True, save_comments=True, save_time=True, table_format="inline", inline_columns_delimiter="\t", inline_reps=None, param_reps=None, **kwargs):
+    def __init__(self, save_props=True, save_comments=True, save_time=True, table_format="inline", inline_columns_delimiter="\t", inline_reps=None, param_reps=None, use_rep_classes=False, **kwargs):
         ITextOutputFileFormat.__init__(self,"dict",save_props,save_comments,save_time,default_kwargs=kwargs)
         self.inline_columns_delimiter=inline_columns_delimiter
         self.table_format=table_format
         self.inline_reps=inline_reps
         self.param_reps=param_reps
+        self.use_rep_classes=use_rep_classes
     
     def get_dictionary_line(self, path, value):
         path="/".join(path)
-        value=string_utils.to_string(value,"parameter",self.param_reps)
+        value=string_utils.to_string(value,"parameter",self.param_reps,use_classes=self.use_rep_classes)
         return "{0}\t{1}".format(path,value)
     def _write_table_inline(self, stream, table):
         self.write_line(stream,"## Table start ##")
@@ -202,12 +205,6 @@ class DictionaryOutputFileFormat(ITextOutputFileFormat):
             line=self.inline_columns_delimiter.join(line)
             self.write_line(stream,line)
         self.write_line(stream,"## Table end ##")
-    def write_value(self, stream, path, value):
-        if _is_table(value):
-            self.write_line(stream,self.get_dictionary_line(path,"table"))
-            self._write_table_inline(stream,value)
-        else:
-            self.write_line(stream,self.get_dictionary_line(path,value))
     def write_data(self, loc_file, data, **kwargs):
         """
         Write data to a Dictionary file.
@@ -223,16 +220,25 @@ class DictionaryOutputFileFormat(ITextOutputFileFormat):
         for path, value in data.iternodes(ordered=True,to_visit="leafs",include_path=True):
             if string_utils.is_convertible(value):
                 self.write_line(stream,self.get_dictionary_line(path,value))
+            elif isinstance(value,dict_entry.InlineTable):
+                self.write_line(stream,self.get_dictionary_line(path,"table"))
+                self._write_table_inline(stream,value.table)
             else:
-                dict_ptr=data.branch_pointer(path)
-                table_entry=dict_entry.build_entry(value,dict_ptr,loc,table_format=self.table_format)
+                rel_path=path[len(data.get_path()):]
+                dict_ptr=data.branch_pointer(rel_path)
+                table_entry=dict_entry.build_entry(value,table_format=self.table_format)
                 if table_entry is None:
                     log.default_log.info("No formatter for {0}".format(value),origin="fileio/savefile",level="warning")
                     self.write_line(stream,self.get_dictionary_line(path,value))
                 else:
                     d=table_entry.to_dict(dict_ptr,loc)
-                    for subpath, subvalue in d.iternodes(ordered=True,to_visit="leafs",include_path=True):
-                        self.write_value(stream,path+subpath,subvalue)
+                    br=data.detach_branch(rel_path)
+                    data.add_entry(rel_path,d,branch_option="attach")
+                    try:
+                        self.write_data(loc_file,data.branch_pointer(rel_path),**kwargs)
+                    finally:
+                        data.detach_branch(rel_path)
+                        data.add_entry(rel_path,br,branch_option="attach")
                 
                 
                 

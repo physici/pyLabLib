@@ -9,6 +9,7 @@ from . import funcargparse
 import re
 import fnmatch
 import struct
+import collections
 
 import numpy as np
 
@@ -248,10 +249,21 @@ def escape_string(value, location="element", quote_type='"'):
             value=quote_type+value+quote_type
     return value
 
-_default_float_representaion="{:.10E}"
-_default_complex_representaion="{:.10E}"
+def _numpy_to_str(a, custom_representations=None):
+    """Convert multidimensional numpy array into a string using the standard number representation rules"""
+    if a.ndim==0:
+        return to_string(a,custom_representations=custom_representations,use_classes=True)
+    elif a.ndim==1:
+        return to_string(list(a),custom_representations=custom_representations,use_classes=True)
+    else:
+        return "["+", ".join([_numpy_to_str(e,custom_representations=custom_representations) for e in a])+"]"
+
+_default_float_representaion="{:.12E}"
+_default_complex_representaion="{:.12E}"
 _default_int_representation="{:d}"
-def to_string(value, location="element", custom_representations=None):
+TConversionClass=collections.namedtuple("TConversionClass",["label","cls","to_str","from_str"])
+_conversion_classes=[("array",np.ndarray,_numpy_to_str,np.array)]
+def to_string(value, location="element", custom_representations=None, use_classes=False):
     """
     Convert value to string with an option of modifying format string.
     
@@ -259,7 +271,10 @@ def to_string(value, location="element", custom_representations=None):
         value
         location (str): Used for converting strings (see :func:`escape_string`).
         custom_representations (dict): dictionary ``{value_type: fmt}``,
-            where value type can be ``'int'``, ``'float'`` or ``'complex'`` and `fmt` is a :meth:`str.format` string.  
+            where value type can be ``'int'``, ``'float'`` or ``'complex'`` and `fmt` is a :meth:`str.format` string.
+        use_classes (bool): if ``True``, use additional representation classes for special objects
+            (e.g., numpy arrays will be represented as ``"array([1, 2, 3])"`` instead of just ``"[1, 2, 3]"``).
+            This improves conversion fidelity, but makes result harder to parse (e.g., by external string parsers).
     """
     tr=custom_representations or {}
     if isinstance(value,complex):
@@ -273,20 +288,24 @@ def to_string(value, location="element", custom_representations=None):
     if isinstance(value,textstring):
         return escape_string(value, location=location)
     if isinstance(value,list):
-        return "["+", ".join(to_string(e,location="element",custom_representations=custom_representations) for e in value)+"]"
+        return "["+", ".join(to_string(e,location="element",custom_representations=custom_representations,use_classes=use_classes) for e in value)+"]"
     if isinstance(value, tuple):
-        return "("+", ".join(to_string(e,location="element",custom_representations=custom_representations) for e in value)+")"
+        return "("+", ".join(to_string(e,location="element",custom_representations=custom_representations,use_classes=use_classes) for e in value)+")"
     if isinstance(value, set):
-        return "{"+", ".join(to_string(e,location="element",custom_representations=custom_representations) for e in value)+"}"
+        return "{"+", ".join(to_string(e,location="element",custom_representations=custom_representations,use_classes=use_classes) for e in value)+"}"
     if isinstance(value, dict):
         return "{"+", ".join("{}: {}".format(
-                to_string(k,location="element",custom_representations=custom_representations),to_string(v,location="element",custom_representations=custom_representations))
-                              for k,v in value.items())+"}"
-    if isinstance(value,np.ndarray):
+                to_string(k,location="element",custom_representations=custom_representations,use_classes=use_classes),
+                to_string(v,location="element",custom_representations=custom_representations,use_classes=use_classes))
+                            for k,v in value.items())+"}"
+    if isinstance(value,np.ndarray) and not use_classes:
         if np.ndim(value)==0:
-            return to_string(np.asscalar(value))
-        if np.ndim(value)==1:
-            return to_string(list(value))
+            return to_string(np.asscalar(value),custom_representations=custom_representations,use_classes=use_classes)
+        return to_string(list(value),custom_representations=custom_representations,use_classes=use_classes)
+    if use_classes:
+        for label,cls,to_str,_ in _conversion_classes:
+            if isinstance(value,cls):
+                return "{}({})".format(label,to_str(value,custom_representations=custom_representations))
     value=str(value) # booleans and None are included here
     for ec in "\n\v\r":
         value=value.replace(ec,"\t")
@@ -378,7 +397,7 @@ def unescape_string(value):
         raise ValueError("malformatted string representation")
     return unescaped
 
-def _parse_parenthesis_struct(line, start=0):
+def _parse_parenthesis_struct(line, start=0, use_classes=True):
     """
     Parse parenthesis structure from the line, starting from start.
     
@@ -413,11 +432,17 @@ def _parse_parenthesis_struct(line, start=0):
                 raise ValueError("malformatted parenthesis structure")
         elif min_pos==open_par_pos:
             gap=line[pos:min_pos]
+            label=None
             if len(gap)>0 and not gap.isspace():
-                raise ValueError("malformatted parenthesis structure")
+                label=gap.lstrip()
+                if not (use_classes and label in [cc[0] for cc in _conversion_classes]):
+                    raise ValueError("malformatted parenthesis structure")
             if curr_elt is None:
-                new_pos,parsed_substructure=_parse_parenthesis_struct(line,min_pos)
-                curr_elt=(line[min_pos],parsed_substructure)
+                new_pos,parsed_substructure=_parse_parenthesis_struct(line,min_pos,use_classes=use_classes)
+                if label is None:
+                    curr_elt=(line[min_pos],parsed_substructure)
+                else:
+                    curr_elt=("e",line[pos:new_pos].strip())
                 pos=new_pos
             else:
                 raise ValueError("malformatted parenthesis structure")
@@ -446,8 +471,8 @@ def _convert_parenthesis_struct(struct, case_sensitive=True, parenthesis_rules="
     Covert parsed parenthesis structure into python objects.
     
     parenthesis_rules determine how to deal with empty entries (e.g., [1,,3]):
-        text: any empty entries are translated into None (i.e., [,] -> [None, None]), except for completely empty structures ([] or ());
-        python: empty entries in the middle are not allowed; empty entries at the end are ignored (i.e., [2,] -> [2])
+        text: any empty entries are translated into ``empty_string`` values (i.e., ``[,] -> [empty_string, empty_string]``), except for completely empty structures (``[]`` or ``()``);
+        python: empty entries in the middle are not allowed; empty entries at the end are ignored (i.e., ``[2,] -> [2]``)
             (single-element tuple can still be expressed in two ways: (e,) or (e)). 
     """
     funcargparse.check_parameter_range(parenthesis_rules,"parenthesis_rules",{"text","python"})
@@ -503,7 +528,8 @@ def _convert_parenthesis_struct(struct, case_sensitive=True, parenthesis_rules="
         raise ValueError("unrecognized element type: {0}".format(elt_type))
 
 
-def from_string(value, case_sensitive=True, parenthesis_rules="text"):
+_complex_re=re.compile(r"\((-?[\d.]*[+-])?[\d.]*[ij]\)")
+def from_string(value, case_sensitive=True, parenthesis_rules="text", use_classes=True):
     """
     Parse a string.
     
@@ -516,6 +542,9 @@ def from_string(value, case_sensitive=True, parenthesis_rules="text"):
         - ``'text'``: any empty entries are translated into None (i.e., ``[,] -> [None, None]``), except for completely empty structures (``[]`` or ``()``);
         - ``'python'``: empty entries in the middle are not allowed; empty entries at the end are ignored (i.e., ``[2,] -> [2]``)
             (single-element tuple can still be expressed in two ways: ``(e,)`` or ``(e)``).
+    
+    `use_classes`: if ``True``, try to find additional representation classes for special objects
+        (e.g., numpy arrays will be represented as ``"array([1, 2, 3])"`` instead of just ``"[1, 2, 3]"``).
     """
     value=value.strip()
     if len(value)==0:
@@ -534,16 +563,17 @@ def from_string(value, case_sensitive=True, parenthesis_rules="text"):
         return float(value)
     except ValueError:
         pass
-    try:
-        return complex(value)
-    except ValueError:
-        pass
-    try:
-        return complex(value.lower().replace("i","j"))
-    except ValueError:
-        pass
+    if _complex_re.match(value):
+        try:
+            return complex(value)
+        except ValueError:
+            pass
+        try:
+            return complex(value.lower().replace("i","j"))
+        except ValueError:
+            pass
     if value[0] in _parenthesis_pairs:
-        pos,parsed_value=_parse_parenthesis_struct(value)
+        pos,parsed_value=_parse_parenthesis_struct(value,use_classes=use_classes)
         if pos==len(value): # malformatted parentheses structures are treated as strings
             struct=(value[0],parsed_value,None)
             return _convert_parenthesis_struct(struct,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules)
@@ -552,12 +582,18 @@ def from_string(value, case_sensitive=True, parenthesis_rules="text"):
         if pos!=len(value):
             raise ValueError("malformatted string representation")
         return unescaped
+    if use_classes:
+        for label,_,_,from_str in _conversion_classes:
+            if value.startswith(label+"("):
+                parsed=from_string(value[len(label):],case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules)
+                if isinstance(parsed,tuple):
+                    return from_str(*parsed)
     return value
 
 
 _delimiters=r"\s*,\s*|\s+"
 _delimiters_regexp=re.compile(_delimiters)
-def from_string_partial(value, delimiters=_delimiters_regexp, case_sensitive=True, parenthesis_rules="text", return_string=False):
+def from_string_partial(value, delimiters=_delimiters_regexp, case_sensitive=True, parenthesis_rules="text", use_classes=True, return_string=False):
     """
     Convert the first part of the supplied string (bounded by `delimiters`) into a value.
     
@@ -572,12 +608,19 @@ def from_string_partial(value, delimiters=_delimiters_regexp, case_sensitive=Tru
     value=value.strip()
     end=None
     if value[0] in _parenthesis_pairs:
-        end,parsed_value=_parse_parenthesis_struct(value)
+        end,parsed_value=_parse_parenthesis_struct(value,use_classes=use_classes)
         if not return_string:
             struct=(value[0],parsed_value)
             res=_convert_parenthesis_struct(struct,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules)
     elif value[0] in _quotation_characters:
         end,res=extract_escaped_string(value)
+    elif use_classes:
+        for label,_,_,from_str in _conversion_classes:
+            if value.startswith(label+"("):
+                end,parsed=from_string_partial(value[len(label):],delimiters=delimiters,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules,use_classes=use_classes,return_string=return_string)
+                if isinstance(parsed,tuple):
+                    end,res=end+len(label)+1,from_str(res)
+                    break
     if end is not None:
         if return_string:
             res=value[:end]
@@ -596,7 +639,7 @@ def from_string_partial(value, delimiters=_delimiters_regexp, case_sensitive=Tru
             res=from_string(res)
         return del_pos[1],res
         
-def from_row_string(value, delimiters=_delimiters_regexp, case_sensitive=True, parenthesis_rules="text", return_string=False):
+def from_row_string(value, delimiters=_delimiters_regexp, case_sensitive=True, parenthesis_rules="text", use_classes=True, return_string=False):
     """
     Convert the row string into a list of values, separated by delimiters.
     
@@ -608,7 +651,7 @@ def from_row_string(value, delimiters=_delimiters_regexp, case_sensitive=True, p
         delimiters=re.compile(delimiters)
     tokens=[]
     while value:
-        pos,token=from_string_partial(value,delimiters=delimiters,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules,return_string=return_string)
+        pos,token=from_string_partial(value,delimiters=delimiters,case_sensitive=case_sensitive,parenthesis_rules=parenthesis_rules,use_classes=use_classes,return_string=return_string)
         tokens.append(token)
         value=value[pos:]
     return tokens

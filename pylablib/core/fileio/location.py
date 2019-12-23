@@ -143,6 +143,7 @@ class LocationFile(object):
         Get file path in a string representation.
         """
         return self.name.to_string()
+    _default_modes={"r":("read","text"),"rb":("read","binary"),"w":("write","text"),"wb":("write","binary"),"a":("append","text"),"ab":("append","binary")}
     def open(self, mode="read", data_type="text"):
         """
         Open the file.
@@ -153,6 +154,7 @@ class LocationFile(object):
         """
         if self.opened:
             raise RuntimeError("opening file {0} twice".format(self.get_path()))
+        mode,data_type=self._default_modes.get(mode,(mode,data_type))
         self.stream=self.loc.open_file(mode,self.name,data_type)
         self.mode=mode
         self.data_type=data_type
@@ -175,7 +177,7 @@ class LocationFile(object):
         """
         try:
             self.open(mode=mode,data_type=data_type)
-            yield
+            yield self.stream
         finally:
             if self.opened:
                 self.close()
