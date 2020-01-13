@@ -163,7 +163,7 @@ class IMAQCamera(interface.IDevice):
         Return tuple ``(hstart, hend, vstart, vend)``.
         """
         t,l,h,w=lib.imgSessionGetROI(self.sid)
-        return l,t,l+w,t+h
+        return l,l+w,t,t+h
     def set_roi(self, hstart=0, hend=None, vstart=0, vend=None):
         """
         Setup camera ROI.
@@ -473,7 +473,7 @@ class IMAQCamera(interface.IDevice):
     def _get_buffer_size(self):
         bpp=self._get_buffer_bpp()
         roi=self.get_roi()
-        w,h=roi[2]-roi[0],roi[3]-roi[1]
+        w,h=roi[1]-roi[0],roi[3]-roi[2]
         return w*h*bpp
     def _parse_buffer(self, buffer, dim=None, bpp=None, nframes=1):
         r,c=dim or self._get_data_dimensions_rc()
