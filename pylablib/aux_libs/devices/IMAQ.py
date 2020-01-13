@@ -80,7 +80,7 @@ class IMAQCamera(interface.IDevice):
         self._add_settings_node("triggers_in_cfg",self._get_triggers_in_cfg,self._set_triggers_in_cfg)
         self._add_settings_node("triggers_out_cfg",self._get_triggers_out_cfg,self._set_triggers_out_cfg)
 
-        
+
     def open(self):
         """Open connection to the camera"""
         self.ifid=lib.imgInterfaceOpen(self.name)
@@ -136,7 +136,7 @@ class IMAQCamera(interface.IDevice):
         """Set value of a floating point attribute with a given name"""
         lib.imgSetAttribute2_double(self.sid,self._norm_attr(attr),value)
         return lib.imgGetAttribute_double(self.sid,self._norm_attr(attr))
-    
+
     ModelData=collections.namedtuple("ModelData",["serial"])
     def get_model_data(self):
         """
@@ -170,7 +170,7 @@ class IMAQCamera(interface.IDevice):
 
         By default, all non-supplied parameters take extreme values.
         """
-        
+
         det_size=self.get_detector_size()
         if hend is None:
             hend=det_size[0]
@@ -311,7 +311,7 @@ class IMAQCamera(interface.IDevice):
         if not self._buffers:
             return -1
         return frame%self._buffer_frames
-        
+
 
 
     def setup_acquisition(self, continuous, frames):
@@ -362,7 +362,7 @@ class IMAQCamera(interface.IDevice):
     def acquisition_in_progress(self):
         """Check if acquisition is in progress"""
         return bool(lib.imgSessionStatus(self.sid)[0])
-    
+
     @contextlib.contextmanager
     def pausing_acquisition(self):
         """
@@ -399,7 +399,7 @@ class IMAQCamera(interface.IDevice):
     def get_new_images_range(self):
         """
         Get the range of the new images.
-        
+
         Return tuple ``(first, last)`` with images range (inclusive).
         If no images are available, return ``None``.
         """
@@ -442,7 +442,7 @@ class IMAQCamera(interface.IDevice):
                 raise e from None
         self._last_wait_frame=self._acquired_frames()-1
         return
-        
+
 
     def _read_frame_data_raw(self, buffer_frame_num):
         """Return raw bytes string corresponding to the given buffer frame number"""
@@ -453,7 +453,7 @@ class IMAQCamera(interface.IDevice):
     def _read_buff_data_raw(self, buffer_frame_num, max_nframes):
         """
         Read raw bytes string containing one or several frames starting with the given buffer frame number.
-        
+
         Read all the frames up to the end of the buffer containing given frame, or up to `max_nframes` frames, whichever is smaller.
         Return tuple ``(number_returned, raw_data)``, where `number_returned` is the total number of returned frames (between 1 and `max_n_frames`),
         and `raw_data` is a binary string of the size ``self._frame_size*number_returned``.
@@ -465,7 +465,7 @@ class IMAQCamera(interface.IDevice):
         jbuff=buffer_frame_num%frames_per_buff
         nread=min(max_nframes,frames_per_buff-jbuff)
         return nread,self._buffers[ibuff][jbuff*self._frame_size:(jbuff+nread)*self._frame_size]
-    
+
     def _get_buffer_bpp(self):
         return self.get_int_value("BYTESPERPIXEL",1)
     def _get_buffer_dtype(self):
@@ -473,7 +473,7 @@ class IMAQCamera(interface.IDevice):
     def _get_buffer_size(self):
         bpp=self._get_buffer_bpp()
         roi=self.get_roi()
-        w,h=roi[1]-roi[0],roi[3]-roi[2]
+        w,h=roi[2]-roi[0],roi[3]-roi[1]
         return w*h*bpp
     def _parse_buffer(self, buffer, dim=None, bpp=None, nframes=1):
         r,c=dim or self._get_data_dimensions_rc()
@@ -570,7 +570,7 @@ class IMAQCamera(interface.IDevice):
     def read_multiple_images_fastbuff(self, rng=None):
         """
         Read multiple images specified by `rng` (by default, all un-read images).
-        
+
         Some frames in the result are "stuck together" in a single buffer, if their memory locations are continuous.
         Return list ``[(number_of_frames, raw_data)]``, where `number_of_frames` specifies number of frames in a given array element,
         and `raw_data` is the binary string corresponding to these frames (of the size ``self._frame_size*number_returned``).
@@ -594,7 +594,7 @@ class IMAQCamera(interface.IDevice):
     def grab(self, n, buff_frames=5000, frame_timeout=20., missing_frame="none", return_buffer_status=False):
         """
         Snap `n` images (with preset image read mode parameters)
-        
+
         `buff_frames` determines buffer size.
         Timeout is specified for a single-frame acquisition, not for the whole acquisition time.
         `missing_frame` determines what to do with frames which have been lost:
@@ -612,3 +612,59 @@ class IMAQCamera(interface.IDevice):
             return (frames[:n],self.get_buffer_status()) if return_buffer_status else frames[:n]
         finally:
             self.clear_acquisition()
+
+    def write_serial(self, message, eol='\r', timeout=1000):
+        """
+        Write a message via the serial IMAQ port to the device
+
+        Parameters
+        ----------
+        message : string
+            The message to write.
+        eol : string
+            The end of line character.
+        timeout : int
+            Write time out for the serial interface.
+
+        Returns
+        -------
+        retval : int
+            Number of bytes written.
+
+        """
+
+        if not self.is_opened():
+            print('Device not opened')
+            retval = 0
+        else:
+            sid = self.sid
+            message = ''.join([message, eol])
+            retval = lib.imgSessionSerialWrite(sid, message, timeout)
+
+        return retval
+
+    def read_serial(self, timeout=1000):
+        """
+        Read data from the serial IMAQ port to the device
+
+        Parameters
+        ----------
+        timeout : int
+            Read time out for the serial interface.
+
+        Returns
+        -------
+        retval : string
+            Data read from the serial port.
+
+        """
+
+        if not self.is_opened():
+            print('Device not opened')
+            retval = ''
+        else:
+            sid = self.sid
+            retval = lib.imgSessionSerialRead(sid, timeout)
+
+        return retval
+
