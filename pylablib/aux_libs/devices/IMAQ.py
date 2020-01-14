@@ -665,6 +665,8 @@ class IMAQCamera(interface.IDevice):
         else:
             sid = self.sid
             retval = lib.imgSessionSerialRead(sid, timeout)
+            retval = retval[0].decode()
+            retval = retval.replace(eol, '\n')
 
         return retval
 
